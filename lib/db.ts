@@ -4,6 +4,14 @@ import type { LotData, RindeData, ParsedRow, RindeRow } from "./data-parser";
 
 // ─── Workspace type ─────────────────────────────────────────────────────────
 
+export interface LotVisit {
+  date: string;        // "YYYY-MM-DD"
+  note: string;
+  yieldStars: number;  // 0 = not set, 1–5
+  sprayTarget: string;
+  sprayEffect: number; // 0 = not set, 1–5
+}
+
 export interface Workspace {
   fieldName: string;
   lotCount: number;
@@ -13,7 +21,7 @@ export interface Workspace {
   lotData: LotData;
   allRows: ParsedRow[];
   rindeData: RindeData;
-  lotNotes: Record<string, string>;
+  lotVisits: Record<string, LotVisit[]>;
   shpFiles: string[];
   csvFiles: string[];
   rindeFiles: string[];
@@ -72,7 +80,7 @@ export async function saveWorkspace(
       lot_data: serializeLotData(state.lotData),
       all_rows: serializeAllRows(state.allRows),
       rinde_data: state.rindeData,
-      lot_notes: state.lotNotes,
+      lot_visits: state.lotVisits,
       shp_files: state.shpFiles,
       csv_files: state.csvFiles,
       rinde_files: state.rindeFiles,
@@ -106,7 +114,7 @@ export async function loadWorkspace(
     lotData: deserializeLotData((data.lot_data ?? {}) as SerializedLotData),
     allRows: deserializeAllRows((data.all_rows ?? []) as SerializedParsedRow[]),
     rindeData: (data.rinde_data ?? {}) as RindeData,
-    lotNotes: (data.lot_notes ?? {}) as Record<string, string>,
+    lotVisits: (data.lot_visits ?? {}) as Record<string, LotVisit[]>,
     shpFiles: (data.shp_files ?? []) as string[],
     csvFiles: (data.csv_files ?? []) as string[],
     rindeFiles: (data.rinde_files ?? []) as string[],
@@ -130,7 +138,7 @@ export function saveWorkspaceLocal(state: Workspace): void {
         lot_data: serializeLotData(state.lotData),
         all_rows: serializeAllRows(state.allRows),
         rinde_data: state.rindeData,
-        lot_notes: state.lotNotes,
+        lot_visits: state.lotVisits,
         shp_files: state.shpFiles,
         csv_files: state.csvFiles,
         rinde_files: state.rindeFiles,
@@ -155,7 +163,7 @@ export function loadWorkspaceLocal(): Workspace | null {
       lotData: deserializeLotData((data.lot_data ?? {}) as SerializedLotData),
       allRows: deserializeAllRows((data.all_rows ?? []) as SerializedParsedRow[]),
       rindeData: (data.rinde_data ?? {}) as RindeData,
-      lotNotes: (data.lot_notes ?? {}) as Record<string, string>,
+      lotVisits: (data.lot_visits ?? {}) as Record<string, LotVisit[]>,
       shpFiles: (data.shp_files ?? []) as string[],
       csvFiles: (data.csv_files ?? []) as string[],
       rindeFiles: (data.rinde_files ?? []) as string[],

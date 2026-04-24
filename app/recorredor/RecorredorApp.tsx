@@ -37,7 +37,14 @@ import {
   loadManagementBackup,
   clearManagementBackup,
   type Workspace,
+  type LotVisit,
 } from "@/lib/db";
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+const SPRAYING_TIPOS = new Set(["HERBICIDA", "FUNGICIDA", "INSECTICIDA", "ACARICIDA"]);
 import AuthButton from "@/components/AuthButton";
 
 // ── State types ───────────────────────────────────────────────────────────────
@@ -72,11 +79,11 @@ export default function RecorredorApp() {
   const [allRows, setAllRows] = useState<ParsedRow[]>([]);
   const [rindeData, setRindeData] = useState<RindeData>({});
   const [selectedLot, setSelectedLot] = useState<SelectedLot | null>(null);
-  const [lotNotes, setLotNotes] = useState<Record<string, string>>({});
+  const [lotVisits, setLotVisits] = useState<Record<string, LotVisit[]>>({});
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(DEFAULT_FILTERS);
   const [fieldName, setFieldName] = useState("");
   const [lotCount, setLotCount] = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [shpStatus, setShpStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [csvStatus, setCsvStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [rindeStatus, setRindeStatus] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -181,7 +188,7 @@ export default function RecorredorApp() {
     setLotData(ws.lotData);
     setAllRows(ws.allRows);
     setRindeData(ws.rindeData);
-    setLotNotes(ws.lotNotes);
+    setLotVisits(ws.lotVisits ?? {});
     setShpFiles(ws.shpFiles);
     setCsvFiles(ws.csvFiles);
     setRindeFiles(ws.rindeFiles);
@@ -241,7 +248,7 @@ export default function RecorredorApp() {
     saveTimeoutRef.current = setTimeout(async () => {
       const state: Workspace = {
         fieldName, lotCount, collections, colorMap, cultivoColorMap,
-        lotData, allRows, rindeData, lotNotes, shpFiles, csvFiles, rindeFiles,
+        lotData, allRows, rindeData, lotVisits, shpFiles, csvFiles, rindeFiles,
       };
       saveWorkspaceLocal(state);
       if (user) {
@@ -252,7 +259,7 @@ export default function RecorredorApp() {
     }, 1500);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, lotData, rindeData, lotNotes, user]);
+  }, [collections, lotData, rindeData, lotVisits, user]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -580,24 +587,36 @@ export default function RecorredorApp() {
     setGpsTracking(true);
   }
 
-  // ── Notes ───────────────────────────────────────────────────────────────────
+  // ── Visit observations ───────────────────────────────────────────────────────
 
-  function saveNote(lotName: string, text: string) {
-    setLotNotes((prev) => {
-      const next = { ...prev };
-      if (text.trim()) next[lotName] = text.trim();
-      else delete next[lotName];
-      return next;
+  function saveVisit(lotName: string, date: string, update: Partial<LotVisit>) {
+    setLotVisits((prev) => {
+      const visits = [...(prev[lotName] ?? [])];
+      const idx = visits.findIndex((v) => v.date === date);
+      const base = idx >= 0 ? visits[idx] : { date, note: "", yieldStars: 0, sprayTarget: "", sprayEffect: 0 };
+      const updated = { ...base, ...update };
+      if (idx >= 0) visits[idx] = updated;
+      else visits.unshift(updated);
+      return { ...prev, [lotName]: visits };
     });
   }
 
   function sendNotes() {
-    const count = Object.keys(lotNotes).length;
-    if (!count) return;
+    const today = todayStr();
+    const entries = Object.entries(lotVisits)
+      .map(([lot, visits]) => ({ lot, visit: visits.find((v) => v.date === today) }))
+      .filter(({ visit }) => visit && (visit.note || visit.yieldStars || visit.sprayTarget));
+    if (!entries.length) return;
     const fecha = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
     let body = `RECORRIDO DEL ${fecha}\n${"=".repeat(40)}\n\n`;
-    Object.entries(lotNotes).forEach(([lote, nota]) => {
-      body += `LOTE: ${lote}\n${nota}\n${"─".repeat(30)}\n\n`;
+    entries.forEach(({ lot, visit }) => {
+      if (!visit) return;
+      body += `LOTE: ${lot}\n`;
+      if (visit.yieldStars) body += `Estimación de rinde: ${"★".repeat(visit.yieldStars)}${"☆".repeat(5 - visit.yieldStars)}\n`;
+      if (visit.sprayTarget) body += `Blanco de aplicación: ${visit.sprayTarget}\n`;
+      if (visit.sprayEffect) body += `Efectividad: ${"★".repeat(visit.sprayEffect)}${"☆".repeat(5 - visit.sprayEffect)}\n`;
+      if (visit.note) body += `\n${visit.note}\n`;
+      body += `${"─".repeat(30)}\n\n`;
     });
     body += "\nEnviado desde I.Ag · Recorredor";
     window.location.href = `mailto:?subject=${encodeURIComponent(`Recorrido ${fecha}`)}&body=${encodeURIComponent(body)}`;
@@ -605,7 +624,11 @@ export default function RecorredorApp() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  const noteCount = Object.keys(lotNotes).length;
+  const today = todayStr();
+  const noteCount = Object.values(lotVisits).filter((visits) => {
+    const v = visits.find((v) => v.date === today);
+    return v && (v.note || v.yieldStars || v.sprayTarget);
+  }).length;
   const filteredRows = selectedLot ? getFilteredRows(selectedLot.lotName, activeFilters, lotData) : [];
   const allLotRows = selectedLot ? (lotData[selectedLot.lotName] ?? []) : [];
 
@@ -649,13 +672,22 @@ export default function RecorredorApp() {
       )}
 
       {/* ── MAIN ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex-1 relative overflow-hidden">
 
-        {/* ── SIDEBAR ── */}
+        {/* Backdrop — tap outside closes sidebar */}
+        {sidebarOpen && (
+          <div
+            className="absolute inset-0 z-[400]"
+            style={{ background: "rgba(0,0,0,.55)" }}
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* ── SIDEBAR (overlay) ── */}
         <aside
-          className="flex flex-col overflow-y-auto flex-shrink-0 transition-all duration-300"
+          className="absolute top-0 left-0 bottom-0 flex flex-col overflow-y-auto transition-all duration-300 z-[500]"
           style={{
-            width: sidebarOpen ? "280px" : "0",
+            width: sidebarOpen ? "300px" : "0",
             overflow: sidebarOpen ? "auto" : "hidden",
             background: "#16213e",
             borderRight: "1px solid #0f3460",
@@ -759,16 +791,20 @@ export default function RecorredorApp() {
                 color={colorMap[selectedLot.zone] ?? "#e2b04a"}
                 filteredRows={filteredRows}
                 allRows={allLotRows}
-                note={lotNotes[selectedLot.lotName] ?? ""}
-                onSaveNote={(text) => saveNote(selectedLot.lotName, text)}
+                visits={lotVisits[selectedLot.lotName] ?? []}
+                onSaveVisit={(date, update) => saveVisit(selectedLot.lotName, date, update)}
+                recentSprayings={allLotRows.filter((r) => {
+                  if (!r._fecha) return false;
+                  const days = (Date.now() - r._fecha.getTime()) / 86400000;
+                  return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
+                })}
               />
             )}
           </div>
         </aside>
 
         {/* ── MAP ── */}
-        <div className="flex-1 relative">
-          <div id="recorredor-map" className="w-full h-full" />
+        <div id="recorredor-map" className="absolute inset-0" />
 
           {/* GPS button */}
           <button
@@ -803,7 +839,6 @@ export default function RecorredorApp() {
               </div>
             </div>
           )}
-        </div>
       </div>
 
       {/* ── LINK COLUMN PICKER MODAL (step 1: identify lote column) ── */}
@@ -994,22 +1029,94 @@ function FiltersPanel({
   );
 }
 
+function StarRating({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
+  return (
+    <div>
+      <p className="text-xs mb-1" style={{ color: "#6a8ab0" }}>{label}</p>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            style={{ fontSize: "1.4rem", lineHeight: 1, color: n <= value ? "#e2b04a" : "#2a4a6a", background: "none", border: "none", cursor: "pointer", padding: "2px" }}
+            onClick={() => onChange(n === value ? 0 : n)}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LotInfo({
-  lotName, zone, color, filteredRows, allRows, note, onSaveNote,
+  lotName, zone, color, filteredRows, allRows, visits, onSaveVisit, recentSprayings,
 }: {
   lotName: string; zone: string; color: string;
   filteredRows: ParsedRow[]; allRows: ParsedRow[];
-  note: string;
-  onSaveNote: (text: string) => void;
+  visits: LotVisit[];
+  onSaveVisit: (date: string, update: Partial<LotVisit>) => void;
+  recentSprayings: ParsedRow[];
 }) {
+  const today = todayStr();
+  const todayVisit = visits.find((v) => v.date === today) ?? { date: today, note: "", yieldStars: 0, sprayTarget: "", sprayEffect: 0 };
+  const pastVisits = [...visits].filter((v) => v.date !== today).sort((a, b) => b.date.localeCompare(a.date));
+  const [editingDate, setEditingDate] = useState<string | null>(null);
+
   const cultivos = [...new Set(filteredRows.map((r) => r._cultivo).filter(Boolean))];
   const sups = [...new Set(filteredRows.map((r) => String(r._sup ?? "")).filter(Boolean))];
   const campaigns = [...new Set(filteredRows.map((r) => r._campaign).filter(Boolean))];
   const hasLabor = filteredRows.some((r) => r._labor);
+  const sortedRows = [...filteredRows].sort((a, b) => (b._fecha?.getTime() ?? 0) - (a._fecha?.getTime() ?? 0));
+  const hasSprayingContext = recentSprayings.length > 0;
 
-  const sortedRows = [...filteredRows].sort((a, b) =>
-    (b._fecha?.getTime() ?? 0) - (a._fecha?.getTime() ?? 0)
-  );
+  function VisitForm({ visit, onSave, onDone }: { visit: LotVisit; onSave: (u: Partial<LotVisit>) => void; onDone?: () => void }) {
+    const [localNote, setLocalNote] = useState(visit.note);
+    const [localTarget, setLocalTarget] = useState(visit.sprayTarget);
+    return (
+      <div className="space-y-3">
+        <StarRating value={visit.yieldStars} onChange={(n) => onSave({ yieldStars: n })} label="Estimación de rinde" />
+        {hasSprayingContext && (
+          <div className="p-2 rounded space-y-2" style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
+            <p className="text-xs" style={{ color: "#6a8ab0" }}>
+              Aplicación reciente:{" "}
+              {recentSprayings.slice(0, 3).map((r, i) => (
+                <span key={i}>{i > 0 ? ", " : ""}<strong style={{ color: "#e2b04a" }}>{r._prod || r._tipo}</strong>{r._fechaStr ? ` (${r._fechaStr})` : ""}</span>
+              ))}
+            </p>
+            <div>
+              <label className="text-xs block mb-1" style={{ color: "#aac4e0" }}>¿Cuál fue el blanco?</label>
+              <input
+                className="w-full rounded px-2 py-1 text-xs"
+                style={{ background: "#16213e", border: "1px solid #2a5298", color: "#e0e0e0", outline: "none" }}
+                placeholder="Ej: yuyo colorado, roya..."
+                value={localTarget}
+                onChange={(e) => setLocalTarget(e.target.value)}
+                onBlur={() => onSave({ sprayTarget: localTarget })}
+              />
+            </div>
+            <StarRating value={visit.sprayEffect} onChange={(n) => onSave({ sprayEffect: n })} label="Efectividad" />
+          </div>
+        )}
+        <div>
+          <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "#6a8ab0" }}>Notas</label>
+          <textarea
+            value={localNote}
+            onChange={(e) => setLocalNote(e.target.value)}
+            onBlur={() => onSave({ note: localNote })}
+            placeholder="Observaciones del recorrido..."
+            className="w-full rounded-md p-2 text-sm resize-y leading-relaxed"
+            style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none", minHeight: "70px" }}
+          />
+        </div>
+        {onDone && (
+          <button className="text-xs py-1 px-3 rounded" style={{ background: "#1a2a4a", border: "1px solid #2a5298", color: "#aac4e0" }} onClick={onDone}>
+            Listo
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -1050,36 +1157,26 @@ function LotInfo({
                 let lastFecha = "";
                 const colSpan = hasLabor ? 4 : 3;
                 return sortedRows.flatMap((row, i) => {
-                  const color = tipoColor(row._tipo);
+                  const tc = tipoColor(row._tipo);
                   const dosisNum = parseFloat(String(row._dosis ?? ""));
                   const dosisStr = row._dosis !== "" && !isNaN(dosisNum) ? `${dosisNum.toFixed(2)} ${row._unid}` : "–";
                   const fechaStr = row._fechaStr || "–";
-                  const rows = [];
-
+                  const cells = [];
                   if (fechaStr !== lastFecha) {
                     lastFecha = fechaStr;
-                    rows.push(
+                    cells.push(
                       <tr key={`fecha-${i}`}>
-                        <td
-                          colSpan={colSpan}
-                          className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide"
-                          style={{
-                            background: "#0f3460",
-                            color: "#e2b04a",
-                            borderTop: "2px solid #1e3a5a",
-                            borderBottom: "1px solid #2a5298",
-                          }}
-                        >
+                        <td colSpan={colSpan} className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide"
+                          style={{ background: "#0f3460", color: "#e2b04a", borderTop: "2px solid #1e3a5a", borderBottom: "1px solid #2a5298" }}>
                           📅 {fechaStr}
                         </td>
                       </tr>
                     );
                   }
-
-                  rows.push(
+                  cells.push(
                     <tr key={i} style={{ borderBottom: "1px solid #1e2e4e" }}>
                       <td className="px-2 py-1.5">
-                        <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: color + "22", color, border: `1px solid ${color}44` }}>
+                        <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: tc + "22", color: tc, border: `1px solid ${tc}44` }}>
                           {row._tipo || "–"}
                         </span>
                       </td>
@@ -1088,7 +1185,7 @@ function LotInfo({
                       <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: "#ccd" }}>{dosisStr}</td>
                     </tr>
                   );
-                  return rows;
+                  return cells;
                 });
               })()}
             </tbody>
@@ -1096,17 +1193,54 @@ function LotInfo({
         </div>
       )}
 
-      {/* Notes */}
+      {/* ── Today's visit ── */}
       <div className="mt-4 pt-3" style={{ borderTop: "1px solid #1e2e4e" }}>
-        <label className="text-xs uppercase tracking-wider block mb-2" style={{ color: "#6a8ab0" }}>📝 Notas del recorrido</label>
-        <textarea
-          defaultValue={note}
-          onBlur={(e) => onSaveNote(e.target.value)}
-          placeholder="Escribí tus observaciones..."
-          className="w-full rounded-md p-2 text-sm resize-y min-h-[80px] leading-relaxed"
-          style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
-        />
+        <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#aac4e0" }}>📌 Recorrida de hoy</p>
+        <VisitForm visit={todayVisit} onSave={(u) => onSaveVisit(today, u)} />
       </div>
+
+      {/* ── Past visits ── */}
+      {pastVisits.length > 0 && (
+        <div className="mt-4 pt-3" style={{ borderTop: "1px solid #1e2e4e" }}>
+          <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#6a8ab0" }}>Visitas anteriores</p>
+          <div className="space-y-3">
+            {pastVisits.map((v) => {
+              const formatted = new Date(v.date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+              const hasContent = v.note || v.yieldStars || v.sprayTarget;
+              const isEditing = editingDate === v.date;
+              return (
+                <div key={v.date} className="rounded-lg p-2 text-xs" style={{ background: "#0d1b35", border: "1px solid #1e3050" }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold" style={{ color: "#aac4e0" }}>📅 {formatted}</span>
+                    <button className="text-xs px-2 py-0.5 rounded"
+                      style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+                      onClick={() => setEditingDate(isEditing ? null : v.date)}>
+                      {isEditing ? "Cerrar" : "Editar"}
+                    </button>
+                  </div>
+                  {isEditing ? (
+                    <VisitForm visit={v} onSave={(u) => onSaveVisit(v.date, u)} onDone={() => setEditingDate(null)} />
+                  ) : (
+                    <>
+                      {!hasContent && <p style={{ color: "#445" }}>Sin anotaciones</p>}
+                      {v.yieldStars > 0 && (
+                        <p style={{ color: "#e2b04a" }}>{"★".repeat(v.yieldStars)}{"☆".repeat(5 - v.yieldStars)} rinde estimado</p>
+                      )}
+                      {v.sprayTarget && (
+                        <p style={{ color: "#ccd" }}>
+                          Blanco: {v.sprayTarget}
+                          {v.sprayEffect > 0 && <span style={{ color: "#e2b04a" }}> · {"★".repeat(v.sprayEffect)}{"☆".repeat(5 - v.sprayEffect)}</span>}
+                        </p>
+                      )}
+                      {v.note && <p style={{ color: "#ccd", whiteSpace: "pre-wrap", marginTop: "4px" }}>{v.note}</p>}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
