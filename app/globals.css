@@ -1,26 +1,56 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* I.Ag color palette — dark navy */
+  --color-navy-950: #0d1525;
+  --color-navy-900: #1a1a2e;
+  --color-navy-800: #16213e;
+  --color-navy-700: #0f3460;
+  --color-navy-600: #1a4a80;
+  --color-navy-500: #2a5298;
+
+  --color-gold-400: #ffe066;
+  --color-gold-500: #e2b04a;
+  --color-gold-600: #c8922e;
+
+  --color-green-400: #3dbb6e;
+  --color-green-900: #0d2a1a;
+
+  --color-blue-light: #aac4e0;
+  --color-blue-mid: #6a8ab0;
+  --color-blue-dark: #4a6a8a;
+
+  --color-text: #e0e0e0;
+  --color-text-muted: #aac4e0;
+  --color-text-dim: #6a8ab0;
+
+  --font-sans: 'Segoe UI', Arial, Helvetica, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+  background: var(--color-navy-900);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--color-navy-950); }
+::-webkit-scrollbar-thumb { background: var(--color-navy-500); border-radius: 3px; }
+
+/* Leaflet overrides */
+.leaflet-popup-content-wrapper {
+  background: #16213e !important;
+  color: #e0e0e0 !important;
+  border: 1px solid #0f3460 !important;
+  border-radius: 8px !important;
+}
+.leaflet-popup-tip { background: #16213e !important; }
+.leaflet-popup-content { font-size: 0.85rem !important; }
