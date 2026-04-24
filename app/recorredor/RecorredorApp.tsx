@@ -830,7 +830,7 @@ export default function RecorredorApp() {
 
           {/* ── YIELD OVERLAY (bottom of map) ── */}
           {selectedLot && (rindeData[selectedLot.lotName] ?? []).length > 0 && (
-            <div className="absolute bottom-4 left-4 z-[500]" style={{ maxWidth: "calc(100% - 4.5rem)" }}>
+            <div className="absolute bottom-4 right-16 z-[500]" style={{ maxWidth: "360px" }}>
               <div className="rounded-xl px-4 py-3" style={{ background: "rgba(13,27,53,.95)", border: "1px solid #2a5298", backdropFilter: "blur(4px)" }}>
                 <p className="text-xs font-semibold mb-2" style={{ color: "#6a8ab0" }}>
                   🌾 Rindes · <span style={{ color: "#e2b04a" }}>{selectedLot.lotName}</span>
