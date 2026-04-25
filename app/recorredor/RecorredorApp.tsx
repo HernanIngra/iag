@@ -116,9 +116,20 @@ export default function RecorredorApp() {
   const [prevManagementRows, setPrevManagementRows] = useState<ParsedRow[]>([]);
   const [prevManagementTimestamp, setPrevManagementTimestamp] = useState<number>(0);
 
+  const [isMobile, setIsMobile] = useState(false);
+
   const gpsWatchRef = useRef<number | null>(null);
   const gpsMarkerRef = useRef<Layer | null>(null);
   const gpsCircleRef = useRef<Layer | null>(null);
+
+  // ── Mobile detection ────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   // ── Map init ────────────────────────────────────────────────────────────────
 
@@ -638,7 +649,9 @@ export default function RecorredorApp() {
       {/* ── TOP BAR ── */}
       <header className="flex items-center justify-between px-4 py-2 flex-shrink-0 z-50" style={{ background: "#0f3460", boxShadow: "0 2px 8px rgba(0,0,0,.4)" }}>
         <div className="flex items-center gap-3">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="px-2 py-1 rounded text-sm" style={{ background: "#0f3460", color: "#aac4e0", border: "1px solid #2a5298" }}>☰</button>
+          {!isMobile && (
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="px-2 py-1 rounded text-sm" style={{ background: "#0f3460", color: "#aac4e0", border: "1px solid #2a5298" }}>☰</button>
+          )}
           <a href="/" className="font-bold text-lg tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</a>
           <span className="text-sm hidden sm:inline" style={{ color: "#aac4e0" }}>
             {fieldName ? `✓ ${fieldName}` : "· Cargá un shapefile para comenzar"}
@@ -672,139 +685,14 @@ export default function RecorredorApp() {
       )}
 
       {/* ── MAIN ── */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 overflow-hidden" style={{ display: "flex", flexDirection: isMobile ? "column" : "row", position: "relative" }}>
 
-        {/* Backdrop — tap outside closes sidebar */}
-        {sidebarOpen && (
-          <div
-            className="absolute inset-0 z-[400]"
-            style={{ background: "rgba(0,0,0,.55)" }}
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
-        {/* ── SIDEBAR (overlay) ── */}
-        <aside
-          className="absolute top-0 left-0 bottom-0 flex flex-col overflow-y-auto transition-all duration-300 z-[500]"
-          style={{
-            width: sidebarOpen ? "300px" : "0",
-            overflow: sidebarOpen ? "auto" : "hidden",
-            background: "#16213e",
-            borderRight: "1px solid #0f3460",
-          }}
-        >
-          {/* Shapefile upload */}
-          <SidebarSection title="🗺 Shapefile de lotes">
-            <UploadZone
-              accept=".zip,.shp,.dbf,.shx,.prj"
-              multiple
-              hint=".zip o seleccioná .shp + .dbf + .shx"
-              onFiles={handleShpFiles}
-              status={shpStatus}
-              icon="🗺️"
-              loadedFiles={shpFiles}
-            />
-            {lotCount > 0 && (
-              <button className="w-full mt-2 text-xs py-1 rounded" style={{ background: "#1a4a80", color: "#e0e8f0" }}
-                onClick={() => {
-                  if (!shpLayerRef.current || !mapRef.current) return;
-                  const layers = allLotLayersRef.current.map((l) => l.layer);
-                  import("leaflet").then((L) => {
-                    const bounds = L.featureGroup(layers).getBounds();
-                    if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
-                  });
-                }}>
-                📍 Centrar en los lotes
-              </button>
-            )}
-          </SidebarSection>
-
-          {/* Manejo upload */}
-          <SidebarSection title="📄 Manejo de lotes">
-            <UploadZone
-              accept=".csv,.xlsx,.xls"
-              multiple={false}
-              hint="CSV o XLSX — elegís columnas en el siguiente paso"
-              onFiles={(fl) => { if (fl[0]) handleDataFileStart(fl[0]); }}
-              status={csvStatus}
-              icon="📄"
-              loadedFiles={csvFiles}
-            />
-            {/* Backup restore button */}
-            {prevManagementTimestamp > 0 && (
-              <button
-                className="w-full mt-2 text-xs py-1.5 px-2 rounded text-left"
-                style={{ background: "#1a2a1a", border: "1px solid #2a4a2a", color: "#3dbb6e" }}
-                onClick={restoreManagementBackup}
-              >
-                ↩ Restaurar manejo anterior ({new Date(prevManagementTimestamp).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })})
-              </button>
-            )}
-          </SidebarSection>
-
-          {/* Rindes upload */}
-          <SidebarSection title="🌾 Rindes históricos" optional>
-            <UploadZone
-              accept=".csv,.xlsx,.xls"
-              multiple={false}
-              hint="CSV o XLSX — te pedirá elegir la columna de enlace"
-              onFiles={(fl) => { if (fl[0]) handleRindeFileStart(fl[0]); }}
-              status={rindeStatus}
-              icon="📊"
-              loadedFiles={rindeFiles}
-            />
-          </SidebarSection>
-
-          {/* Filters */}
-          {allRows.length > 0 && (
-            <FiltersPanel
-              allRows={allRows}
-              cultivoColorMap={cultivoColorMap}
-              filters={activeFilters}
-              onChange={setActiveFilters}
-            />
-          )}
-
-          {/* Legend */}
-          {Object.keys(cultivoColorMap).length > 0 && (
-            <SidebarSection title="🌱 Cultivos">
-              <ul className="space-y-1">
-                {Object.entries(cultivoColorMap).sort((a, b) => a[0].localeCompare(b[0])).map(([name, color]) => (
-                  <li key={name} className="flex items-center gap-2 text-xs" style={{ color: "#ccd" }}>
-                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
-                    {name}
-                  </li>
-                ))}
-              </ul>
-            </SidebarSection>
-          )}
-
-          {/* Lot info */}
-          <div className="p-4 flex-1">
-            <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#aac4e0" }}>📌 Lote seleccionado</p>
-            {!selectedLot ? (
-              <p className="text-xs italic" style={{ color: "#445" }}>Hacé clic en un lote del mapa para ver su información.</p>
-            ) : (
-              <LotInfo
-                lotName={selectedLot.lotName}
-                zone={selectedLot.zone}
-                color={colorMap[selectedLot.zone] ?? "#e2b04a"}
-                filteredRows={filteredRows}
-                allRows={allLotRows}
-                visits={lotVisits[selectedLot.lotName] ?? []}
-                onSaveVisit={(date, update) => saveVisit(selectedLot.lotName, date, update)}
-                recentSprayings={allLotRows.filter((r) => {
-                  if (!r._fecha) return false;
-                  const days = (Date.now() - r._fecha.getTime()) / 86400000;
-                  return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
-                })}
-              />
-            )}
-          </div>
-        </aside>
-
-        {/* ── MAP ── */}
-        <div id="recorredor-map" className="absolute inset-0" />
+        {/* ── MAP AREA — always rendered, positioned by isMobile ── */}
+        <div style={isMobile
+          ? { position: "relative", height: "50vh", flexShrink: 0, width: "100%" }
+          : { position: "absolute", inset: 0 }
+        }>
+          <div id="recorredor-map" className="absolute inset-0" />
 
           {/* GPS button */}
           <button
@@ -828,8 +716,8 @@ export default function RecorredorApp() {
             </div>
           )}
 
-          {/* ── YIELD OVERLAY (bottom of map) ── */}
-          {selectedLot && (rindeData[selectedLot.lotName] ?? []).length > 0 && (
+          {/* Yield overlay — only on desktop (on mobile it's in the panel) */}
+          {!isMobile && selectedLot && (rindeData[selectedLot.lotName] ?? []).length > 0 && (
             <div className="absolute bottom-4 right-16 z-[500]" style={{ maxWidth: "360px" }}>
               <div className="rounded-xl px-4 py-3" style={{ background: "rgba(13,27,53,.95)", border: "1px solid #2a5298", backdropFilter: "blur(4px)" }}>
                 <p className="text-xs font-semibold mb-2" style={{ color: "#6a8ab0" }}>
@@ -839,6 +727,152 @@ export default function RecorredorApp() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* ── PANEL CONTENT (shared between desktop sidebar and mobile bottom panel) ── */}
+        {(() => {
+          const panelContent = (
+            <>
+              <SidebarSection title="🗺 Shapefile de lotes" collapsible defaultOpen={false}>
+                <UploadZone
+                  accept=".zip,.shp,.dbf,.shx,.prj"
+                  multiple
+                  hint=".zip o seleccioná .shp + .dbf + .shx"
+                  onFiles={handleShpFiles}
+                  status={shpStatus}
+                  icon="🗺️"
+                  loadedFiles={shpFiles}
+                />
+                {lotCount > 0 && (
+                  <button className="w-full mt-2 text-xs py-1 rounded" style={{ background: "#1a4a80", color: "#e0e8f0" }}
+                    onClick={() => {
+                      if (!shpLayerRef.current || !mapRef.current) return;
+                      const layers = allLotLayersRef.current.map((l) => l.layer);
+                      import("leaflet").then((L) => {
+                        const bounds = L.featureGroup(layers).getBounds();
+                        if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
+                      });
+                    }}>
+                    📍 Centrar en los lotes
+                  </button>
+                )}
+              </SidebarSection>
+
+              <SidebarSection title="📄 Manejo de lotes" collapsible defaultOpen={false}>
+                <UploadZone
+                  accept=".csv,.xlsx,.xls"
+                  multiple={false}
+                  hint="CSV o XLSX — elegís columnas en el siguiente paso"
+                  onFiles={(fl) => { if (fl[0]) handleDataFileStart(fl[0]); }}
+                  status={csvStatus}
+                  icon="📄"
+                  loadedFiles={csvFiles}
+                />
+                {prevManagementTimestamp > 0 && (
+                  <button
+                    className="w-full mt-2 text-xs py-1.5 px-2 rounded text-left"
+                    style={{ background: "#1a2a1a", border: "1px solid #2a4a2a", color: "#3dbb6e" }}
+                    onClick={restoreManagementBackup}
+                  >
+                    ↩ Restaurar manejo anterior ({new Date(prevManagementTimestamp).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })})
+                  </button>
+                )}
+              </SidebarSection>
+
+              <SidebarSection title="🌾 Rindes históricos" optional collapsible defaultOpen={false}>
+                <UploadZone
+                  accept=".csv,.xlsx,.xls"
+                  multiple={false}
+                  hint="CSV o XLSX — te pedirá elegir la columna de enlace"
+                  onFiles={(fl) => { if (fl[0]) handleRindeFileStart(fl[0]); }}
+                  status={rindeStatus}
+                  icon="📊"
+                  loadedFiles={rindeFiles}
+                />
+              </SidebarSection>
+
+              {allRows.length > 0 && (
+                <FiltersPanel
+                  allRows={allRows}
+                  cultivoColorMap={cultivoColorMap}
+                  filters={activeFilters}
+                  onChange={setActiveFilters}
+                />
+              )}
+
+              {Object.keys(cultivoColorMap).length > 0 && (
+                <SidebarSection title="🌱 Cultivos" collapsible defaultOpen={false}>
+                  <ul className="space-y-1">
+                    {Object.entries(cultivoColorMap).sort((a, b) => a[0].localeCompare(b[0])).map(([name, color]) => (
+                      <li key={name} className="flex items-center gap-2 text-xs" style={{ color: "#ccd" }}>
+                        <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
+                        {name}
+                      </li>
+                    ))}
+                  </ul>
+                </SidebarSection>
+              )}
+
+              <div className="p-4">
+                <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#aac4e0" }}>📌 Lote seleccionado</p>
+                {!selectedLot ? (
+                  <p className="text-xs italic" style={{ color: "#445" }}>Tocá un lote del mapa para ver su información.</p>
+                ) : (
+                  <>
+                    <LotInfo
+                      lotName={selectedLot.lotName}
+                      zone={selectedLot.zone}
+                      color={colorMap[selectedLot.zone] ?? "#e2b04a"}
+                      filteredRows={filteredRows}
+                      allRows={allLotRows}
+                      visits={lotVisits[selectedLot.lotName] ?? []}
+                      onSaveVisit={(date, update) => saveVisit(selectedLot.lotName, date, update)}
+                      recentSprayings={allLotRows.filter((r) => {
+                        if (!r._fecha) return false;
+                        const days = (Date.now() - r._fecha.getTime()) / 86400000;
+                        return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
+                      })}
+                    />
+                    {/* Yield data inside panel on mobile */}
+                    {isMobile && (rindeData[selectedLot.lotName] ?? []).length > 0 && (
+                      <div className="mt-4 pt-3" style={{ borderTop: "1px solid #1e2e4e" }}>
+                        <YieldBar lotRindes={rindeData[selectedLot.lotName] ?? []} />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
+          );
+
+          if (isMobile) {
+            return (
+              <div className="flex-1 overflow-y-auto" style={{ background: "#16213e", borderTop: "1px solid #0f3460" }}>
+                {panelContent}
+              </div>
+            );
+          }
+
+          return (
+            <>
+              {sidebarOpen && (
+                <div className="absolute inset-0 z-[400]" style={{ background: "rgba(0,0,0,.55)" }}
+                  onClick={() => setSidebarOpen(false)} />
+              )}
+              <aside
+                className="absolute top-0 left-0 bottom-0 flex flex-col overflow-y-auto transition-all duration-300 z-[500]"
+                style={{
+                  width: sidebarOpen ? "300px" : "0",
+                  overflow: sidebarOpen ? "auto" : "hidden",
+                  background: "#16213e",
+                  borderRight: "1px solid #0f3460",
+                }}
+              >
+                {panelContent}
+              </aside>
+            </>
+          );
+        })()}
       </div>
 
       {/* ── LINK COLUMN PICKER MODAL (step 1: identify lote column) ── */}
@@ -878,14 +912,24 @@ export default function RecorredorApp() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function SidebarSection({ title, children, optional }: { title: string; children: React.ReactNode; optional?: boolean }) {
+function SidebarSection({ title, children, optional, collapsible, defaultOpen = true }: {
+  title: string; children: React.ReactNode; optional?: boolean; collapsible?: boolean; defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="p-4" style={{ borderBottom: "1px solid #0f3460" }}>
-      <p className="text-xs uppercase tracking-wider mb-2 flex items-center gap-2" style={{ color: "#aac4e0" }}>
-        {title}
-        {optional && <span className="text-xs normal-case px-2 py-0.5 rounded-full" style={{ background: "#1e2e3e", color: "#6a8ab0", letterSpacing: 0, textTransform: "none" }}>Optativo</span>}
-      </p>
-      {children}
+    <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
+      <button
+        className="flex items-center justify-between w-full mb-0"
+        style={{ cursor: collapsible ? "pointer" : "default", background: "none", border: "none", padding: 0 }}
+        onClick={() => collapsible && setOpen((o) => !o)}
+      >
+        <p className="text-xs uppercase tracking-wider flex items-center gap-2" style={{ color: "#aac4e0" }}>
+          {title}
+          {optional && <span className="text-xs normal-case px-2 py-0.5 rounded-full" style={{ background: "#1e2e3e", color: "#6a8ab0", letterSpacing: 0, textTransform: "none" }}>Optativo</span>}
+        </p>
+        {collapsible && <span className="text-xs flex-shrink-0 ml-2" style={{ color: "#6a8ab0" }}>{open ? "▲" : "▼"}</span>}
+      </button>
+      {open && <div className="mt-2">{children}</div>}
     </div>
   );
 }
