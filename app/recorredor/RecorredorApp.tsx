@@ -689,7 +689,7 @@ export default function RecorredorApp() {
 
         {/* ── MAP AREA — always rendered, positioned by isMobile ── */}
         <div style={isMobile
-          ? { position: "relative", height: "50vh", flexShrink: 0, width: "100%" }
+          ? { position: "relative", height: "38vh", flexShrink: 0, width: "100%" }
           : { position: "absolute", inset: 0 }
         }>
           <div id="recorredor-map" className="absolute inset-0" />
@@ -832,13 +832,8 @@ export default function RecorredorApp() {
                         const days = (Date.now() - r._fecha.getTime()) / 86400000;
                         return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
                       })}
+                      lotRindes={rindeData[selectedLot.lotName] ?? []}
                     />
-                    {/* Yield data inside panel on mobile */}
-                    {isMobile && (rindeData[selectedLot.lotName] ?? []).length > 0 && (
-                      <div className="mt-4 pt-3" style={{ borderTop: "1px solid #1e2e4e" }}>
-                        <YieldBar lotRindes={rindeData[selectedLot.lotName] ?? []} />
-                      </div>
-                    )}
                   </>
                 )}
               </div>
@@ -1094,18 +1089,20 @@ function StarRating({ value, onChange, label }: { value: number; onChange: (n: n
 }
 
 function LotInfo({
-  lotName, zone, color, filteredRows, allRows, visits, onSaveVisit, recentSprayings,
+  lotName, zone, color, filteredRows, allRows, visits, onSaveVisit, recentSprayings, lotRindes,
 }: {
   lotName: string; zone: string; color: string;
   filteredRows: ParsedRow[]; allRows: ParsedRow[];
   visits: LotVisit[];
   onSaveVisit: (date: string, update: Partial<LotVisit>) => void;
   recentSprayings: ParsedRow[];
+  lotRindes: Array<{ campana: string; cultivo: string; tipoCorr: string; genetica: string; rinde: number }>;
 }) {
   const today = todayStr();
   const todayVisit = visits.find((v) => v.date === today) ?? { date: today, note: "", yieldStars: 0, sprayTarget: "", sprayEffect: 0 };
   const pastVisits = [...visits].filter((v) => v.date !== today).sort((a, b) => b.date.localeCompare(a.date));
   const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [rindesOpen, setRindesOpen] = useState(false);
 
   const cultivos = [...new Set(filteredRows.map((r) => r._cultivo).filter(Boolean))];
   const sups = [...new Set(filteredRows.map((r) => String(r._sup ?? "")).filter(Boolean))];
@@ -1167,12 +1164,6 @@ function LotInfo({
       <div className="text-xl font-bold mb-1" style={{ color }}>🌿 {lotName}</div>
       <div className="text-xs mb-3" style={{ color: "#8ab" }}>Campo: {zone}</div>
 
-      {allRows.length === 0 && (
-        <p className="text-xs italic mb-4" style={{ color: "#445" }}>
-          No hay datos de manejo. Cargá un CSV/XLSX con columna "Lote".
-        </p>
-      )}
-
       {allRows.length > 0 && (
         <div className="rounded-lg p-2 mb-3 text-xs space-y-1" style={{ background: "#0d1b35", color: "#8ab" }}>
           {cultivos.length > 0 && <div>🌱 <strong style={{ color: "#e2b04a" }}>Cultivo:</strong> {cultivos.join(", ")}</div>}
@@ -1184,64 +1175,87 @@ function LotInfo({
         </div>
       )}
 
-      {/* Applications table */}
-      {sortedRows.length > 0 && (
-        <div className="overflow-x-auto mb-4">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr style={{ background: "#0d1b35" }}>
-                <th className="text-left px-2 py-1" style={{ color: "#667" }}>Tipo</th>
-                {hasLabor && <th className="text-left px-2 py-1" style={{ color: "#667" }}>Labor</th>}
-                <th className="text-left px-2 py-1" style={{ color: "#667" }}>{hasLabor ? "Producto" : "Producto / Labor"}</th>
-                <th className="text-left px-2 py-1" style={{ color: "#667" }}>Dosis</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(() => {
-                let lastFecha = "";
-                const colSpan = hasLabor ? 4 : 3;
-                return sortedRows.flatMap((row, i) => {
-                  const tc = tipoColor(row._tipo);
-                  const dosisNum = parseFloat(String(row._dosis ?? ""));
-                  const dosisStr = row._dosis !== "" && !isNaN(dosisNum) ? `${dosisNum.toFixed(2)} ${row._unid}` : "–";
-                  const fechaStr = row._fechaStr || "–";
-                  const cells = [];
-                  if (fechaStr !== lastFecha) {
-                    lastFecha = fechaStr;
-                    cells.push(
-                      <tr key={`fecha-${i}`}>
-                        <td colSpan={colSpan} className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide"
-                          style={{ background: "#0f3460", color: "#e2b04a", borderTop: "2px solid #1e3a5a", borderBottom: "1px solid #2a5298" }}>
-                          📅 {fechaStr}
-                        </td>
-                      </tr>
-                    );
-                  }
-                  cells.push(
-                    <tr key={i} style={{ borderBottom: "1px solid #1e2e4e" }}>
-                      <td className="px-2 py-1.5">
-                        <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: tc + "22", color: tc, border: `1px solid ${tc}44` }}>
-                          {row._tipo || "–"}
-                        </span>
-                      </td>
-                      {hasLabor && <td className="px-2 py-1.5" style={{ color: "#aac4e0" }}>{row._labor || "–"}</td>}
-                      <td className="px-2 py-1.5" style={{ color: "#ccd" }}>{row._prod || "–"}</td>
-                      <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: "#ccd" }}>{dosisStr}</td>
-                    </tr>
-                  );
-                  return cells;
-                });
-              })()}
-            </tbody>
-          </table>
-        </div>
-      )}
-
       {/* ── Today's visit ── */}
-      <div className="mt-4 pt-3" style={{ borderTop: "1px solid #1e2e4e" }}>
+      <div className="mb-4 pt-1">
         <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#aac4e0" }}>📌 Recorrida de hoy</p>
         <VisitForm visit={todayVisit} onSave={(u) => onSaveVisit(today, u)} />
       </div>
+
+      {/* ── Rindes históricos (collapsible) ── */}
+      {lotRindes.length > 0 && (
+        <div style={{ borderTop: "1px solid #1e2e4e", marginBottom: "8px" }}>
+          <button
+            className="flex items-center justify-between w-full py-2 text-xs uppercase tracking-wider"
+            style={{ background: "none", border: "none", color: "#6a8ab0", cursor: "pointer" }}
+            onClick={() => setRindesOpen((o) => !o)}
+          >
+            <span>🌾 Rindes históricos</span>
+            <span>{rindesOpen ? "▲" : "▼"}</span>
+          </button>
+          {rindesOpen && <YieldBar lotRindes={lotRindes} />}
+        </div>
+      )}
+
+      {/* ── Applications table ── */}
+      {sortedRows.length > 0 && (
+        <div style={{ borderTop: "1px solid #1e2e4e" }}>
+          <p className="text-xs uppercase tracking-wider mt-3 mb-2" style={{ color: "#6a8ab0" }}>Historial de aplicaciones</p>
+          {allRows.length === 0 && (
+            <p className="text-xs italic mb-2" style={{ color: "#445" }}>
+              No hay datos de manejo. Cargá un CSV/XLSX con columna "Lote".
+            </p>
+          )}
+          <div className="overflow-x-auto mb-2">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr style={{ background: "#0d1b35" }}>
+                  <th className="text-left px-2 py-1" style={{ color: "#667" }}>Tipo</th>
+                  {hasLabor && <th className="text-left px-2 py-1" style={{ color: "#667" }}>Labor</th>}
+                  <th className="text-left px-2 py-1" style={{ color: "#667" }}>{hasLabor ? "Producto" : "Producto / Labor"}</th>
+                  <th className="text-left px-2 py-1" style={{ color: "#667" }}>Dosis</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  let lastFecha = "";
+                  const colSpan = hasLabor ? 4 : 3;
+                  return sortedRows.flatMap((row, i) => {
+                    const tc = tipoColor(row._tipo);
+                    const dosisNum = parseFloat(String(row._dosis ?? ""));
+                    const dosisStr = row._dosis !== "" && !isNaN(dosisNum) ? `${dosisNum.toFixed(2)} ${row._unid}` : "–";
+                    const fechaStr = row._fechaStr || "–";
+                    const cells = [];
+                    if (fechaStr !== lastFecha) {
+                      lastFecha = fechaStr;
+                      cells.push(
+                        <tr key={`fecha-${i}`}>
+                          <td colSpan={colSpan} className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide"
+                            style={{ background: "#0f3460", color: "#e2b04a", borderTop: "2px solid #1e3a5a", borderBottom: "1px solid #2a5298" }}>
+                            📅 {fechaStr}
+                          </td>
+                        </tr>
+                      );
+                    }
+                    cells.push(
+                      <tr key={i} style={{ borderBottom: "1px solid #1e2e4e" }}>
+                        <td className="px-2 py-1.5">
+                          <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: tc + "22", color: tc, border: `1px solid ${tc}44` }}>
+                            {row._tipo || "–"}
+                          </span>
+                        </td>
+                        {hasLabor && <td className="px-2 py-1.5" style={{ color: "#aac4e0" }}>{row._labor || "–"}</td>}
+                        <td className="px-2 py-1.5" style={{ color: "#ccd" }}>{row._prod || "–"}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: "#ccd" }}>{dosisStr}</td>
+                      </tr>
+                    );
+                    return cells;
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── Past visits ── */}
       {pastVisits.length > 0 && (
