@@ -642,6 +642,14 @@ export default function RecorredorApp() {
   }).length;
   const filteredRows = selectedLot ? getFilteredRows(selectedLot.lotName, activeFilters, lotData) : [];
   const allLotRows = selectedLot ? (lotData[selectedLot.lotName] ?? []) : [];
+  const todayVisit = selectedLot
+    ? (lotVisits[selectedLot.lotName] ?? []).find((v) => v.date === today) ?? { date: today, note: "", yieldStars: 0, sprayTarget: "", sprayEffect: 0 }
+    : null;
+  const recentSprayingsForSelected = allLotRows.filter((r) => {
+    if (!r._fecha) return false;
+    const days = (Date.now() - r._fecha.getTime()) / 86400000;
+    return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
+  });
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: "#1a1a2e", color: "#e0e0e0" }}>
@@ -790,6 +798,17 @@ export default function RecorredorApp() {
                   loadedFiles={rindeFiles}
                 />
               </SidebarSection>
+
+              {selectedLot && todayVisit && (
+                <SidebarSection title="📌 Recorrida de hoy" collapsible defaultOpen={true}>
+                  <VisitForm
+                    visit={todayVisit}
+                    onSave={(u) => saveVisit(selectedLot.lotName, today, u)}
+                    hasSprayingContext={recentSprayingsForSelected.length > 0}
+                    recentSprayings={recentSprayingsForSelected}
+                  />
+                </SidebarSection>
+              )}
 
               {allRows.length > 0 && (
                 <FiltersPanel
@@ -1088,6 +1107,60 @@ function StarRating({ value, onChange, label }: { value: number; onChange: (n: n
   );
 }
 
+function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings }: {
+  visit: LotVisit;
+  onSave: (u: Partial<LotVisit>) => void;
+  onDone?: () => void;
+  hasSprayingContext: boolean;
+  recentSprayings: ParsedRow[];
+}) {
+  const [localNote, setLocalNote] = useState(visit.note);
+  const [localTarget, setLocalTarget] = useState(visit.sprayTarget);
+  return (
+    <div className="space-y-3">
+      <StarRating value={visit.yieldStars} onChange={(n) => onSave({ yieldStars: n })} label="Estimación de rinde" />
+      {hasSprayingContext && (
+        <div className="p-2 rounded space-y-2" style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
+          <p className="text-xs" style={{ color: "#6a8ab0" }}>
+            Aplicación reciente:{" "}
+            {recentSprayings.slice(0, 3).map((r, i) => (
+              <span key={i}>{i > 0 ? ", " : ""}<strong style={{ color: "#e2b04a" }}>{r._prod || r._tipo}</strong>{r._fechaStr ? ` (${r._fechaStr})` : ""}</span>
+            ))}
+          </p>
+          <div>
+            <label className="text-xs block mb-1" style={{ color: "#aac4e0" }}>¿Cuál fue el blanco?</label>
+            <input
+              className="w-full rounded px-2 py-1 text-xs"
+              style={{ background: "#16213e", border: "1px solid #2a5298", color: "#e0e0e0", outline: "none" }}
+              placeholder="Ej: yuyo colorado, roya..."
+              value={localTarget}
+              onChange={(e) => setLocalTarget(e.target.value)}
+              onBlur={() => onSave({ sprayTarget: localTarget })}
+            />
+          </div>
+          <StarRating value={visit.sprayEffect} onChange={(n) => onSave({ sprayEffect: n })} label="Efectividad" />
+        </div>
+      )}
+      <div>
+        <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "#6a8ab0" }}>Notas</label>
+        <textarea
+          value={localNote}
+          onChange={(e) => setLocalNote(e.target.value)}
+          onBlur={() => onSave({ note: localNote })}
+          placeholder="Observaciones del recorrido..."
+          className="w-full rounded-md p-2 text-sm resize-y leading-relaxed"
+          style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none", minHeight: "70px" }}
+        />
+      </div>
+      {onDone && (
+        <button className="text-xs py-1 px-3 rounded" style={{ background: "#1a2a4a", border: "1px solid #2a5298", color: "#aac4e0" }} onClick={onDone}>
+          Listo
+        </button>
+      )}
+    </div>
+  );
+}
+
 function LotInfo({
   lotName, zone, color, filteredRows, allRows, visits, onSaveVisit, recentSprayings, lotRindes,
 }: {
@@ -1099,66 +1172,15 @@ function LotInfo({
   lotRindes: Array<{ campana: string; cultivo: string; tipoCorr: string; genetica: string; rinde: number }>;
 }) {
   const today = todayStr();
-  const todayVisit = visits.find((v) => v.date === today) ?? { date: today, note: "", yieldStars: 0, sprayTarget: "", sprayEffect: 0 };
   const pastVisits = [...visits].filter((v) => v.date !== today).sort((a, b) => b.date.localeCompare(a.date));
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [rindesOpen, setRindesOpen] = useState(false);
-  const [visitOpen, setVisitOpen] = useState(true);
 
   const cultivos = [...new Set(filteredRows.map((r) => r._cultivo).filter(Boolean))];
   const sups = [...new Set(filteredRows.map((r) => String(r._sup ?? "")).filter(Boolean))];
   const campaigns = [...new Set(filteredRows.map((r) => r._campaign).filter(Boolean))];
   const hasLabor = filteredRows.some((r) => r._labor);
   const sortedRows = [...filteredRows].sort((a, b) => (b._fecha?.getTime() ?? 0) - (a._fecha?.getTime() ?? 0));
-  const hasSprayingContext = recentSprayings.length > 0;
-
-  function VisitForm({ visit, onSave, onDone }: { visit: LotVisit; onSave: (u: Partial<LotVisit>) => void; onDone?: () => void }) {
-    const [localNote, setLocalNote] = useState(visit.note);
-    const [localTarget, setLocalTarget] = useState(visit.sprayTarget);
-    return (
-      <div className="space-y-3">
-        <StarRating value={visit.yieldStars} onChange={(n) => onSave({ yieldStars: n })} label="Estimación de rinde" />
-        {hasSprayingContext && (
-          <div className="p-2 rounded space-y-2" style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
-            <p className="text-xs" style={{ color: "#6a8ab0" }}>
-              Aplicación reciente:{" "}
-              {recentSprayings.slice(0, 3).map((r, i) => (
-                <span key={i}>{i > 0 ? ", " : ""}<strong style={{ color: "#e2b04a" }}>{r._prod || r._tipo}</strong>{r._fechaStr ? ` (${r._fechaStr})` : ""}</span>
-              ))}
-            </p>
-            <div>
-              <label className="text-xs block mb-1" style={{ color: "#aac4e0" }}>¿Cuál fue el blanco?</label>
-              <input
-                className="w-full rounded px-2 py-1 text-xs"
-                style={{ background: "#16213e", border: "1px solid #2a5298", color: "#e0e0e0", outline: "none" }}
-                placeholder="Ej: yuyo colorado, roya..."
-                value={localTarget}
-                onChange={(e) => setLocalTarget(e.target.value)}
-                onBlur={() => onSave({ sprayTarget: localTarget })}
-              />
-            </div>
-            <StarRating value={visit.sprayEffect} onChange={(n) => onSave({ sprayEffect: n })} label="Efectividad" />
-          </div>
-        )}
-        <div>
-          <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "#6a8ab0" }}>Notas</label>
-          <textarea
-            value={localNote}
-            onChange={(e) => setLocalNote(e.target.value)}
-            onBlur={() => onSave({ note: localNote })}
-            placeholder="Observaciones del recorrido..."
-            className="w-full rounded-md p-2 text-sm resize-y leading-relaxed"
-            style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none", minHeight: "70px" }}
-          />
-        </div>
-        {onDone && (
-          <button className="text-xs py-1 px-3 rounded" style={{ background: "#1a2a4a", border: "1px solid #2a5298", color: "#aac4e0" }} onClick={onDone}>
-            Listo
-          </button>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div>
@@ -1175,23 +1197,6 @@ function LotInfo({
           </div>
         </div>
       )}
-
-      {/* ── Today's visit (collapsible) ── */}
-      <div className="mb-2" style={{ borderTop: "1px solid #1e2e4e" }}>
-        <button
-          className="flex items-center justify-between w-full py-2 text-xs uppercase tracking-wider"
-          style={{ background: "none", border: "none", color: "#aac4e0", cursor: "pointer" }}
-          onClick={() => setVisitOpen((o) => !o)}
-        >
-          <span>📌 Recorrida de hoy</span>
-          <span>{visitOpen ? "▲" : "▼"}</span>
-        </button>
-        {visitOpen && (
-          <div className="pb-3">
-            <VisitForm visit={todayVisit} onSave={(u) => onSaveVisit(today, u)} />
-          </div>
-        )}
-      </div>
 
       {/* ── Rindes históricos (collapsible) ── */}
       {lotRindes.length > 0 && (
@@ -1289,7 +1294,7 @@ function LotInfo({
                     </button>
                   </div>
                   {isEditing ? (
-                    <VisitForm visit={v} onSave={(u) => onSaveVisit(v.date, u)} onDone={() => setEditingDate(null)} />
+                    <VisitForm visit={v} onSave={(u) => onSaveVisit(v.date, u)} onDone={() => setEditingDate(null)} hasSprayingContext={recentSprayings.length > 0} recentSprayings={recentSprayings} />
                   ) : (
                     <>
                       {!hasContent && <p style={{ color: "#445" }}>Sin anotaciones</p>}
