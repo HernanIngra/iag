@@ -1103,6 +1103,7 @@ function LotInfo({
   const pastVisits = [...visits].filter((v) => v.date !== today).sort((a, b) => b.date.localeCompare(a.date));
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [rindesOpen, setRindesOpen] = useState(false);
+  const [visitOpen, setVisitOpen] = useState(true);
 
   const cultivos = [...new Set(filteredRows.map((r) => r._cultivo).filter(Boolean))];
   const sups = [...new Set(filteredRows.map((r) => String(r._sup ?? "")).filter(Boolean))];
@@ -1175,10 +1176,21 @@ function LotInfo({
         </div>
       )}
 
-      {/* ── Today's visit ── */}
-      <div className="mb-4 pt-1">
-        <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#aac4e0" }}>📌 Recorrida de hoy</p>
-        <VisitForm visit={todayVisit} onSave={(u) => onSaveVisit(today, u)} />
+      {/* ── Today's visit (collapsible) ── */}
+      <div className="mb-2" style={{ borderTop: "1px solid #1e2e4e" }}>
+        <button
+          className="flex items-center justify-between w-full py-2 text-xs uppercase tracking-wider"
+          style={{ background: "none", border: "none", color: "#aac4e0", cursor: "pointer" }}
+          onClick={() => setVisitOpen((o) => !o)}
+        >
+          <span>📌 Recorrida de hoy</span>
+          <span>{visitOpen ? "▲" : "▼"}</span>
+        </button>
+        {visitOpen && (
+          <div className="pb-3">
+            <VisitForm visit={todayVisit} onSave={(u) => onSaveVisit(today, u)} />
+          </div>
+        )}
       </div>
 
       {/* ── Rindes históricos (collapsible) ── */}
