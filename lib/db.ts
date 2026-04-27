@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GeoCollection } from "./shapefile";
-import type { LotData, RindeData, ParsedRow, RindeRow } from "./data-parser";
+import type { LotData, RindeData, ParsedRow, RindeRow, ColumnMapping } from "./data-parser";
 
 // ─── Workspace type ─────────────────────────────────────────────────────────
 
@@ -10,6 +10,12 @@ export interface LotVisit {
   yieldStars: number;  // 0 = not set, 1–5
   sprayTarget: string;
   sprayEffect: number; // 0 = not set, 1–5
+}
+
+export interface DriveManejo {
+  fileId: string;
+  type: "sheets" | "file";
+  url: string;
 }
 
 export interface Workspace {
@@ -25,6 +31,8 @@ export interface Workspace {
   shpFiles: string[];
   csvFiles: string[];
   rindeFiles: string[];
+  driveManejo?: DriveManejo | null;
+  manejoColMapping?: ColumnMapping | null;
 }
 
 // ─── Date serialization ─────────────────────────────────────────────────────
@@ -84,6 +92,8 @@ export async function saveWorkspace(
       shp_files: state.shpFiles,
       csv_files: state.csvFiles,
       rinde_files: state.rindeFiles,
+      drive_manejo: state.driveManejo ?? null,
+      manejo_col_mapping: state.manejoColMapping ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" }
@@ -118,6 +128,8 @@ export async function loadWorkspace(
     shpFiles: (data.shp_files ?? []) as string[],
     csvFiles: (data.csv_files ?? []) as string[],
     rindeFiles: (data.rinde_files ?? []) as string[],
+    driveManejo: (data.drive_manejo ?? null) as DriveManejo | null,
+    manejoColMapping: (data.manejo_col_mapping ?? null) as ColumnMapping | null,
   };
 }
 
@@ -142,6 +154,8 @@ export function saveWorkspaceLocal(state: Workspace): void {
         shp_files: state.shpFiles,
         csv_files: state.csvFiles,
         rinde_files: state.rindeFiles,
+        drive_manejo: state.driveManejo ?? null,
+        manejo_col_mapping: state.manejoColMapping ?? null,
       })
     );
   } catch {
@@ -167,6 +181,8 @@ export function loadWorkspaceLocal(): Workspace | null {
       shpFiles: (data.shp_files ?? []) as string[],
       csvFiles: (data.csv_files ?? []) as string[],
       rindeFiles: (data.rinde_files ?? []) as string[],
+      driveManejo: (data.drive_manejo ?? null) as DriveManejo | null,
+      manejoColMapping: (data.manejo_col_mapping ?? null) as ColumnMapping | null,
     };
   } catch {
     return null;

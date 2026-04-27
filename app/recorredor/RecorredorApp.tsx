@@ -38,6 +38,7 @@ import {
   clearManagementBackup,
   type Workspace,
   type LotVisit,
+  type DriveManejo,
 } from "@/lib/db";
 
 function todayStr() {
@@ -122,6 +123,21 @@ export default function RecorredorApp() {
   const gpsMarkerRef = useRef<Layer | null>(null);
   const gpsCircleRef = useRef<Layer | null>(null);
 
+  // Drive manejo
+  const [driveManejo, setDriveManejo] = useState<DriveManejo | null>(null);
+  const [manejoColMapping, setManejoColMapping] = useState<ColumnMapping | null>(null);
+  const [driveRefreshing, setDriveRefreshing] = useState(false);
+  const [driveError, setDriveError] = useState<string | null>(null);
+  const [pendingDriveInfo, setPendingDriveInfo] = useState<DriveManejo | null>(null);
+  const [manejoTab, setManejoTab] = useState<"local" | "drive">("local");
+  const [driveUrlInput, setDriveUrlInput] = useState("");
+
+  // ── Switch to Drive tab when a Drive link is active ─────────────────────────
+
+  useEffect(() => {
+    if (driveManejo) setManejoTab("drive");
+  }, [driveManejo]);
+
   // ── Mobile detection ────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -203,6 +219,8 @@ export default function RecorredorApp() {
     setShpFiles(ws.shpFiles);
     setCsvFiles(ws.csvFiles);
     setRindeFiles(ws.rindeFiles);
+    if (ws.driveManejo) setDriveManejo(ws.driveManejo);
+    if (ws.manejoColMapping) setManejoColMapping(ws.manejoColMapping);
     setShpStatus({ msg: `✓ ${ws.lotCount} lotes`, ok: true });
     if (ws.allRows.length) {
       setCsvStatus({ msg: `✓ ${ws.allRows.length} registros · ${Object.keys(ws.lotData).length} lotes`, ok: true });
@@ -231,6 +249,9 @@ export default function RecorredorApp() {
         const bounds = mod.default.featureGroup(layerList as LeafletGeoJSON[]).getBounds();
         if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
       });
+      if (ws.driveManejo && ws.manejoColMapping) {
+        refreshDriveWith(ws.driveManejo, ws.manejoColMapping);
+      }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, mapReady]);
@@ -248,6 +269,9 @@ export default function RecorredorApp() {
         if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
       });
     });
+    if (ws.driveManejo && ws.manejoColMapping) {
+      refreshDriveWith(ws.driveManejo, ws.manejoColMapping);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, authLoaded, user]);
 
@@ -260,6 +284,7 @@ export default function RecorredorApp() {
       const state: Workspace = {
         fieldName, lotCount, collections, colorMap, cultivoColorMap,
         lotData, allRows, rindeData, lotVisits, shpFiles, csvFiles, rindeFiles,
+        driveManejo, manejoColMapping,
       };
       saveWorkspaceLocal(state);
       if (user) {
@@ -270,7 +295,7 @@ export default function RecorredorApp() {
     }, 1500);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, lotData, rindeData, lotVisits, user]);
+  }, [collections, lotData, rindeData, lotVisits, driveManejo, manejoColMapping, user]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -460,8 +485,17 @@ export default function RecorredorApp() {
       setCultivoColorMap(cMap);
       recolorPolygons(cMap, finalLotData);
 
-      setCsvStatus({ msg: `✓ ${finalRows.length} registros · ${Object.keys(finalLotData).length} lotes`, ok: true });
-      setCsvFiles((prev) => [...prev, pendingFile!.name]);
+      setManejoColMapping(mapping);
+      if (pendingDriveInfo) {
+        setDriveManejo(pendingDriveInfo);
+        setPendingDriveInfo(null);
+        setCsvFiles([]);
+        const time = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+        setCsvStatus({ msg: `✓ Drive · ${finalRows.length} registros · ${Object.keys(finalLotData).length} lotes · ${time}`, ok: true });
+      } else {
+        setCsvStatus({ msg: `✓ ${finalRows.length} registros · ${Object.keys(finalLotData).length} lotes`, ok: true });
+        setCsvFiles((prev) => [...prev, pendingFile!.name]);
+      }
       setPendingFile(null);
 
       rebuildFilters(finalRows);
@@ -596,6 +630,67 @@ export default function RecorredorApp() {
     navigator.geolocation.getCurrentPosition(onSuccess, () => setGpsStatus("Error GPS"), { enableHighAccuracy: true });
     gpsWatchRef.current = navigator.geolocation.watchPosition(onSuccess, undefined, { enableHighAccuracy: true, maximumAge: 5000 });
     setGpsTracking(true);
+  }
+
+  // ── Drive manejo ─────────────────────────────────────────────────────────────
+
+  async function refreshDriveWith(info: DriveManejo, mapping: ColumnMapping) {
+    setDriveRefreshing(true);
+    setDriveError(null);
+    setCsvStatus({ msg: "Actualizando desde Drive...", ok: false });
+    try {
+      const res = await fetch(`/api/drive-fetch?fileId=${info.fileId}&type=${info.type}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const file = new File([blob], "drive-manejo.xlsx", { type: blob.type });
+      const { rows, lotData: newLd } = await parseManagementFile(file, mapping);
+      setAllRows(rows);
+      setLotData(newLd);
+      const cultivoNames = [...new Set(rows.map((r) => r._cultivo).filter(Boolean))];
+      const cMap = buildCultivoColorMap(cultivoNames);
+      setCultivoColorMap(cMap);
+      recolorPolygons(cMap, newLd);
+      rebuildFilters(rows);
+      const time = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+      setCsvStatus({ msg: `✓ Drive · ${rows.length} registros · actualizado ${time}`, ok: true });
+    } catch (err) {
+      const msg = (err as Error).message;
+      setDriveError(msg);
+      setCsvStatus({ msg: `✗ Drive: ${msg}`, ok: false });
+    } finally {
+      setDriveRefreshing(false);
+    }
+  }
+
+  async function handleDriveLink() {
+    const parsed = parseDriveUrl(driveUrlInput.trim());
+    if (!parsed) {
+      setDriveError("Link inválido. Usá el link compartido de Google Sheets o Drive.");
+      return;
+    }
+    const info: DriveManejo = { ...parsed, url: driveUrlInput.trim() };
+    setDriveError(null);
+    setPendingDriveInfo(info);
+    setCsvStatus({ msg: "Descargando desde Drive...", ok: false });
+    try {
+      const res = await fetch(`/api/drive-fetch?fileId=${parsed.fileId}&type=${parsed.type}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const file = new File([blob], "drive-manejo.xlsx", { type: blob.type });
+      setCsvStatus(null);
+      await handleDataFileStart(file);
+    } catch (err) {
+      const msg = (err as Error).message;
+      setDriveError(msg);
+      setCsvStatus({ msg: `✗ Drive: ${msg}`, ok: false });
+      setPendingDriveInfo(null);
+    }
   }
 
   // ── Visit observations ───────────────────────────────────────────────────────
@@ -767,23 +862,104 @@ export default function RecorredorApp() {
               </SidebarSection>
 
               <SidebarSection title="📄 Manejo de lotes" collapsible defaultOpen={false}>
-                <UploadZone
-                  accept=".csv,.xlsx,.xls"
-                  multiple={false}
-                  hint="CSV o XLSX — elegís columnas en el siguiente paso"
-                  onFiles={(fl) => { if (fl[0]) handleDataFileStart(fl[0]); }}
-                  status={csvStatus}
-                  icon="📄"
-                  loadedFiles={csvFiles}
-                />
-                {prevManagementTimestamp > 0 && (
-                  <button
-                    className="w-full mt-2 text-xs py-1.5 px-2 rounded text-left"
-                    style={{ background: "#1a2a1a", border: "1px solid #2a4a2a", color: "#3dbb6e" }}
-                    onClick={restoreManagementBackup}
-                  >
-                    ↩ Restaurar manejo anterior ({new Date(prevManagementTimestamp).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })})
-                  </button>
+                {/* Tab toggle */}
+                <div className="flex gap-1 mb-3">
+                  {(["local", "drive"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      className="flex-1 py-1 text-xs rounded"
+                      style={{
+                        background: manejoTab === tab ? "#0f3460" : "transparent",
+                        border: "1px solid #2a5298",
+                        color: manejoTab === tab ? "#e0e8f0" : "#6a8ab0",
+                      }}
+                      onClick={() => setManejoTab(tab)}
+                    >
+                      {tab === "local" ? "📁 Archivo" : "☁️ Google Drive"}
+                    </button>
+                  ))}
+                </div>
+
+                {manejoTab === "local" ? (
+                  <>
+                    <UploadZone
+                      accept=".csv,.xlsx,.xls"
+                      multiple={false}
+                      hint="CSV o XLSX — elegís columnas en el siguiente paso"
+                      onFiles={(fl) => { if (fl[0]) handleDataFileStart(fl[0]); }}
+                      status={csvStatus}
+                      icon="📄"
+                      loadedFiles={csvFiles}
+                    />
+                    {prevManagementTimestamp > 0 && (
+                      <button
+                        className="w-full mt-2 text-xs py-1.5 px-2 rounded text-left"
+                        style={{ background: "#1a2a1a", border: "1px solid #2a4a2a", color: "#3dbb6e" }}
+                        onClick={restoreManagementBackup}
+                      >
+                        ↩ Restaurar manejo anterior ({new Date(prevManagementTimestamp).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })})
+                      </button>
+                    )}
+                  </>
+                ) : driveManejo ? (
+                  /* Drive — ya vinculado */
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs px-2 py-2 rounded" style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
+                      <span>☁️</span>
+                      <span className="flex-1 truncate font-semibold" style={{ color: "#3dbb6e" }}>
+                        {driveManejo.type === "sheets" ? "Google Sheets" : "Google Drive"} vinculado
+                      </span>
+                    </div>
+                    {csvStatus && (
+                      <p className="text-xs px-1" style={{ color: csvStatus.ok ? "#3dbb6e" : "#e2b04a" }}>{csvStatus.msg}</p>
+                    )}
+                    {driveError && (
+                      <p className="text-xs px-2 py-1 rounded" style={{ background: "#3a1a1a", border: "1px solid #6a2a2a", color: "#e07070" }}>{driveError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        className="flex-1 py-1.5 text-xs rounded font-semibold"
+                        style={{ background: "#1a3a2a", border: "1px solid #2a5a3a", color: "#3dbb6e", opacity: driveRefreshing ? 0.6 : 1 }}
+                        onClick={() => manejoColMapping && refreshDriveWith(driveManejo, manejoColMapping)}
+                        disabled={driveRefreshing || !manejoColMapping}
+                      >
+                        {driveRefreshing ? "Actualizando..." : "↻ Actualizar"}
+                      </button>
+                      <button
+                        className="px-3 py-1.5 text-xs rounded"
+                        style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+                        onClick={() => { setDriveManejo(null); setManejoColMapping(null); setDriveError(null); setCsvStatus(null); }}
+                      >
+                        Desvincular
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Drive — no vinculado */
+                  <div className="space-y-2">
+                    <p className="text-xs leading-relaxed" style={{ color: "#6a8ab0" }}>
+                      Compartí tu Google Sheet o archivo de Drive como <strong style={{ color: "#aac4e0" }}>"cualquiera con el link puede ver"</strong> y pegá el link acá.
+                    </p>
+                    <input
+                      className="w-full rounded px-2 py-1.5 text-xs"
+                      style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd", outline: "none" }}
+                      placeholder="https://docs.google.com/spreadsheets/d/..."
+                      value={driveUrlInput}
+                      onChange={(e) => { setDriveUrlInput(e.target.value); setDriveError(null); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" && driveUrlInput.trim()) handleDriveLink(); }}
+                    />
+                    {driveError && (
+                      <p className="text-xs px-2 py-1 rounded" style={{ background: "#3a1a1a", border: "1px solid #6a2a2a", color: "#e07070" }}>{driveError}</p>
+                    )}
+                    <button
+                      className="w-full py-1.5 text-xs rounded font-semibold"
+                      style={{ background: driveUrlInput.trim() ? "#1a3460" : "#0d1b35", border: "1px solid #2a5298", color: driveUrlInput.trim() ? "#e0e8f0" : "#445" }}
+                      onClick={handleDriveLink}
+                      disabled={!driveUrlInput.trim()}
+                    >
+                      Vincular archivo
+                    </button>
+                  </div>
                 )}
               </SidebarSection>
 
@@ -895,7 +1071,7 @@ export default function RecorredorApp() {
           columns={linkPickerCols}
           fileName={pendingFile?.name ?? ""}
           onSelect={handleLinkColumnSelected}
-          onCancel={() => { setLinkPickerCols([]); setPendingFile(null); setCsvStatus(null); }}
+          onCancel={() => { setLinkPickerCols([]); setPendingFile(null); setPendingDriveInfo(null); setCsvStatus(null); }}
         />
       )}
 
@@ -907,7 +1083,7 @@ export default function RecorredorApp() {
           fileName={pendingFile?.name ?? ""}
           hasExistingData={allRows.length > 0}
           onConfirm={handleColMappingConfirmed}
-          onCancel={() => { setPendingColMapping(null); setPendingFile(null); setCsvStatus(null); }}
+          onCancel={() => { setPendingColMapping(null); setPendingFile(null); setPendingDriveInfo(null); setCsvStatus(null); }}
         />
       )}
 
@@ -922,6 +1098,18 @@ export default function RecorredorApp() {
       )}
     </div>
   );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function parseDriveUrl(url: string): { fileId: string; type: "sheets" | "file" } | null {
+  const sheetsMatch = url.match(/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (sheetsMatch) return { fileId: sheetsMatch[1], type: "sheets" };
+  const driveMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch) return { fileId: driveMatch[1], type: "file" };
+  const openMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (openMatch) return { fileId: openMatch[1], type: "file" };
+  return null;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
