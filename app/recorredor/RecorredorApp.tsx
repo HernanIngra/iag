@@ -693,6 +693,33 @@ export default function RecorredorApp() {
     }
   }
 
+  // ── Export visits CSV ────────────────────────────────────────────────────────
+
+  function downloadVisitsCSV() {
+    const header = ["Lote", "Fecha", "Rinde estimado (★)", "Blanco de aplicación", "Efectividad (★)", "Notas"];
+    const rows: string[][] = [header];
+    Object.entries(lotVisits)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([lot, visits]) => {
+        [...visits]
+          .sort((a, b) => b.date.localeCompare(a.date))
+          .forEach((v) => {
+            if (!v.note && !v.yieldStars && !v.sprayTarget) return;
+            const fecha = new Date(v.date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+            rows.push([lot, fecha, v.yieldStars ? String(v.yieldStars) : "", v.sprayTarget ?? "", v.sprayEffect ? String(v.sprayEffect) : "", v.note ?? ""]);
+          });
+      });
+    if (rows.length === 1) return;
+    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `recorridos-${todayStr()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Visit observations ───────────────────────────────────────────────────────
 
   function saveVisit(lotName: string, date: string, update: Partial<LotVisit>) {
@@ -993,6 +1020,18 @@ export default function RecorredorApp() {
                   filters={activeFilters}
                   onChange={setActiveFilters}
                 />
+              )}
+
+              {Object.values(lotVisits).some((vs) => vs.some((v) => v.note || v.yieldStars || v.sprayTarget)) && (
+                <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
+                  <button
+                    className="w-full py-1.5 text-xs rounded"
+                    style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+                    onClick={downloadVisitsCSV}
+                  >
+                    ⬇ Exportar historial de recorridas (.csv)
+                  </button>
+                </div>
               )}
 
               {Object.keys(cultivoColorMap).length > 0 && (
