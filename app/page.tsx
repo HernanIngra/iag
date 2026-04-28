@@ -23,8 +23,8 @@ const apps = [
     subtitle: "Comparador",
     description:
       "Compará genéticas y agroquímicos con tus ensayos. Entendé qué materiales funcionan mejor en cada ambiente.",
-    available: false,
-    badge: "Próximamente",
+    available: true,
+    badge: null,
   },
   {
     href: "/presupuesto",
