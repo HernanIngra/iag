@@ -44,6 +44,8 @@ trial_entradas: dict[tuple, list] = defaultdict(list)
 for row in ws.iter_rows(min_row=2, values_only=True):
     inst = str(row[0] or "").strip()
     red  = str(row[1] or "").strip()
+    if red in ("Chaguar", "ADECO"):
+        red = "Ensayos particulares"
     loc  = str(row[2] or "").strip()
     prod = str(row[3] or "").strip() or None
     amb  = str(row[4] or "").strip() or None
