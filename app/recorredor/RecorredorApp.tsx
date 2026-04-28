@@ -66,7 +66,9 @@ interface SelectedLot {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function RecorredorApp() {
+const ADMIN_EMAIL = "hernaningrassia@gmail.com";
+
+export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string; asEmail?: string } = {}) {
   const mapRef = useRef<LeafletMap | null>(null);
   const shpLayerRef = useRef<LayerGroup | null>(null);
   const allLotLayersRef = useRef<LotLayer[]>([]);
@@ -97,6 +99,10 @@ export default function RecorredorApp() {
   const [isSaving, setIsSaving] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const supabase = useState(() => createSupabaseBrowserClient())[0];
+
+  // Admin helpers (computed after user is known)
+  const isAdmin = user?.email === ADMIN_EMAIL;
+  const effectiveUserId = (isAdmin && asUserId) ? asUserId : user?.id;
 
   // Column picker — manejo (step 1: link column)
   const [linkPickerCols, setLinkPickerCols] = useState<string[]>([]);
@@ -240,7 +246,7 @@ export default function RecorredorApp() {
 
   useEffect(() => {
     if (!user || !mapReady) return;
-    loadWorkspace(supabase, user.id).then(async (ws) => {
+    loadWorkspace(supabase, effectiveUserId ?? user.id).then(async (ws) => {
       if (!ws || !ws.collections.length) ws = loadWorkspaceLocal();
       if (!ws || !ws.collections.length) return;
       applyWorkspace(ws);
@@ -289,7 +295,7 @@ export default function RecorredorApp() {
       saveWorkspaceLocal(state);
       if (user) {
         setIsSaving(true);
-        await saveWorkspace(supabase, user.id, state);
+        await saveWorkspace(supabase, effectiveUserId ?? user.id, state);
         setIsSaving(false);
       }
     }, 1500);
@@ -789,6 +795,11 @@ export default function RecorredorApp() {
           {lotCount > 0 && <span className="text-xs" style={{ color: "#6a8ab0" }}>{lotCount} lotes</span>}
         </div>
         <div className="flex items-center gap-3">
+          {isAdmin && !asUserId && (
+            <a href="/admin" className="text-xs font-semibold px-2 py-1 rounded" style={{ background: "#1a2a10", color: "#3dbb6e", border: "1px solid #1a4a20" }}>
+              Admin
+            </a>
+          )}
           {isSaving && <span className="text-xs" style={{ color: "#6a8ab0" }}>Guardando...</span>}
           {noteCount > 0 && (
             <>
@@ -803,6 +814,18 @@ export default function RecorredorApp() {
           <AuthButton />
         </div>
       </header>
+
+      {/* ── ADMIN BANNER ── */}
+      {isAdmin && asUserId && (
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 text-xs" style={{ background: "#2a1a00", borderBottom: "1px solid #e2b04a" }}>
+          <span style={{ color: "#e2b04a" }}>
+            🔧 <strong>Modo admin</strong> · cargando para <strong>{asEmail ?? asUserId}</strong>
+          </span>
+          <a href="/admin" className="font-semibold px-3 py-1 rounded" style={{ background: "#0f3460", color: "#e2b04a", border: "1px solid #2a5298" }}>
+            ← Panel admin
+          </a>
+        </div>
+      )}
 
       {/* ── LOGIN BANNER ── */}
       {!user && lotCount > 0 && (
