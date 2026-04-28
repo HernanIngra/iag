@@ -29,4 +29,5 @@ export interface InaseCatalogEntry {
   n: number;
   c: string; // cultivar
   e: "MAIZ" | "SOJA";
+  s: string;  // solicitante_rnc (empresa)
 }

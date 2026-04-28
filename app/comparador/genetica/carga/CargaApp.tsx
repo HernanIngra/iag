@@ -60,11 +60,10 @@ function InaseInput({
 
   const especie = cultivo === "maiz" ? "MAIZ" : "SOJA";
   const suggestions = catalog
-    .filter(
-      (e) =>
-        e.e === especie && e.c.toLowerCase().includes(value.toLowerCase())
-    )
-    .slice(0, 12);
+    .filter((e) => e.e === especie && e.c.toLowerCase().includes(value.toLowerCase()))
+    .slice(0, 20);
+  const exactMatch = suggestions.some((s) => s.c.toLowerCase() === value.toLowerCase());
+  const showFreeText = value.trim().length > 0 && !exactMatch;
 
   return (
     <div ref={ref} style={{ position: "relative", flex: 1 }}>
@@ -88,7 +87,7 @@ function InaseInput({
           boxSizing: "border-box",
         }}
       />
-      {open && suggestions.length > 0 && (
+      {open && (suggestions.length > 0 || showFreeText) && (
         <ul
           style={{
             position: "absolute",
@@ -109,27 +108,25 @@ function InaseInput({
           {suggestions.map((s) => (
             <li
               key={s.n + s.c}
-              onMouseDown={() => {
-                onChange(s.c);
-                setOpen(false);
-              }}
-              style={{
-                padding: "7px 12px",
-                cursor: "pointer",
-                fontSize: 12,
-                color: "#aac4e0",
-                borderBottom: "1px solid #0f2040",
-              }}
-              onMouseEnter={(e) =>
-                ((e.currentTarget as HTMLElement).style.background = "#1a3060")
-              }
-              onMouseLeave={(e) =>
-                ((e.currentTarget as HTMLElement).style.background = "transparent")
-              }
+              onMouseDown={() => { onChange(s.c); setOpen(false); }}
+              style={{ padding: "7px 12px", cursor: "pointer", fontSize: 12, color: "#aac4e0", borderBottom: "1px solid #0f2040" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#1a3060")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
             >
               {s.c}
             </li>
           ))}
+          {showFreeText && (
+            <li
+              onMouseDown={() => { onChange(value.trim()); setOpen(false); }}
+              style={{ padding: "7px 12px", cursor: "pointer", fontSize: 12, color: "#e2b04a", borderTop: suggestions.length ? "1px solid #1a4a80" : "none", display: "flex", alignItems: "center", gap: 6 }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#1a3060")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+            >
+              <span style={{ fontSize: 14 }}>✎</span>
+              Usar &quot;{value.trim()}&quot; como híbrido experimental
+            </li>
+          )}
         </ul>
       )}
     </div>

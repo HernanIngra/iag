@@ -42,10 +42,12 @@ with open(SRC, encoding="utf-8", errors="replace") as f:
             num = int(float((row.get("numero") or "0").replace(",", ".")))
         except (ValueError, AttributeError):
             num = 0
+        solicitante = (row.get("solicitante_rnc") or "").strip()
         entries.append({
             "n": num,
             "c": cultivar,
             "e": especie,
+            "s": solicitante,
         })
 
 os.makedirs(os.path.dirname(DST), exist_ok=True)
