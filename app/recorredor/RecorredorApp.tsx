@@ -73,6 +73,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const shpLayerRef = useRef<LayerGroup | null>(null);
   const allLotLayersRef = useRef<LotLayer[]>([]);
   const selectedLayerRef = useRef<LeafletGeoJSON | null>(null);
+  const lotDimmedRef = useRef<Set<string>>(new Set());
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [collections, setCollections] = useState<GeoCollection[]>([]);
@@ -303,6 +304,28 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collections, lotData, rindeData, lotVisits, driveManejo, manejoColMapping, user]);
 
+  // ── Dim/highlight lots based on tipo filter ─────────────────────────────────
+
+  useEffect(() => {
+    if (!allLotLayersRef.current.length) return;
+    const filterActive = activeFilters.tipos.length > 0;
+    const newDimmed = new Set<string>();
+    allLotLayersRef.current.forEach(({ layer, lotName }) => {
+      if (layer === selectedLayerRef.current) return;
+      if (!filterActive) {
+        layer.setStyle({ fillOpacity: 0.35 });
+      } else {
+        const hasMatch = (lotData[lotName] ?? []).some(
+          (r) => r._tipo && activeFilters.tipos.includes(r._tipo)
+        );
+        layer.setStyle({ fillOpacity: hasMatch ? 0.45 : 0.08 });
+        if (!hasMatch) newDimmed.add(lotName);
+      }
+    });
+    lotDimmedRef.current = newDimmed;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilters.tipos, lotData]);
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   function getLotBaseColor(props: Record<string, unknown>, cultivoMap: Record<string, string>, data: LotData): string {
@@ -369,11 +392,17 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           allLotLayersRef.current.push({ layer: lotLayer, lotName, zone, props: props as Record<string, unknown> });
           lotLayer.on("click", () => selectLot(lotLayer, lotName, zone, props as Record<string, unknown>, cMap, cCultivoMap, data));
           lotLayer.on("mouseover", () => {
-            if (lotLayer !== selectedLayerRef.current) lotLayer.setStyle({ fillOpacity: 0.6, weight: 2 });
+            if (lotLayer !== selectedLayerRef.current) {
+              const opacity = lotDimmedRef.current.has(lotName) ? 0.2 : 0.6;
+              lotLayer.setStyle({ fillOpacity: opacity, weight: 2 });
+            }
             lotLayer.bindTooltip(`<b>${lotName}</b><br><small>${zone}</small>`, { sticky: true }).openTooltip();
           });
           lotLayer.on("mouseout", () => {
-            if (lotLayer !== selectedLayerRef.current) lotLayer.setStyle({ fillOpacity: 0.35, weight: 1.2 });
+            if (lotLayer !== selectedLayerRef.current) {
+              const opacity = lotDimmedRef.current.has(lotName) ? 0.08 : 0.35;
+              lotLayer.setStyle({ fillOpacity: opacity, weight: 1.2 });
+            }
             lotLayer.unbindTooltip();
           });
         },
@@ -589,8 +618,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   ) {
     if (selectedLayerRef.current) {
       const prev = allLotLayersRef.current.find((l) => l.layer === selectedLayerRef.current);
+      const prevOpacity = prev && lotDimmedRef.current.has(prev.lotName) ? 0.08 : 0.35;
       selectedLayerRef.current.setStyle({
-        fillOpacity: 0.35,
+        fillOpacity: prevOpacity,
         weight: 1.2,
         color: "#fff",
         fillColor: getLotBaseColor(prev?.props ?? {}, cCultivoMap, data),
@@ -1267,7 +1297,12 @@ function FiltersPanel({
   onChange: (f: ActiveFilters) => void;
 }) {
   const campaigns = [...new Set(allRows.map((r) => r._campaign).filter(Boolean))].sort();
-  const tipos = [...new Set(allRows.map((r) => r._tipo).filter(Boolean))].sort();
+  const PRIORITY_TIPOS = ["Herbicidas", "Insecticidas", "Fungicidas"];
+  const allTipos = [...new Set(allRows.map((r) => r._tipo).filter(Boolean))];
+  const tipos = [
+    ...PRIORITY_TIPOS.filter((t) => allTipos.includes(t)),
+    ...allTipos.filter((t) => !PRIORITY_TIPOS.includes(t)).sort(),
+  ];
   const cultivos = Object.keys(cultivoColorMap).sort();
   const geneticas = [...new Set(allRows.map((r) => r._genetica).filter(Boolean))].sort();
 
