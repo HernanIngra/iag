@@ -6,6 +6,11 @@ import { AuthBar } from "@/components/AuthBar";
 export const metadata: Metadata = {
   title: "I.Ag — Inteligencia Agronómica",
   description: "Plataforma para ingenieros agrónomos y productores agropecuarios",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icons/iag-logo.svg",
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {

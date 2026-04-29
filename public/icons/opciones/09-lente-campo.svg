@@ -1,0 +1,39 @@
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" rx="38" fill="#0d1b35"/>
+  <!-- Iris / apertura de lente - aro exterior -->
+  <circle cx="100" cy="100" r="76" fill="#0f2045" stroke="#e2b04a" stroke-width="3"/>
+  <!-- Campo con surcos dentro del lente -->
+  <clipPath id="lente-clip">
+    <circle cx="100" cy="100" r="72"/>
+  </clipPath>
+  <g clip-path="url(#lente-clip)">
+    <!-- Fondo campo -->
+    <rect x="28" y="28" width="144" height="144" fill="#0a1e10"/>
+    <!-- Surcos curvas de contorno -->
+    <ellipse cx="100" cy="100" rx="68" ry="40" stroke="#3dbb6e" stroke-width="3" fill="none" opacity="0.4"/>
+    <ellipse cx="100" cy="100" rx="52" ry="28" stroke="#3dbb6e" stroke-width="3" fill="none" opacity="0.5"/>
+    <ellipse cx="100" cy="100" rx="36" ry="18" stroke="#3dbb6e" stroke-width="3" fill="none" opacity="0.6"/>
+    <ellipse cx="100" cy="100" rx="20" ry="9" stroke="#3dbb6e" stroke-width="3" fill="none" opacity="0.8"/>
+    <!-- Líneas de cuadrícula de campo -->
+    <line x1="28" y1="72" x2="172" y2="72" stroke="#1e4a2e" stroke-width="5"/>
+    <line x1="28" y1="88" x2="172" y2="88" stroke="#1e4a2e" stroke-width="5"/>
+    <line x1="28" y1="112" x2="172" y2="112" stroke="#1e4a2e" stroke-width="5"/>
+    <line x1="28" y1="128" x2="172" y2="128" stroke="#1e4a2e" stroke-width="5"/>
+    <line x1="72" y1="28" x2="72" y2="172" stroke="#1e4a2e" stroke-width="5"/>
+    <line x1="88" y1="28" x2="88" y2="172" stroke="#1e4a2e" stroke-width="5"/>
+    <line x1="112" y1="28" x2="112" y2="172" stroke="#1e4a2e" stroke-width="5"/>
+    <line x1="128" y1="28" x2="128" y2="172" stroke="#1e4a2e" stroke-width="5"/>
+  </g>
+  <!-- Palas de apertura (iris) -->
+  <circle cx="100" cy="100" r="72" fill="none" stroke="#e2b04a" stroke-width="2.5"/>
+  <!-- Anillo interior (pupila) -->
+  <circle cx="100" cy="100" r="22" fill="#0d1b35" stroke="#e2b04a" stroke-width="2.5"/>
+  <!-- "IA" en el centro -->
+  <text x="100" y="106" font-family="Arial, sans-serif" font-size="16" font-weight="bold"
+        text-anchor="middle" fill="#e2b04a">IA</text>
+  <!-- Cruces de mira -->
+  <line x1="100" y1="22" x2="100" y2="36" stroke="#e2b04a" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="100" y1="164" x2="100" y2="178" stroke="#e2b04a" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="22" y1="100" x2="36" y2="100" stroke="#e2b04a" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="164" y1="100" x2="178" y2="100" stroke="#e2b04a" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

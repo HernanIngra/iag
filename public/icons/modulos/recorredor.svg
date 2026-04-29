@@ -1,0 +1,25 @@
+<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Camioneta pickup / 4x4 de perfil -->
+  <!-- Ruedas -->
+  <circle cx="22" cy="58" r="10" fill="#1a2f55" stroke="#e2b04a" stroke-width="2.5"/>
+  <circle cx="22" cy="58" r="4" fill="#e2b04a"/>
+  <circle cx="58" cy="58" r="10" fill="#1a2f55" stroke="#e2b04a" stroke-width="2.5"/>
+  <circle cx="58" cy="58" r="4" fill="#e2b04a"/>
+  <!-- Chasis / carrocería baja -->
+  <rect x="10" y="44" width="60" height="14" rx="3" fill="#1a3a5c"/>
+  <!-- Cabina -->
+  <path d="M14 44 L14 30 Q14 24 22 24 L42 24 Q48 24 52 30 L62 44Z"
+        fill="#1a4a7a" stroke="#e2b04a" stroke-width="1.5"/>
+  <!-- Caja trasera (pickup bed) -->
+  <rect x="44" y="34" width="22" height="10" rx="2" fill="#0f2a45" stroke="#e2b04a" stroke-width="1.5"/>
+  <!-- Vidrio parabrisas -->
+  <path d="M22 24 L22 40 L50 40 L50 30 Q48 24 42 24Z" fill="#0d2a4a" opacity="0.7"/>
+  <!-- Ventanilla trasera -->
+  <rect x="26" y="27" width="12" height="10" rx="2" fill="#0d2a4a" opacity="0.8"/>
+  <!-- Faro delantero -->
+  <rect x="10" y="36" width="6" height="5" rx="1" fill="#e2b04a"/>
+  <!-- Pin GPS encima -->
+  <circle cx="40" cy="12" r="7" fill="#3dbb6e"/>
+  <circle cx="40" cy="12" r="3" fill="#0d1b35"/>
+  <line x1="40" y1="19" x2="40" y2="26" stroke="#3dbb6e" stroke-width="2" stroke-linecap="round"/>
+</svg>

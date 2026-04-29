@@ -1,0 +1,32 @@
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" rx="38" fill="#0d1b35"/>
+  <!-- Surcos de campo abajo (vista desde arriba) -->
+  <rect x="18" y="130" width="164" height="52" rx="4" fill="#0a1e10"/>
+  <line x1="18" y1="140" x2="182" y2="140" stroke="#3dbb6e" stroke-width="5" opacity="0.3"/>
+  <line x1="18" y1="152" x2="182" y2="152" stroke="#3dbb6e" stroke-width="5" opacity="0.3"/>
+  <line x1="18" y1="164" x2="182" y2="164" stroke="#3dbb6e" stroke-width="5" opacity="0.3"/>
+  <line x1="18" y1="176" x2="182" y2="176" stroke="#3dbb6e" stroke-width="5" opacity="0.3"/>
+  <!-- Señal GPS (ondas) -->
+  <path d="M100 130 C80 116 80 104 100 96 C120 104 120 116 100 130Z" stroke="#e2b04a" stroke-width="1.5" fill="none" opacity="0.4" stroke-dasharray="3 3"/>
+  <!-- Drone - cuerpo central -->
+  <rect x="84" y="84" width="32" height="32" rx="8" fill="#1a3a5c" stroke="#e2b04a" stroke-width="2.5"/>
+  <circle cx="100" cy="100" r="8" fill="#0d1b35" stroke="#e2b04a" stroke-width="2"/>
+  <circle cx="100" cy="100" r="3" fill="#e2b04a"/>
+  <!-- Brazos del drone -->
+  <line x1="84" y1="84" x2="52" y2="55" stroke="#e2b04a" stroke-width="3" stroke-linecap="round"/>
+  <line x1="116" y1="84" x2="148" y2="55" stroke="#e2b04a" stroke-width="3" stroke-linecap="round"/>
+  <line x1="84" y1="116" x2="52" y2="145" stroke="#e2b04a" stroke-width="3" stroke-linecap="round"/>
+  <line x1="116" y1="116" x2="148" y2="145" stroke="#e2b04a" stroke-width="3" stroke-linecap="round"/>
+  <!-- Hélices (elipses) -->
+  <ellipse cx="46" cy="50" rx="22" ry="8" fill="#1a3a5c" stroke="#3dbb6e" stroke-width="2"/>
+  <circle cx="46" cy="50" r="4" fill="#3dbb6e"/>
+  <ellipse cx="154" cy="50" rx="22" ry="8" fill="#1a3a5c" stroke="#3dbb6e" stroke-width="2"/>
+  <circle cx="154" cy="50" r="4" fill="#3dbb6e"/>
+  <ellipse cx="46" cy="150" rx="22" ry="8" fill="#1a3a5c" stroke="#3dbb6e" stroke-width="2"/>
+  <circle cx="46" cy="150" r="4" fill="#3dbb6e"/>
+  <ellipse cx="154" cy="150" rx="22" ry="8" fill="#1a3a5c" stroke="#3dbb6e" stroke-width="2"/>
+  <circle cx="154" cy="150" r="4" fill="#3dbb6e"/>
+  <!-- Indicador de señal -->
+  <path d="M108 78 Q115 68 108 60" stroke="#e2b04a" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <path d="M112 75 Q122 62 112 52" stroke="#e2b04a" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+</svg>

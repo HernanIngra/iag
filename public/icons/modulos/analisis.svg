@@ -1,0 +1,28 @@
+<svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Laptop con gráfico adentro -->
+  <!-- Pantalla -->
+  <rect x="8" y="12" width="64" height="42" rx="5" fill="#1a3a5c" stroke="#e2b04a" stroke-width="2"/>
+  <!-- Contenido pantalla: gráfico de línea -->
+  <rect x="12" y="16" width="56" height="34" rx="3" fill="#0d1b35"/>
+  <!-- Eje -->
+  <line x1="18" y1="44" x2="62" y2="44" stroke="#2a4a6a" stroke-width="1"/>
+  <line x1="18" y1="44" x2="18" y2="22" stroke="#2a4a6a" stroke-width="1"/>
+  <!-- Curva de análisis (línea de regresión) -->
+  <path d="M20 42 C28 38 34 30 42 28 C50 26 56 24 64 20"
+        stroke="#e2b04a" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- Puntos de datos -->
+  <circle cx="22" cy="41" r="2.5" fill="#3dbb6e"/>
+  <circle cx="30" cy="36" r="2.5" fill="#3dbb6e"/>
+  <circle cx="38" cy="31" r="2.5" fill="#3dbb6e"/>
+  <circle cx="46" cy="27" r="2.5" fill="#3dbb6e"/>
+  <circle cx="54" cy="25" r="2.5" fill="#3dbb6e"/>
+  <circle cx="62" cy="22" r="2.5" fill="#3dbb6e"/>
+  <!-- Zona base laptop -->
+  <rect x="4" y="54" width="72" height="6" rx="3" fill="#1a3a5c" stroke="#e2b04a" stroke-width="1.5"/>
+  <!-- Trackpad -->
+  <rect x="30" y="55" width="20" height="4" rx="2" fill="#0f2545"/>
+  <!-- Bisagra -->
+  <rect x="8" y="53" width="64" height="3" rx="1" fill="#0f2a45"/>
+  <!-- Luz de encendido -->
+  <circle cx="66" cy="14" r="2" fill="#3dbb6e"/>
+</svg>

@@ -1,0 +1,30 @@
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" rx="38" fill="#0d1b35"/>
+  <!-- Hoja forma -->
+  <path d="M100 170 C60 170 30 140 30 95 C30 50 70 28 100 28 C130 28 170 50 170 95 C170 140 140 170 100 170Z"
+        fill="#0f2545" stroke="#e2b04a" stroke-width="3"/>
+  <!-- Vena central -->
+  <line x1="100" y1="165" x2="100" y2="36" stroke="#e2b04a" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Trazas circuito izquierda -->
+  <path d="M100 90 H72 V72 H60" stroke="#3dbb6e" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M100 110 H68 V128 H54" stroke="#3dbb6e" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M100 70 H80 V58" stroke="#3dbb6e" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M100 130 H76 V148" stroke="#3dbb6e" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <!-- Trazas circuito derecha -->
+  <path d="M100 90 H128 V72 H140" stroke="#3dbb6e" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M100 110 H132 V128 H146" stroke="#3dbb6e" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M100 70 H120 V58" stroke="#3dbb6e" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M100 130 H124 V148" stroke="#3dbb6e" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <!-- Nodos -->
+  <circle cx="60" cy="72" r="4" fill="#e2b04a"/>
+  <circle cx="54" cy="128" r="4" fill="#e2b04a"/>
+  <circle cx="80" cy="58" r="4" fill="#e2b04a"/>
+  <circle cx="76" cy="148" r="4" fill="#e2b04a"/>
+  <circle cx="140" cy="72" r="4" fill="#e2b04a"/>
+  <circle cx="146" cy="128" r="4" fill="#e2b04a"/>
+  <circle cx="120" cy="58" r="4" fill="#e2b04a"/>
+  <circle cx="124" cy="148" r="4" fill="#e2b04a"/>
+  <!-- Chip central -->
+  <rect x="87" y="87" width="26" height="26" rx="4" fill="#1a2f55" stroke="#e2b04a" stroke-width="2"/>
+  <circle cx="100" cy="100" r="5" fill="#e2b04a"/>
+</svg>

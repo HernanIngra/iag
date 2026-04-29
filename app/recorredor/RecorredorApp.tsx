@@ -637,6 +637,30 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setSidebarOpen(true);
   }
 
+  // ── Remove a single CSV file and its rows ────────────────────────────────────
+
+  function removeCsvFile(fileName: string) {
+    const newRows = allRows.filter((r) => r._file !== fileName);
+    const newLotData: LotData = {};
+    newRows.forEach((r) => {
+      if (!newLotData[r._linkKey]) newLotData[r._linkKey] = [];
+      newLotData[r._linkKey].push(r);
+    });
+    setAllRows(newRows);
+    setLotData(newLotData);
+    setCsvFiles((prev) => prev.filter((f) => f !== fileName));
+    if (newRows.length === 0) {
+      setCsvStatus(null);
+    } else {
+      setCsvStatus({ msg: `✓ ${newRows.length} registros · ${Object.keys(newLotData).length} lotes`, ok: true });
+    }
+    rebuildFilters(newRows);
+    const cultivoNames = [...new Set(newRows.map((r) => r._cultivo).filter(Boolean))];
+    const cMap = buildCultivoColorMap(cultivoNames);
+    setCultivoColorMap(cMap);
+    recolorPolygons(cMap, newLotData);
+  }
+
   // ── GPS ─────────────────────────────────────────────────────────────────────
 
   async function toggleGPS() {
@@ -970,6 +994,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                       status={csvStatus}
                       icon="📄"
                       loadedFiles={csvFiles}
+                      onRemove={removeCsvFile}
                     />
                     {prevManagementTimestamp > 0 && (
                       <button
@@ -1229,13 +1254,14 @@ function SidebarSection({ title, children, optional, collapsible, defaultOpen = 
 }
 
 function UploadZone({
-  accept, multiple, hint, onFiles, status, icon, loadedFiles = [],
+  accept, multiple, hint, onFiles, status, icon, loadedFiles = [], onRemove,
 }: {
   accept: string; multiple: boolean; hint: string;
   onFiles: (files: FileList) => void;
   status: { msg: string; ok: boolean } | null;
   icon: string;
   loadedFiles?: string[];
+  onRemove?: (name: string) => void;
 }) {
   const [drag, setDrag] = useState(false);
 
@@ -1245,6 +1271,14 @@ function UploadZone({
         {loadedFiles.map((name, i) => (
           <div key={i} className="flex items-center gap-2 text-xs px-2 py-1 rounded" style={{ background: "#0d2a1a", border: "1px solid #1e5a2e", color: "#3dbb6e" }}>
             <span className="truncate flex-1">✓ {name}</span>
+            {onRemove && (
+              <button
+                onClick={() => onRemove(name)}
+                title="Eliminar este archivo"
+                className="shrink-0 w-4 h-4 flex items-center justify-center rounded hover:opacity-70"
+                style={{ color: "#e25a5a", fontSize: "14px", lineHeight: 1 }}
+              >×</button>
+            )}
           </div>
         ))}
         <label
@@ -1309,28 +1343,6 @@ function FiltersPanel({
   return (
     <SidebarSection title="🔍 Filtros">
       <div className="space-y-3 text-xs">
-        <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
-          value={filters.campaign} onChange={(e) => onChange({ ...filters, campaign: e.target.value })}>
-          <option value="">Todas las campañas</option>
-          {campaigns.map((c) => <option key={c} value={c}>Campaña {c}</option>)}
-        </select>
-
-        {cultivos.length > 0 && (
-          <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
-            value={filters.cultivo} onChange={(e) => onChange({ ...filters, cultivo: e.target.value })}>
-            <option value="">Todos los cultivos</option>
-            {cultivos.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        )}
-
-        {geneticas.length > 0 && (
-          <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
-            value={filters.genetica} onChange={(e) => onChange({ ...filters, genetica: e.target.value })}>
-            <option value="">Todas las genéticas</option>
-            {geneticas.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select>
-        )}
-
         <div>
           <div className="flex justify-between items-center mb-1">
             <span style={{ color: "#6a8ab0" }}>Tipo de aplicación</span>
@@ -1357,6 +1369,28 @@ function FiltersPanel({
             })}
           </div>
         </div>
+
+        <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
+          value={filters.campaign} onChange={(e) => onChange({ ...filters, campaign: e.target.value })}>
+          <option value="">Todas las campañas</option>
+          {campaigns.map((c) => <option key={c} value={c}>Campaña {c}</option>)}
+        </select>
+
+        {cultivos.length > 0 && (
+          <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
+            value={filters.cultivo} onChange={(e) => onChange({ ...filters, cultivo: e.target.value })}>
+            <option value="">Todos los cultivos</option>
+            {cultivos.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+
+        {geneticas.length > 0 && (
+          <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
+            value={filters.genetica} onChange={(e) => onChange({ ...filters, genetica: e.target.value })}>
+            <option value="">Todas las genéticas</option>
+            {geneticas.map((g) => <option key={g} value={g}>{g}</option>)}
+          </select>
+        )}
 
         <button className="w-full py-1.5 rounded font-semibold text-xs" style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
           onClick={() => {

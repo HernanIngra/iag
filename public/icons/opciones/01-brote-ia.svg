@@ -1,0 +1,20 @@
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" rx="38" fill="#0d1b35"/>
+  <!-- I -->
+  <rect x="36" y="72" width="12" height="72" rx="3" fill="#e2b04a"/>
+  <rect x="28" y="68" width="28" height="11" rx="3" fill="#e2b04a"/>
+  <rect x="28" y="133" width="28" height="11" rx="3" fill="#e2b04a"/>
+  <!-- punto separador -->
+  <circle cx="84" cy="138" r="6" fill="#3dbb6e"/>
+  <!-- A -->
+  <path d="M112 144 L133 72 L154 144" stroke="#e2b04a" stroke-width="13" stroke-linejoin="round" fill="none" stroke-linecap="round"/>
+  <line x1="119" y1="118" x2="147" y2="118" stroke="#e2b04a" stroke-width="9" stroke-linecap="round"/>
+  <!-- g -->
+  <path d="M162 100 Q162 130 150 140 Q138 150 130 145" stroke="#e2b04a" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <!-- Brote sobre la I -->
+  <line x1="42" y1="68" x2="42" y2="42" stroke="#3dbb6e" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M42 53 C42 40 56 35 60 44" stroke="#3dbb6e" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M42 46 C42 34 28 30 24 40" stroke="#3dbb6e" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <ellipse cx="61" cy="43" rx="5" ry="7" fill="#3dbb6e" transform="rotate(-30 61 43)"/>
+  <ellipse cx="23" cy="39" rx="5" ry="7" fill="#3dbb6e" transform="rotate(30 23 39)"/>
+</svg>

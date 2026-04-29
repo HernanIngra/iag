@@ -8,7 +8,7 @@ import type { User } from "@supabase/supabase-js";
 const apps = [
   {
     href: "/recorredor",
-    emoji: "🌿",
+    icon: "/icons/modulos/recorredor.svg",
     action: "Recorrer",
     subtitle: "Recorredor",
     description:
@@ -18,7 +18,7 @@ const apps = [
   },
   {
     href: "/comparador",
-    emoji: "📊",
+    icon: "/icons/modulos/comparador.svg",
     action: "Comparar",
     subtitle: "Comparador",
     description:
@@ -28,7 +28,7 @@ const apps = [
   },
   {
     href: "/presupuesto",
-    emoji: "📋",
+    icon: "/icons/modulos/analisis.svg",
     action: "Analizar",
     subtitle: "Presupuesto y análisis",
     description:
@@ -268,7 +268,7 @@ function AppScreen({
 
 function AppCard({
   href,
-  emoji,
+  icon,
   action,
   subtitle,
   description,
@@ -292,7 +292,8 @@ function AppCard({
           {badge}
         </span>
       )}
-      <span className="text-4xl">{emoji}</span>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={icon} alt={action} className="w-14 h-14" style={{ filter: available ? "none" : "grayscale(0.4) opacity(0.6)" }} />
       <div>
         <h3 className="text-2xl font-bold" style={{ color: "#e2b04a" }}>
           {action}

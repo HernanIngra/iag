@@ -15,6 +15,7 @@ export interface ParsedRow {
   _genetica: string;
   _sup: unknown;
   _campaign: string;
+  _file: string;
 }
 
 export interface RindeRow {
@@ -151,7 +152,8 @@ export function detectColumnMapping(cols: string[], linkCol: string): ColumnMapp
 
 export async function parseManagementFile(
   file: File,
-  mapping: ColumnMapping
+  mapping: ColumnMapping,
+  fileName?: string
 ): Promise<{ rows: ParsedRow[]; lotData: LotData }> {
   const raw = await readFile(file);
   if (!raw.length) throw new Error("El archivo está vacío");
@@ -186,6 +188,7 @@ export async function parseManagementFile(
         _genetica: geneticaCol ? String(row[geneticaCol] ?? "").trim() : "",
         _sup: supCol ? row[supCol] : "",
         _campaign: campaign,
+        _file: fileName ?? file.name,
       } as ParsedRow;
     })
     .filter((r) => r._linkKey);

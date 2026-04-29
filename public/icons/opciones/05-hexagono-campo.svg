@@ -1,0 +1,36 @@
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" rx="38" fill="#0d1b35"/>
+  <!-- Hexágono exterior -->
+  <polygon points="100,22 168,61 168,139 100,178 32,139 32,61"
+           fill="#0f2545" stroke="#e2b04a" stroke-width="3.5"/>
+  <!-- Surcos de campo dentro del hexágono (líneas diagonales) -->
+  <clipPath id="hex">
+    <polygon points="100,26 163,63 163,137 100,174 37,137 37,63"/>
+  </clipPath>
+  <g clip-path="url(#hex)">
+    <line x1="20" y1="65" x2="120" y2="185" stroke="#1e4a2e" stroke-width="7"/>
+    <line x1="38" y1="55" x2="138" y2="175" stroke="#1e4a2e" stroke-width="7"/>
+    <line x1="56" y1="45" x2="156" y2="165" stroke="#1e4a2e" stroke-width="7"/>
+    <line x1="74" y1="35" x2="174" y2="155" stroke="#1e4a2e" stroke-width="7"/>
+    <line x1="92" y1="25" x2="192" y2="145" stroke="#1e4a2e" stroke-width="7"/>
+    <line x1="110" y1="15" x2="210" y2="135" stroke="#1e4a2e" stroke-width="7"/>
+    <line x1="128" y1="15" x2="228" y2="115" stroke="#1e4a2e" stroke-width="7"/>
+    <line x1="2" y1="75" x2="102" y2="195" stroke="#1e4a2e" stroke-width="7"/>
+    <!-- Surcos más claros -->
+    <line x1="20" y1="65" x2="120" y2="185" stroke="#3dbb6e" stroke-width="2" opacity="0.5"/>
+    <line x1="38" y1="55" x2="138" y2="175" stroke="#3dbb6e" stroke-width="2" opacity="0.5"/>
+    <line x1="56" y1="45" x2="156" y2="165" stroke="#3dbb6e" stroke-width="2" opacity="0.5"/>
+    <line x1="74" y1="35" x2="174" y2="155" stroke="#3dbb6e" stroke-width="2" opacity="0.5"/>
+    <line x1="92" y1="25" x2="192" y2="145" stroke="#3dbb6e" stroke-width="2" opacity="0.5"/>
+    <line x1="110" y1="15" x2="210" y2="135" stroke="#3dbb6e" stroke-width="2" opacity="0.5"/>
+    <line x1="128" y1="15" x2="228" y2="115" stroke="#3dbb6e" stroke-width="2" opacity="0.5"/>
+    <line x1="2" y1="75" x2="102" y2="195" stroke="#3dbb6e" stroke-width="2" opacity="0.5"/>
+  </g>
+  <!-- Pin de mapa en el centro -->
+  <circle cx="100" cy="92" r="18" fill="#e2b04a"/>
+  <circle cx="100" cy="92" r="8" fill="#0d1b35"/>
+  <path d="M100 110 L100 130" stroke="#e2b04a" stroke-width="4" stroke-linecap="round"/>
+  <!-- Hexágono interior (borde extra) -->
+  <polygon points="100,22 168,61 168,139 100,178 32,139 32,61"
+           fill="none" stroke="#e2b04a" stroke-width="3.5"/>
+</svg>
