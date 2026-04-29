@@ -421,6 +421,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setShpStatus({ msg: "Procesando shapefile...", ok: false });
     try {
       const newCols = await loadShapefiles(files);
+      const fileNames = Array.from(files).map((f) => f.name);
+      newCols.forEach((col, i) => { (col as unknown as Record<string, unknown>)._file = fileNames[Math.min(i, fileNames.length - 1)]; });
       const mergedCols = [...collections, ...newCols];
       const cMap = buildColorMap(mergedCols);
       setCollections(mergedCols);
@@ -635,6 +637,26 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     });
     setSelectedLot({ lotName, zone, props, layer });
     setSidebarOpen(true);
+  }
+
+  // ── Remove a shapefile and its lots ─────────────────────────────────────────
+
+  async function removeShpFile(fileName: string) {
+    const newCols = collections.filter((col) => (col as unknown as Record<string, unknown>)._file !== fileName);
+    const cMap = buildColorMap(newCols);
+    setCollections(newCols);
+    setColorMap(cMap);
+    setShpFiles((prev) => prev.filter((f) => f !== fileName));
+    let total = 0;
+    newCols.forEach((c) => (total += c.features.length));
+    setLotCount(total);
+    if (total === 0) {
+      setShpStatus(null);
+      setFieldName("");
+    } else {
+      setShpStatus({ msg: `✓ ${total} lotes`, ok: true });
+    }
+    await drawCollections(newCols, cMap, cultivoColorMap, lotData);
   }
 
   // ── Remove a single CSV file and its rows ────────────────────────────────────
@@ -949,6 +971,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                   status={shpStatus}
                   icon="🗺️"
                   loadedFiles={shpFiles}
+                  onRemove={removeShpFile}
                 />
                 {lotCount > 0 && (
                   <button className="w-full mt-2 text-xs py-1 rounded" style={{ background: "#1a4a80", color: "#e0e8f0" }}
