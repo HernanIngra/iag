@@ -31,6 +31,7 @@ import {
   isWinterCrop,
   cultivoIcon,
   DEFAULT_FILTERS,
+  normalizeProductType,
   type ActiveFilters,
 } from "@/lib/recorredor-types";
 import type { User } from "@supabase/supabase-js";
@@ -288,13 +289,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // ── Workspace restore helper ─────────────────────────────────────────────────
 
   function applyWorkspace(ws: Workspace) {
+    const normalizedRows = ws.allRows.map((r) => ({ ...r, _tipo: normalizeProductType(r._tipo) }));
+    const normalizedLotData: LotData = {};
+    for (const [k, rows] of Object.entries(ws.lotData)) {
+      normalizedLotData[k] = rows.map((r) => ({ ...r, _tipo: normalizeProductType(r._tipo) }));
+    }
     setFieldName(ws.fieldName);
     setLotCount(ws.lotCount);
     setCollections(ws.collections);
     setColorMap(ws.colorMap);
     setCultivoColorMap(ws.cultivoColorMap);
-    setLotData(ws.lotData);
-    setAllRows(ws.allRows);
+    setLotData(normalizedLotData);
+    setAllRows(normalizedRows);
     setRindeData(ws.rindeData);
     setLotVisits(ws.lotVisits ?? {});
     setShpFiles(ws.shpFiles);
@@ -308,11 +314,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setRainData(ws.rainData ?? {});
     setPluviometroMap(ws.pluviometroMap ?? {});
     setShpStatus({ msg: `✓ ${ws.lotCount} lotes`, ok: true });
-    if (ws.allRows.length) {
-      setCsvStatus({ msg: `✓ ${ws.allRows.length} registros · ${Object.keys(ws.lotData).length} lotes`, ok: true });
-      const campaigns = [...new Set(ws.allRows.map((r) => r._campaign).filter(Boolean))].sort();
-      const tipos = [...new Set(ws.allRows.map((r) => r._tipo).filter(Boolean))];
-      const dates = ws.allRows.map((r) => r._fecha).filter((d): d is Date => !!d && !isNaN(d.getTime()));
+    if (normalizedRows.length) {
+      setCsvStatus({ msg: `✓ ${normalizedRows.length} registros · ${Object.keys(normalizedLotData).length} lotes`, ok: true });
+      const campaigns = [...new Set(normalizedRows.map((r) => r._campaign).filter(Boolean))].sort();
+      const tipos = [...new Set(normalizedRows.map((r) => r._tipo).filter(Boolean))];
+      const dates = normalizedRows.map((r) => r._fecha).filter((d): d is Date => !!d && !isNaN(d.getTime()));
       const from = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
       const to = dates.length ? new Date(Math.max(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
       setActiveFilters({ campaign: campaigns.length === 1 ? campaigns[0] : "", from, to, tipos, cultivo: "", genetica: "", prod: "" });

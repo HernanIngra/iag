@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import type { ParsedRow } from "./data-parser";
 import type { RainReading, RainData } from "./db";
+import { normalizeProductType } from "./recorredor-types";
 
 // ── Source format identifiers ─────────────────────────────────────────────────
 
@@ -18,35 +19,6 @@ export const SOURCE_LABELS: Record<SourceFormat, string> = {
   lluvia:         "Lluvias / Pluviómetros",
   generic:        "Otro / mapear manualmente",
 };
-
-// ── Type normalization ────────────────────────────────────────────────────────
-
-const CANONICAL_TYPES: Record<string, string> = {
-  herbicida:     "Herbicida",
-  fungicida:     "Fungicida",
-  insecticida:   "Insecticida",
-  fertilizante:  "Fertilizante",
-  fertil:        "Fertilizante",
-  coadyuvante:   "Coadyuvante",
-  semilla:       "Semilla",
-  laboreo:       "Laboreo",
-  fumigacion:    "Fumigación",
-  fumigación:    "Fumigación",
-  inoculante:    "Inoculante",
-  acaricida:     "Acaricida",
-  nematicida:    "Nematicida",
-  regulador:     "Regulador de crecimiento",
-};
-
-export function normalizeProductType(raw: string): string {
-  if (!raw) return "";
-  const lower = raw.toLowerCase().trim();
-  if (CANONICAL_TYPES[lower]) return CANONICAL_TYPES[lower];
-  for (const [key, val] of Object.entries(CANONICAL_TYPES)) {
-    if (lower.startsWith(key)) return val;
-  }
-  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-}
 
 // ── Campaign normalization ────────────────────────────────────────────────────
 

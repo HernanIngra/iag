@@ -23,6 +23,37 @@ export const DEFAULT_FILTERS: ActiveFilters = {
   prod: "",
 };
 
+// ── Tipo normalization (canonical casing + singular) ─────────────────────────
+
+const CANONICAL_TYPES: Record<string, string> = {
+  herbicida:    "Herbicida",
+  fungicida:    "Fungicida",
+  insecticida:  "Insecticida",
+  fertilizante: "Fertilizante",
+  fertil:       "Fertilizante",
+  coadyuvante:  "Coadyuvante",
+  semilla:      "Semilla",
+  laboreo:      "Laboreo",
+  labranza:     "Labranza",
+  fumigacion:   "Fumigación",
+  fumigación:   "Fumigación",
+  inoculante:   "Inoculante",
+  acaricida:    "Acaricida",
+  nematicida:   "Nematicida",
+  regulador:    "Regulador de crecimiento",
+  riego:        "Riego",
+};
+
+export function normalizeProductType(raw: string): string {
+  if (!raw) return "";
+  const lower = raw.toLowerCase().trim();
+  if (CANONICAL_TYPES[lower]) return CANONICAL_TYPES[lower];
+  for (const [key, val] of Object.entries(CANONICAL_TYPES)) {
+    if (lower.startsWith(key)) return val;
+  }
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
 export const TIPO_COLORS: Record<string, string> = {
   HERBICIDA: "#e2b04a",
   FUNGICIDA: "#3dbb6e",
