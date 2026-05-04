@@ -315,7 +315,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       const dates = ws.allRows.map((r) => r._fecha).filter((d): d is Date => !!d && !isNaN(d.getTime()));
       const from = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
       const to = dates.length ? new Date(Math.max(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
-      setActiveFilters({ campaign: campaigns.length === 1 ? campaigns[0] : "", from, to, tipos, cultivo: "", genetica: "" });
+      setActiveFilters({ campaign: campaigns.length === 1 ? campaigns[0] : "", from, to, tipos, cultivo: "", genetica: "", prod: "" });
     }
     if (Object.keys(ws.rindeData).length) {
       setRindeStatus({ msg: `✓ Rindes · ${Object.keys(ws.rindeData).length} lotes`, ok: true });
@@ -385,27 +385,33 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collections, lotData, rindeData, lotVisits, driveManejo, manejoColMapping, rainData, pluviometroMap, user]);
 
-  // ── Dim/highlight lots based on tipo filter ─────────────────────────────────
+  // ── Dim/highlight lots based on tipo/product filter ─────────────────────────
 
   useEffect(() => {
     if (!allLotLayersRef.current.length) return;
-    const filterActive = activeFilters.tipos.length > 0;
+    const tiposActive = activeFilters.tipos.length > 0;
+    const prodActive = !!activeFilters.prod;
+    const filterActive = tiposActive || prodActive;
+    const prodLower = activeFilters.prod.toLowerCase();
     const newDimmed = new Set<string>();
     allLotLayersRef.current.forEach(({ layer, lotName }) => {
       if (layer === selectedLayerRef.current) return;
       if (!filterActive) {
         layer.setStyle({ fillOpacity: 0.35 });
       } else {
-        const hasMatch = (lotData[lotName] ?? []).some(
-          (r) => r._tipo && activeFilters.tipos.includes(r._tipo)
-        );
+        const rows = lotData[lotName] ?? [];
+        const hasMatch = rows.some((r) => {
+          if (tiposActive && !activeFilters.tipos.includes(r._tipo)) return false;
+          if (prodActive && ![r._prod, r._labor].some((v) => v && String(v).toLowerCase().includes(prodLower))) return false;
+          return true;
+        });
         layer.setStyle({ fillOpacity: hasMatch ? 0.45 : 0.08 });
         if (!hasMatch) newDimmed.add(lotName);
       }
     });
     lotDimmedRef.current = newDimmed;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilters.tipos, lotData]);
+  }, [activeFilters.tipos, activeFilters.prod, lotData]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -428,6 +434,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       if (filters.tipos.length && !filters.tipos.includes(r._tipo)) return false;
       if (filters.from && r._fecha && r._fecha < new Date(filters.from)) return false;
       if (filters.to && r._fecha && r._fecha > new Date(filters.to + "T23:59:59")) return false;
+      if (filters.prod) {
+        const p = filters.prod.toLowerCase();
+        if (![r._prod, r._labor].some((v) => v && String(v).toLowerCase().includes(p))) return false;
+      }
       return true;
     });
   }
@@ -438,7 +448,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     const dates = rows.map((r) => r._fecha).filter((d): d is Date => !!d && !isNaN(d.getTime()));
     const from = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
     const to = dates.length ? new Date(Math.max(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
-    setActiveFilters({ campaign: campaigns.length === 1 ? campaigns[0] : "", from, to, tipos, cultivo: "", genetica: "" });
+    setActiveFilters({ campaign: campaigns.length === 1 ? campaigns[0] : "", from, to, tipos, cultivo: "", genetica: "", prod: "" });
   }
 
   // ── Draw collections on map ──────────────────────────────────────────────────
@@ -1512,8 +1522,9 @@ function FiltersPanel({
   filters: ActiveFilters;
   onChange: (f: ActiveFilters) => void;
 }) {
+  const [showProdFilter, setShowProdFilter] = useState(!!filters.prod);
   const campaigns = [...new Set(allRows.map((r) => r._campaign).filter(Boolean))].sort();
-  const PRIORITY_TIPOS = ["Herbicidas", "Insecticidas", "Fungicidas"];
+  const PRIORITY_TIPOS = ["Herbicida", "Insecticida", "Fungicida", "Fertilizante"];
   const allTipos = [...new Set(allRows.map((r) => r._tipo).filter(Boolean))];
   const tipos = [
     ...PRIORITY_TIPOS.filter((t) => allTipos.includes(t)),
@@ -1521,6 +1532,21 @@ function FiltersPanel({
   ];
   const cultivos = Object.keys(cultivoColorMap).sort();
   const geneticas = [...new Set(allRows.map((r) => r._genetica).filter(Boolean))].sort();
+
+  const allProducts = useMemo(() => {
+    const set = new Set<string>();
+    allRows.forEach((r) => {
+      if (r._prod) set.add(String(r._prod));
+      if (r._labor) set.add(String(r._labor));
+    });
+    return [...set].sort();
+  }, [allRows]);
+
+  const filteredProducts = useMemo(() => {
+    if (!filters.prod) return allProducts;
+    const q = filters.prod.toLowerCase();
+    return allProducts.filter((p) => p.toLowerCase().includes(q));
+  }, [allProducts, filters.prod]);
 
   return (
     <SidebarSection title="🔍 Filtros">
@@ -1552,6 +1578,45 @@ function FiltersPanel({
           </div>
         </div>
 
+        {/* Product filter — collapsible */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <span style={{ color: "#6a8ab0" }}>Producto</span>
+            <button
+              className="px-1.5 py-0.5 rounded text-xs font-bold"
+              style={{ background: showProdFilter ? "#1a3a5a" : "none", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+              onClick={() => { setShowProdFilter((v) => !v); if (showProdFilter) onChange({ ...filters, prod: "" }); }}
+            >{showProdFilter ? "−" : "+"}</button>
+          </div>
+          {showProdFilter && (
+            <div>
+              <input
+                type="text"
+                placeholder="Buscar producto..."
+                className="w-full rounded px-2 py-1.5 mb-1"
+                style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
+                value={filters.prod}
+                onChange={(e) => onChange({ ...filters, prod: e.target.value })}
+              />
+              {filters.prod && filteredProducts.length > 0 && (
+                <div className="max-h-28 overflow-y-auto rounded" style={{ background: "#0a1628", border: "1px solid #2a4a6a" }}>
+                  {filteredProducts.slice(0, 20).map((p) => (
+                    <button key={p} className="w-full text-left px-2 py-1 text-xs hover:opacity-80"
+                      style={{ color: filters.prod === p ? "#7ab8e8" : "#aac", background: filters.prod === p ? "#1a3a5a" : "transparent" }}
+                      onClick={() => onChange({ ...filters, prod: p })}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {filters.prod && (
+                <button className="mt-1 text-xs" style={{ color: "#6a8ab0" }}
+                  onClick={() => onChange({ ...filters, prod: "" })}>✕ Limpiar producto</button>
+              )}
+            </div>
+          )}
+        </div>
+
         <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
           value={filters.campaign} onChange={(e) => onChange({ ...filters, campaign: e.target.value })}>
           <option value="">Todas las campañas</option>
@@ -1579,7 +1644,8 @@ function FiltersPanel({
             const dates = allRows.map((r) => r._fecha).filter((d): d is Date => !!d && !isNaN(d.getTime()));
             const from = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
             const to = dates.length ? new Date(Math.max(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
-            onChange({ campaign: "", from, to, tipos: [...new Set(allRows.map((r) => r._tipo).filter(Boolean))], cultivo: "", genetica: "" });
+            setShowProdFilter(false);
+            onChange({ campaign: "", from, to, tipos: [...new Set(allRows.map((r) => r._tipo).filter(Boolean))], cultivo: "", genetica: "", prod: "" });
           }}>
           Limpiar filtros
         </button>

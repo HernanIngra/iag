@@ -10,6 +10,7 @@ export interface ActiveFilters {
   tipos: string[];
   cultivo: string;
   genetica: string;
+  prod: string;
 }
 
 export const DEFAULT_FILTERS: ActiveFilters = {
@@ -19,6 +20,7 @@ export const DEFAULT_FILTERS: ActiveFilters = {
   tipos: [],
   cultivo: "",
   genetica: "",
+  prod: "",
 };
 
 export const TIPO_COLORS: Record<string, string> = {
