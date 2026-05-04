@@ -1,7 +1,7 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as LeafletMap, LayerGroup, Layer, GeoJSON as LeafletGeoJSON } from "leaflet";
 import type { Feature } from "geojson";
 import type { GeoCollection } from "@/lib/shapefile";
@@ -1861,6 +1861,9 @@ function ColumnMappingModal({
 
 // ── FileDashboard ─────────────────────────────────────────────────────────────
 
+interface WorkspaceItem { id: string; label: string; isOwn: boolean }
+interface EmpresaItem  { id: string; name: string; workspaceId: string; isOwner: boolean }
+
 function FileDashboard({
   user,
   myEmpresas, sharedEmpresas, activeEmpresaId,
@@ -1900,215 +1903,256 @@ function FileDashboard({
   const [showNewEmpresa, setShowNewEmpresa] = useState(false);
   const [newEmpresaLoading, setNewEmpresaLoading] = useState(false);
 
-  const allEmpresas = [
-    ...myEmpresas.map((e) => ({ id: e.id, name: e.name, ownerWorkspaceId: undefined as string | undefined, isOwner: true })),
-    ...sharedEmpresas.map((e) => ({ id: e.empresaId, name: `${e.empresaName} (${e.ownerName ?? "asesor"})`, ownerWorkspaceId: e.ownerWorkspaceId, isOwner: false })),
-  ];
+  // ── Workspace list (own + one per shared asesor) ───────────────────────────
+  const workspaces = useMemo<WorkspaceItem[]>(() => {
+    const ws: WorkspaceItem[] = [];
+    if (user) ws.push({ id: user.id, label: "Mi espacio", isOwn: true });
+    const seen = new Set<string>();
+    sharedEmpresas.forEach((e) => {
+      if (!seen.has(e.ownerWorkspaceId)) {
+        seen.add(e.ownerWorkspaceId);
+        ws.push({ id: e.ownerWorkspaceId, label: e.ownerName ?? "Espacio compartido", isOwn: false });
+      }
+    });
+    return ws;
+  }, [user, sharedEmpresas]);
 
-  const activeEmpresa = allEmpresas.find((e) => e.id === activeEmpresaId);
-  const isOwner = activeEmpresa?.isOwner ?? true;
+  // ── Multi-select: workspaces & empresas ───────────────────────────────────
+  const [selWs, setSelWs] = useState<Set<string>>(() =>
+    new Set(user?.id ? [user.id] : [])
+  );
+  const [selEmp, setSelEmp] = useState<Set<string>>(() =>
+    activeEmpresaId ? new Set([activeEmpresaId]) : new Set()
+  );
 
-  // Files filtered to active empresa
-  const filteredShp = shpFileMeta.length
-    ? shpFiles.filter((n) => {
-        const m = shpFileMeta.find((x) => x.name === n);
-        return !m?.empresaId || m.empresaId === activeEmpresaId;
-      })
-    : shpFiles;
-  const filteredCsv = csvFileMeta.length
-    ? csvFiles.filter((n) => {
-        const m = csvFileMeta.find((x) => x.name === n);
-        return !m?.empresaId || m.empresaId === activeEmpresaId;
-      })
-    : csvFiles;
-  const filteredRinde = rindeFileMeta.length
-    ? rindeFiles.filter((n) => {
-        const m = rindeFileMeta.find((x) => x.name === n);
-        return !m?.empresaId || m.empresaId === activeEmpresaId;
-      })
-    : rindeFiles;
+  // Empresas visible given selected workspaces
+  const availableEmpresas = useMemo<EmpresaItem[]>(() => {
+    const result: EmpresaItem[] = [];
+    if (selWs.has(user?.id ?? "")) {
+      myEmpresas.forEach((e) => result.push({ id: e.id, name: e.name, workspaceId: e.ownerId, isOwner: true }));
+    }
+    sharedEmpresas.forEach((e) => {
+      if (selWs.has(e.ownerWorkspaceId))
+        result.push({ id: e.empresaId, name: e.empresaName, workspaceId: e.ownerWorkspaceId, isOwner: false });
+    });
+    return result;
+  }, [selWs, myEmpresas, sharedEmpresas, user]);
+
+  // Keep selEmp in sync when workspace selection changes
+  useEffect(() => {
+    const valid = new Set(availableEmpresas.map((e) => e.id));
+    setSelEmp((prev) => {
+      const kept = new Set([...prev].filter((id) => valid.has(id)));
+      if (kept.size === 0 && availableEmpresas.length > 0) return new Set([availableEmpresas[0].id]);
+      return kept;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableEmpresas]);
+
+  // Primary empresa for uploads (first selected)
+  const primaryEmpresaId = [...selEmp][0] ?? availableEmpresas[0]?.id;
+  const primaryEmpresa = availableEmpresas.find((e) => e.id === primaryEmpresaId);
+
+  // Notify parent when primary empresa changes
+  useEffect(() => {
+    if (!primaryEmpresaId) return;
+    const emp = availableEmpresas.find((e) => e.id === primaryEmpresaId);
+    onSelectEmpresa(primaryEmpresaId, emp?.workspaceId !== user?.id ? emp?.workspaceId : undefined);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [primaryEmpresaId]);
+
+  function toggleWs(id: string) {
+    setSelWs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) { if (next.size > 1) next.delete(id); }
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleEmp(id: string) {
+    setSelEmp((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) { if (next.size > 1) next.delete(id); }
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Files filtered to selected empresas
+  const filteredShp = shpFiles.filter((n) => {
+    const m = shpFileMeta.find((x) => x.name === n);
+    return !m?.empresaId || selEmp.has(m.empresaId);
+  });
+  const filteredCsv = csvFiles.filter((n) => {
+    const m = csvFileMeta.find((x) => x.name === n);
+    return !m?.empresaId || selEmp.has(m.empresaId);
+  });
+  const filteredRinde = rindeFiles.filter((n) => {
+    const m = rindeFileMeta.find((x) => x.name === n);
+    return !m?.empresaId || selEmp.has(m.empresaId);
+  });
 
   async function handleInvite() {
-    if (!activeEmpresaId || !inviteEmail.trim()) return;
-    setInviteLoading(true);
-    setInviteMsg("");
+    if (!primaryEmpresaId || !inviteEmail.trim()) return;
+    setInviteLoading(true); setInviteMsg("");
     try {
-      await onInvite(activeEmpresaId, inviteEmail.trim());
+      await onInvite(primaryEmpresaId, inviteEmail.trim());
       setInviteMsg(`Invitación enviada a ${inviteEmail.trim()}`);
       setInviteEmail("");
-    } catch (e) {
-      setInviteMsg((e as Error).message);
-    } finally {
-      setInviteLoading(false);
-    }
+    } catch (e) { setInviteMsg((e as Error).message); }
+    finally { setInviteLoading(false); }
   }
 
   async function handleNewEmpresa() {
     if (!newEmpresaName.trim()) return;
     setNewEmpresaLoading(true);
-    try {
-      await onNewEmpresa(newEmpresaName.trim());
-      setNewEmpresaName("");
-      setShowNewEmpresa(false);
-    } finally {
-      setNewEmpresaLoading(false);
-    }
+    try { await onNewEmpresa(newEmpresaName.trim()); setNewEmpresaName(""); setShowNewEmpresa(false); }
+    finally { setNewEmpresaLoading(false); }
   }
 
   return (
     <div className="flex-1 overflow-y-auto" style={{ background: "#1a1a2e" }}>
       <div className="max-w-2xl mx-auto px-4 py-8">
 
-        {/* Header */}
         <div className="mb-6">
           <h2 className="text-2xl font-bold" style={{ color: "#e2b04a" }}>Archivos</h2>
-          <p className="text-sm mt-1" style={{ color: "#6a8ab0" }}>Shapes, manejo y rindes para la empresa activa</p>
+          <p className="text-sm mt-1" style={{ color: "#6a8ab0" }}>Seleccioná workspace y empresa para ver y gestionar archivos</p>
         </div>
 
-        {/* Empresa selector (only for logged-in users) */}
-        {user && allEmpresas.length > 0 && (
-          <div className="mb-6 p-4 rounded-xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresa activa</p>
-              <div className="flex gap-2">
-                {isOwner && activeEmpresaId && (
-                  <button
-                    className="text-xs px-2 py-1 rounded"
-                    style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
-                    onClick={() => { setShowInvite(!showInvite); setShowNewEmpresa(false); }}
-                  >
-                    Invitar →
-                  </button>
-                )}
-                <button
-                  className="text-xs px-2 py-1 rounded"
-                  style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
-                  onClick={() => { setShowNewEmpresa(!showNewEmpresa); setShowInvite(false); }}
-                >
-                  + Nueva
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {allEmpresas.map((emp) => (
-                <button
-                  key={emp.id}
-                  onClick={() => onSelectEmpresa(emp.id, emp.ownerWorkspaceId)}
-                  className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
-                  style={{
-                    background: emp.id === activeEmpresaId ? "#1a4a80" : "#0f2040",
-                    border: `2px solid ${emp.id === activeEmpresaId ? "#3dbb6e" : "#1a3460"}`,
-                    color: emp.id === activeEmpresaId ? "#e2b04a" : "#aac4e0",
-                  }}
-                >
-                  {emp.name}
-                </button>
-              ))}
-            </div>
-
-            {/* New empresa form */}
-            {showNewEmpresa && (
-              <div className="mt-3 flex gap-2">
-                <input
-                  type="text"
-                  value={newEmpresaName}
-                  onChange={(e) => setNewEmpresaName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleNewEmpresa()}
-                  placeholder="Nombre de la empresa"
-                  className="flex-1 rounded px-3 py-1.5 text-sm"
-                  style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
-                  autoFocus
-                />
-                <button
-                  onClick={handleNewEmpresa}
-                  disabled={newEmpresaLoading}
-                  className="px-3 py-1.5 rounded text-sm font-semibold"
-                  style={{ background: "#3dbb6e", color: "#fff" }}
-                >
-                  {newEmpresaLoading ? "..." : "Crear"}
-                </button>
-              </div>
-            )}
-
-            {/* Invite form */}
-            {showInvite && (
-              <div className="mt-3 space-y-2">
-                <p className="text-xs" style={{ color: "#6a8ab0" }}>Invitar por email — el usuario verá esta empresa en su cuenta</p>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                    placeholder="email@ejemplo.com"
-                    className="flex-1 rounded px-3 py-1.5 text-sm"
-                    style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleInvite}
-                    disabled={inviteLoading || !inviteEmail.trim()}
-                    className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                    style={{ background: "#1a4a80", color: "#e0e8f0", border: "1px solid #2a5298" }}
-                  >
-                    {inviteLoading ? "..." : "Invitar"}
-                  </button>
+        {user && (
+          <>
+            {/* ── Workspace selector ── */}
+            {workspaces.length > 0 && (
+              <div className="mb-4 p-4 rounded-xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+                <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#6a8ab0" }}>Workspace</p>
+                <div className="flex flex-wrap gap-2">
+                  {workspaces.map((ws) => {
+                    const active = selWs.has(ws.id);
+                    return (
+                      <button key={ws.id} onClick={() => toggleWs(ws.id)}
+                        className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                        style={{
+                          background: active ? "#1a4a80" : "#0f2040",
+                          border: `2px solid ${active ? "#2a6aaa" : "#1a3460"}`,
+                          color: active ? "#e0e8f0" : "#6a8ab0",
+                        }}>
+                        {ws.isOwn ? "📁 " : "🤝 "}{ws.label}
+                        {active && selWs.size > 1 && <span className="ml-1 text-xs opacity-60">✓</span>}
+                      </button>
+                    );
+                  })}
                 </div>
-                {inviteMsg && <p className="text-xs" style={{ color: "#3dbb6e" }}>{inviteMsg}</p>}
               </div>
             )}
-          </div>
+
+            {/* ── Empresa selector ── */}
+            {availableEmpresas.length > 0 && (
+              <div className="mb-4 p-4 rounded-xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresa</p>
+                  <div className="flex gap-2">
+                    {primaryEmpresa?.isOwner && primaryEmpresaId && (
+                      <button className="text-xs px-2 py-1 rounded"
+                        style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
+                        onClick={() => { setShowInvite(!showInvite); setShowNewEmpresa(false); }}>
+                        Invitar →
+                      </button>
+                    )}
+                    {selWs.has(user.id) && (
+                      <button className="text-xs px-2 py-1 rounded"
+                        style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
+                        onClick={() => { setShowNewEmpresa(!showNewEmpresa); setShowInvite(false); }}>
+                        + Nueva
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {availableEmpresas.map((emp) => {
+                    const active = selEmp.has(emp.id);
+                    const isPrimary = emp.id === primaryEmpresaId;
+                    return (
+                      <button key={emp.id} onClick={() => toggleEmp(emp.id)}
+                        className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                        style={{
+                          background: active ? "#1a3a60" : "#0f2040",
+                          border: `2px solid ${isPrimary ? "#3dbb6e" : active ? "#2a5298" : "#1a3460"}`,
+                          color: active ? "#e2b04a" : "#6a8ab0",
+                        }}>
+                        {emp.name}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selEmp.size > 1 && (
+                  <p className="text-xs mt-2" style={{ color: "#4a6a8a" }}>
+                    Mostrando archivos de {selEmp.size} empresas · los nuevos archivos van a <strong style={{ color: "#aac4e0" }}>{primaryEmpresa?.name}</strong>
+                  </p>
+                )}
+
+                {showNewEmpresa && (
+                  <div className="mt-3 flex gap-2">
+                    <input type="text" value={newEmpresaName} autoFocus
+                      onChange={(e) => setNewEmpresaName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleNewEmpresa()}
+                      placeholder="Nombre de la empresa"
+                      className="flex-1 rounded px-3 py-1.5 text-sm"
+                      style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
+                    <button onClick={handleNewEmpresa} disabled={newEmpresaLoading}
+                      className="px-3 py-1.5 rounded text-sm font-semibold"
+                      style={{ background: "#3dbb6e", color: "#fff" }}>
+                      {newEmpresaLoading ? "..." : "Crear"}
+                    </button>
+                  </div>
+                )}
+
+                {showInvite && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs" style={{ color: "#6a8ab0" }}>
+                      Invitar a <strong style={{ color: "#aac4e0" }}>{primaryEmpresa?.name}</strong> — el usuario verá esta empresa en su cuenta
+                    </p>
+                    <div className="flex gap-2">
+                      <input type="email" value={inviteEmail} autoFocus
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+                        placeholder="email@ejemplo.com"
+                        className="flex-1 rounded px-3 py-1.5 text-sm"
+                        style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
+                      <button onClick={handleInvite} disabled={inviteLoading || !inviteEmail.trim()}
+                        className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
+                        style={{ background: "#1a4a80", color: "#e0e8f0", border: "1px solid #2a5298" }}>
+                        {inviteLoading ? "..." : "Invitar"}
+                      </button>
+                    </div>
+                    {inviteMsg && <p className="text-xs" style={{ color: "#3dbb6e" }}>{inviteMsg}</p>}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
-        {/* File sections */}
+        {/* ── File sections ── */}
         <div className="space-y-4">
-          <DashFileSection
-            title="🗺 Shapes / KMZ"
-            hint=".zip con .shp + .dbf + .shx, o un .kmz"
-            accept=".zip,.shp,.dbf,.shx,.prj,.kmz"
-            multiple
-            files={filteredShp}
-            status={shpStatus}
-            onFiles={onUploadShp}
-            onRemove={onRemoveShp}
-          />
-          <DashFileSection
-            title="📄 Manejo de lotes"
-            hint="CSV o XLSX — podés vincular varios archivos"
-            accept=".csv,.xlsx,.xls"
-            multiple={false}
-            files={filteredCsv}
-            status={csvStatus}
-            onFiles={onUploadCsv}
-            onRemove={onRemoveCsv}
-          />
-          <DashFileSection
-            title="🌾 Rindes históricos"
-            hint="CSV o XLSX con columna de lote y rendimiento"
-            accept=".csv,.xlsx,.xls"
-            multiple={false}
-            files={filteredRinde}
-            status={rindeStatus}
-            onFiles={onUploadRinde}
-            onRemove={onRemoveRinde}
-          />
+          <DashFileSection title="🗺 Shapes / KMZ" hint=".zip con .shp + .dbf + .shx"
+            accept=".zip,.shp,.dbf,.shx,.prj,.kmz" multiple
+            files={filteredShp} status={shpStatus} onFiles={onUploadShp} onRemove={onRemoveShp} />
+          <DashFileSection title="📄 Manejo de lotes" hint="CSV o XLSX — elegís columnas en el siguiente paso"
+            accept=".csv,.xlsx,.xls" multiple={false}
+            files={filteredCsv} status={csvStatus} onFiles={onUploadCsv} onRemove={onRemoveCsv} />
+          <DashFileSection title="🌾 Rindes históricos" hint="CSV o XLSX con columna de lote y rendimiento"
+            accept=".csv,.xlsx,.xls" multiple={false}
+            files={filteredRinde} status={rindeStatus} onFiles={onUploadRinde} onRemove={onRemoveRinde} />
         </div>
 
-        {/* Go to map button */}
         <div className="mt-8">
-          <button
-            onClick={onGoToMap}
+          <button onClick={onGoToMap}
             className="w-full py-4 rounded-xl text-lg font-bold transition-all"
-            style={{ background: "#1a4a80", color: "#e2b04a", border: "2px solid #2a5298" }}
-          >
+            style={{ background: "#1a4a80", color: "#e2b04a", border: "2px solid #2a5298" }}>
             Ir a recorrer →
           </button>
-          {filteredShp.length === 0 && (
-            <p className="text-center text-xs mt-2" style={{ color: "#4a6a8a" }}>
-              Podés explorar el mapa sin shapes cargados
-            </p>
-          )}
         </div>
       </div>
     </div>
@@ -2127,29 +2171,25 @@ function DashFileSection({
   return (
     <div className="rounded-xl p-4" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
       <p className="text-sm font-semibold mb-3" style={{ color: "#aac4e0" }}>{title}</p>
-
       {files.length > 0 ? (
         <div className="space-y-1.5 mb-3">
           {files.map((name, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg" style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
+            <div key={i} className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
+              style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
               <span className="truncate flex-1" style={{ color: "#3dbb6e" }}>✓ {name}</span>
-              <button
-                onClick={() => onRemove(name)}
+              <button onClick={() => onRemove(name)}
                 className="shrink-0 w-5 h-5 flex items-center justify-center rounded hover:opacity-70 text-sm"
-                style={{ color: "#e25a5a" }}
-              >×</button>
+                style={{ color: "#e25a5a" }}>×</button>
             </div>
           ))}
         </div>
       ) : (
         <p className="text-xs mb-3" style={{ color: "#445" }}>Sin archivos cargados</p>
       )}
-
       {status && !status.ok && (
         <p className="text-xs mb-2 px-2 py-1 rounded" style={{ background: "#3a2a0a", color: "#e2b04a" }}>{status.msg}</p>
       )}
-
-      <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg text-xs transition-colors hover:opacity-80"
+      <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg text-xs hover:opacity-80"
         style={{ background: "#0d1b35", border: "1px dashed #2a5298", color: "#6a8ab0" }}>
         <input type="file" accept={accept} multiple={multiple} className="sr-only"
           onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />

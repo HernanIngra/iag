@@ -31,15 +31,6 @@ DROP POLICY IF EXISTS "owner manages empresa" ON empresas;
 CREATE POLICY "owner manages empresa" ON empresas
   FOR ALL USING (auth.uid() = owner_id);
 
-DROP POLICY IF EXISTS "members can see shared empresa" ON empresas;
-CREATE POLICY "members can see shared empresa" ON empresas
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM empresa_members
-      WHERE empresa_id = empresas.id AND member_user_id = auth.uid()
-    )
-  );
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. Empresa members
 -- La unidad de sharing es la empresa, no el workspace.
@@ -55,18 +46,34 @@ CREATE TABLE IF NOT EXISTS empresa_members (
 
 ALTER TABLE empresa_members ENABLE ROW LEVEL SECURITY;
 
+-- Funciones SECURITY DEFINER para evitar recursión infinita entre empresas ↔ empresa_members
+CREATE OR REPLACE FUNCTION is_empresa_owner(p_empresa_id uuid)
+RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM empresas WHERE id = p_empresa_id AND owner_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION is_empresa_member(p_empresa_id uuid)
+RETURNS boolean AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM empresa_members
+    WHERE empresa_id = p_empresa_id AND member_user_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER;
+
 DROP POLICY IF EXISTS "owner manages empresa members" ON empresa_members;
 CREATE POLICY "owner manages empresa members" ON empresa_members
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM empresas
-      WHERE id = empresa_members.empresa_id AND owner_id = auth.uid()
-    )
-  );
+  FOR ALL USING (is_empresa_owner(empresa_id));
 
 DROP POLICY IF EXISTS "member can see own empresa membership" ON empresa_members;
 CREATE POLICY "member can see own empresa membership" ON empresa_members
   FOR SELECT USING (auth.uid() = member_user_id);
+
+-- Política en empresas que usa la función para evitar recursión:
+DROP POLICY IF EXISTS "members can see shared empresa" ON empresas;
+CREATE POLICY "members can see shared empresa" ON empresas
+  FOR SELECT USING (is_empresa_member(id));
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4. Empresa invites (para emails que aún no tienen cuenta)
