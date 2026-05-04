@@ -1525,10 +1525,12 @@ function FiltersPanel({
   const [showProdFilter, setShowProdFilter] = useState(!!filters.prod);
   const campaigns = [...new Set(allRows.map((r) => r._campaign).filter(Boolean))].sort();
   const PRIORITY_TIPOS = ["Herbicida", "Insecticida", "Fungicida", "Fertilizante"];
+  const JUNK_TIPOS = new Set(["0", "0.0", ""]);
   const allTipos = [...new Set(allRows.map((r) => r._tipo).filter(Boolean))];
   const tipos = [
     ...PRIORITY_TIPOS.filter((t) => allTipos.includes(t)),
-    ...allTipos.filter((t) => !PRIORITY_TIPOS.includes(t)).sort(),
+    ...allTipos.filter((t) => !PRIORITY_TIPOS.includes(t) && !JUNK_TIPOS.has(t)).sort(),
+    ...allTipos.filter((t) => JUNK_TIPOS.has(t)).sort(),
   ];
   const cultivos = Object.keys(cultivoColorMap).sort();
   const geneticas = [...new Set(allRows.map((r) => r._genetica).filter(Boolean))].sort();
