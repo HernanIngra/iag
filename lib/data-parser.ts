@@ -113,7 +113,7 @@ function parseDateCell(rawDate: unknown): { fecha: Date | null; fechaStr: string
     });
     const m = fecha.getMonth() + 1;
     const y = fecha.getFullYear();
-    const startY = m >= 7 ? y : y - 1;
+    const startY = m >= 8 ? y : y - 1;
     campaign = `${String(startY).slice(2)}-${String(startY + 1).slice(2)}`;
   }
 
@@ -171,7 +171,7 @@ export async function parseManagementFile(
       if (!campaign && anioCol && mesCol) {
         const m = Number(row[mesCol]);
         const y = Number(row[anioCol]);
-        const startY = m >= 7 ? y : y - 1;
+        const startY = m >= 8 ? y : y - 1;
         campaign = `${String(startY).slice(2)}-${String(startY + 1).slice(2)}`;
       }
       return {

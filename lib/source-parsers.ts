@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import type { ParsedRow } from "./data-parser";
+import type { RainReading, RainData } from "./db";
 
 // ── Source format identifiers ─────────────────────────────────────────────────
 
@@ -7,12 +8,14 @@ export type SourceFormat =
   | "finnegans"
   | "synagro"
   | "excel-propio"
+  | "lluvia"
   | "generic";
 
 export const SOURCE_LABELS: Record<SourceFormat, string> = {
   finnegans:      "Finnegans",
   synagro:        "Synagro",
   "excel-propio": "Excel propio",
+  lluvia:         "Lluvias / Pluviómetros",
   generic:        "Otro / mapear manualmente",
 };
 
@@ -53,6 +56,8 @@ function normalizeCampaign(raw: string | null | undefined): string {
   const stripped = s.replace(/^C\s*/i, "");           // 'C 25-26' → '25-26'
   const slashMatch = stripped.match(/^(\d{4})\/(\d{4})$/);
   if (slashMatch) return `${slashMatch[1].slice(2)}-${slashMatch[2].slice(2)}`; // '2025/2026' → '25-26'
+  const dashMatch = stripped.match(/^(\d{4})-(\d{4})$/);
+  if (dashMatch) return `${dashMatch[1].slice(2)}-${dashMatch[2].slice(2)}`; // '2014-2015' → '14-15'
   return stripped;
 }
 
@@ -84,7 +89,7 @@ function parseDateCell(raw: unknown): { fecha: Date | null; fechaStr: string; ca
   const fechaStr = fecha.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
   const m = fecha.getMonth() + 1;
   const y = fecha.getFullYear();
-  const startY = m >= 7 ? y : y - 1;
+  const startY = m >= 8 ? y : y - 1;
   return { fecha, fechaStr, campaign: `${String(startY).slice(2)}-${String(startY + 1).slice(2)}` };
 }
 
@@ -147,6 +152,9 @@ export function detectSourceFormat(cols: string[]): SourceFormat {
   if (has("TipoDeLabor") || has("Labor/producto") || has("Documento")) return "finnegans";
   if (hasPartial("Lote - Actividad") || (has("Tarea") && has("Insumo"))) return "synagro";
   if (hasPartial("PRODUC")) return "excel-propio";
+  // Lluvia: Valor + Ubicación (or Pluviometro) without management columns
+  if ((has("Valor") || has("valor") || has("MM") || has("mm")) &&
+      (hasPartial("Ubicaci") || hasPartial("Pluviometro") || hasPartial("Pluviometro"))) return "lluvia";
   return "generic";
 }
 
@@ -385,7 +393,7 @@ async function parseExcelPropio(file: File, fileName: string): Promise<ParsedRow
         const m = Number(row[mesKey]);
         const y = Number(row[anioKey]);
         if (!isNaN(m) && !isNaN(y) && y > 2000) {
-          const startY = m >= 7 ? y : y - 1;
+          const startY = m >= 8 ? y : y - 1;
           campaign = `${String(startY).slice(2)}-${String(startY + 1).slice(2)}`;
         }
       }
@@ -405,6 +413,46 @@ async function parseExcelPropio(file: File, fileName: string): Promise<ParsedRow
     .filter((r): r is ParsedRow => r !== null && !!r._linkKey);
 }
 
+// ── Lluvia parser ─────────────────────────────────────────────────────────────
+
+export async function parseLluviaFile(file: File): Promise<RainData> {
+  const rawRows = await readFirstSheet(file);
+
+  // Find header row containing Fecha + Ubicación/Pluviometro + Valor/mm
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+    const vals = Object.values(rawRows[i]).map((v) => String(v ?? "").trim().toLowerCase());
+    if (vals.some((v) => v === "fecha") && vals.some((v) => v.includes("ubicaci") || v.includes("pluviometro"))) {
+      headerIdx = i;
+      break;
+    }
+  }
+  const rows = applyHeader(rawRows, headerIdx);
+  const sampleCols = colsOf(rows);
+
+  const fechaKey = sampleCols.find((k) => k.toLowerCase() === "fecha") ?? "Fecha";
+  const ubicKey  = sampleCols.find((k) => k.toLowerCase().includes("ubicaci") || k.toLowerCase().includes("pluviometro")) ?? "Ubicación";
+  const valorKey = sampleCols.find((k) => k.toLowerCase() === "valor" || k.toLowerCase() === "mm") ?? "Valor";
+  const campKey  = sampleCols.find((k) => k.toLowerCase().includes("campa"));
+
+  const rainData: RainData = {};
+
+  for (const row of rows) {
+    const pluviometro = String(row[ubicKey] ?? "").trim();
+    if (!pluviometro) continue;
+    const mm = parseFloat(String(row[valorKey] ?? "").replace(",", "."));
+    if (isNaN(mm)) continue;
+    const { fecha, campaign } = parseDateCell(row[fechaKey]);
+    if (!fecha) continue;
+    const date = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}-${String(fecha.getDate()).padStart(2, "0")}`;
+    const rawCampaign = campKey ? normalizeCampaign(row[campKey] as string) || campaign : campaign;
+    if (!rainData[pluviometro]) rainData[pluviometro] = [];
+    rainData[pluviometro].push({ date, mm, campaign: rawCampaign, source: "upload" });
+  }
+
+  return rainData;
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 export async function parseWithSource(
@@ -417,6 +465,7 @@ export async function parseWithSource(
     case "finnegans":     return parseFinnegans(file, name);
     case "synagro":       return parseSynagro(file, name);
     case "excel-propio":  return parseExcelPropio(file, name);
+    case "lluvia":        return null; // lluvia uses parseLluviaFile directly, not ParsedRow
     case "generic":       return null;
   }
 }

@@ -22,6 +22,7 @@ import {
 import {
   detectSourceFormat,
   parseWithSource,
+  parseLluviaFile,
   SOURCE_LABELS,
   type SourceFormat,
 } from "@/lib/source-parsers";
@@ -53,6 +54,8 @@ import {
   type FileMeta,
   type Empresa,
   type SharedEmpresa,
+  type RainData,
+  type RainReading,
 } from "@/lib/db";
 
 function todayStr() {
@@ -173,6 +176,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [rindeFileMeta, setRindeFileMeta] = useState<FileMeta[]>([]);
   const pendingCsvEmpresaIdRef = useRef<string | undefined>(undefined);
 
+  // Rain data
+  const [rainData, setRainData] = useState<RainData>({});
+  const [pluviometroMap, setPluviometroMap] = useState<Record<string, string>>({});
+  const [rainFiles, setRainFiles] = useState<string[]>([]);
+  // Pending lluvia link modal
+  const [pendingRainData, setPendingRainData] = useState<RainData>({});
+  const [pendingRainFileName, setPendingRainFileName] = useState("");
+  // Rain overlay
+  const [rainOverlay, setRainOverlay] = useState(false);
+  const [rainPeriodDays, setRainPeriodDays] = useState(30);
+  const [rainInterpolate, setRainInterpolate] = useState(false);
+
   // ── Switch to Drive tab when a Drive link is active ─────────────────────────
 
   useEffect(() => {
@@ -290,6 +305,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setRindeFileMeta(ws.rindeFileMeta ?? []);
     if (ws.driveManejo) setDriveManejo(ws.driveManejo);
     if (ws.manejoColMapping) setManejoColMapping(ws.manejoColMapping);
+    setRainData(ws.rainData ?? {});
+    setPluviometroMap(ws.pluviometroMap ?? {});
     setShpStatus({ msg: `✓ ${ws.lotCount} lotes`, ok: true });
     if (ws.allRows.length) {
       setCsvStatus({ msg: `✓ ${ws.allRows.length} registros · ${Object.keys(ws.lotData).length} lotes`, ok: true });
@@ -355,6 +372,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         lotData, allRows, rindeData, lotVisits, shpFiles, csvFiles, rindeFiles,
         shpFileMeta, csvFileMeta, rindeFileMeta,
         driveManejo, manejoColMapping,
+        rainData, pluviometroMap,
       };
       saveWorkspaceLocal(state);
       if (user) {
@@ -365,7 +383,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }, 1500);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, lotData, rindeData, lotVisits, driveManejo, manejoColMapping, user]);
+  }, [collections, lotData, rindeData, lotVisits, driveManejo, manejoColMapping, rainData, pluviometroMap, user]);
 
   // ── Dim/highlight lots based on tipo filter ─────────────────────────────────
 
@@ -538,6 +556,50 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
   // ── Management upload: step 1b — source confirmed, parse + show preview ─────
 
+  // ── Rain file upload ──────────────────────────────────────────────────────────
+
+  async function handleRainFileStart(file: File) {
+    try {
+      const parsed = await parseLluviaFile(file);
+      if (!Object.keys(parsed).length) throw new Error("No se encontraron lecturas válidas.");
+      setPendingRainData(parsed);
+      setPendingRainFileName(file.name);
+    } catch (err) {
+      alert(`✗ ${(err as Error).message}`);
+    }
+  }
+
+  function handleRainLinkConfirmed(linkMap: Record<string, string>) {
+    // linkMap: pluviometro → lot name (or "" = no association)
+    const newPluvMap = { ...pluviometroMap, ...linkMap };
+    setPluviometroMap(newPluvMap);
+    // Merge rain readings
+    const newRainData = { ...rainData };
+    for (const [pluv, readings] of Object.entries(pendingRainData)) {
+      const key = linkMap[pluv] || pluv; // use linked lot name, or original pluviometro name
+      if (!newRainData[key]) newRainData[key] = [];
+      // Deduplicate by date
+      const existing = new Set(newRainData[key].map((r) => r.date));
+      newRainData[key].push(...readings.filter((r) => !existing.has(r.date)));
+    }
+    setRainData(newRainData);
+    setRainFiles((prev) => [...prev, pendingRainFileName]);
+    setPendingRainData({});
+    setPendingRainFileName("");
+  }
+
+  // ── Rain entry from recorrida ─────────────────────────────────────────────────
+
+  function addRainReading(lotName: string, reading: RainReading) {
+    setRainData((prev) => {
+      const existing = prev[lotName] ?? [];
+      const deduped = existing.filter((r) => r.date !== reading.date);
+      return { ...prev, [lotName]: [...deduped, reading].sort((a, b) => b.date.localeCompare(a.date)) };
+    });
+  }
+
+  // ── Management upload: step 1b — source confirmed, parse + show preview ─────
+
   async function handleSourceConfirmed(source: SourceFormat) {
     setPendingSource(null);
     if (source === "generic") {
@@ -546,6 +608,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         const cols = await detectLinkColumns(pendingFile);
         setLinkPickerCols(cols);
       }
+      return;
+    }
+    if (source === "lluvia") {
+      if (pendingFile) await handleRainFileStart(pendingFile);
+      setPendingFile(null);
       return;
     }
     if (!pendingFile) return;
@@ -1083,6 +1150,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
               return next;
             });
           }}
+          rainFiles={rainFiles}
+          onUploadRain={(fl) => { if (fl[0]) handleRainFileStart(fl[0]); }}
+          onRemoveRain={(name) => setRainFiles((prev) => prev.filter((f) => f !== name))}
           shpStatus={shpStatus}
           csvStatus={csvStatus}
           rindeStatus={rindeStatus}
@@ -1220,6 +1290,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                         return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
                       })}
                       lotRindes={rindeData[selectedLot.lotName] ?? []}
+                      rainReadings={rainData[selectedLot.lotName] ?? []}
+                      onAddRain={(reading) => addRainReading(selectedLot.lotName, reading)}
                     />
                   </>
                 )}
@@ -1256,6 +1328,17 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           );
         })()}
       </div>
+
+      {/* ── PLUVIOMETRO LINK MODAL ── */}
+      {Object.keys(pendingRainData).length > 0 && (
+        <PluviometroLinkModal
+          rainData={pendingRainData}
+          knownLots={Object.keys(lotData)}
+          existingMap={pluviometroMap}
+          onConfirm={handleRainLinkConfirmed}
+          onCancel={() => { setPendingRainData({}); setPendingRainFileName(""); }}
+        />
+      )}
 
       {/* ── SOURCE SELECTOR MODAL ── */}
       {pendingSource !== null && (
@@ -1581,6 +1664,7 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings 
 
 function LotInfo({
   lotName, zone, color, filteredRows, allRows, visits, onSaveVisit, recentSprayings, lotRindes,
+  rainReadings, onAddRain,
 }: {
   lotName: string; zone: string; color: string;
   filteredRows: ParsedRow[]; allRows: ParsedRow[];
@@ -1588,11 +1672,16 @@ function LotInfo({
   onSaveVisit: (date: string, update: Partial<LotVisit>) => void;
   recentSprayings: ParsedRow[];
   lotRindes: Array<{ campana: string; cultivo: string; tipoCorr: string; genetica: string; rinde: number }>;
+  rainReadings: RainReading[];
+  onAddRain: (reading: RainReading) => void;
 }) {
   const today = todayStr();
   const pastVisits = [...visits].filter((v) => v.date !== today).sort((a, b) => b.date.localeCompare(a.date));
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [rindesOpen, setRindesOpen] = useState(false);
+  const [rainOpen, setRainOpen] = useState(false);
+  const [rainDate, setRainDate] = useState(today);
+  const [rainMm, setRainMm] = useState("");
 
   const cultivos = [...new Set(filteredRows.map((r) => r._cultivo).filter(Boolean))];
   const sups = [...new Set(filteredRows.map((r) => String(r._sup ?? "")).filter(Boolean))];
@@ -1630,6 +1719,54 @@ function LotInfo({
           {rindesOpen && <YieldBar lotRindes={lotRindes} />}
         </div>
       )}
+
+      {/* ── Lluvia ── */}
+      <div style={{ borderTop: "1px solid #1e2e4e", marginBottom: "8px" }}>
+        <button
+          className="flex items-center justify-between w-full py-2 text-xs uppercase tracking-wider"
+          style={{ background: "none", border: "none", color: "#6a8ab0", cursor: "pointer" }}
+          onClick={() => setRainOpen((o) => !o)}
+        >
+          <span>🌧 Lluvia</span>
+          <span>{rainOpen ? "▲" : "▼"}</span>
+        </button>
+        {rainOpen && (
+          <div className="pb-2">
+            <div className="flex gap-2 mb-2 items-center">
+              <input type="date" value={rainDate} onChange={(e) => setRainDate(e.target.value)}
+                className="text-xs px-2 py-1 rounded flex-1"
+                style={{ background: "#0f2040", border: "1px solid #1a3460", color: "#e0e0e0" }} />
+              <input type="number" value={rainMm} onChange={(e) => setRainMm(e.target.value)}
+                placeholder="mm" min={0} step={0.1}
+                className="text-xs px-2 py-1 rounded w-16 text-right"
+                style={{ background: "#0f2040", border: "1px solid #1a3460", color: "#e0e0e0" }} />
+              <button
+                onClick={() => {
+                  const mm = parseFloat(rainMm);
+                  if (!rainDate || isNaN(mm)) return;
+                  const m = new Date(rainDate).getMonth() + 1;
+                  const y = new Date(rainDate).getFullYear();
+                  const startY = m >= 8 ? y : y - 1;
+                  onAddRain({ date: rainDate, mm, campaign: `${String(startY).slice(2)}-${String(startY + 1).slice(2)}`, source: "recorrida" });
+                  setRainMm("");
+                }}
+                className="px-3 py-1 rounded text-xs font-bold"
+                style={{ background: "#1a4a80", color: "#e2b04a", border: "1px solid #2a5298" }}>
+                +
+              </button>
+            </div>
+            {rainReadings.slice(0, 5).map((r, i) => (
+              <div key={i} className="flex justify-between text-xs py-0.5" style={{ color: "#aac4e0" }}>
+                <span>{r.date}</span>
+                <span className="font-semibold" style={{ color: "#5ab0e0" }}>{r.mm} mm</span>
+              </div>
+            ))}
+            {rainReadings.length === 0 && (
+              <p className="text-xs" style={{ color: "#445" }}>Sin lecturas registradas</p>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── Applications table ── */}
       {sortedRows.length > 0 && (
@@ -1948,6 +2085,7 @@ function FileDashboard({
   shpFiles, shpFileMeta, csvFiles, csvFileMeta, rindeFiles, rindeFileMeta,
   onUploadShp, onUploadCsv, onUploadRinde,
   onRemoveShp, onRemoveCsv, onRemoveRinde,
+  rainFiles, onUploadRain, onRemoveRain,
   shpStatus, csvStatus, rindeStatus,
   onGoToMap,
 }: {
@@ -1967,6 +2105,9 @@ function FileDashboard({
   onRemoveShp: (name: string) => void;
   onRemoveCsv: (name: string) => void;
   onRemoveRinde: (name: string) => void;
+  rainFiles: string[];
+  onUploadRain: (fl: FileList) => void;
+  onRemoveRain: (name: string) => void;
   shpStatus: { msg: string; ok: boolean } | null;
   csvStatus: { msg: string; ok: boolean } | null;
   rindeStatus: { msg: string; ok: boolean } | null;
@@ -2222,6 +2363,9 @@ function FileDashboard({
           <DashFileSection title="🌾 Rindes históricos" hint="CSV o XLSX con columna de lote y rendimiento"
             accept=".csv,.xlsx,.xls" multiple={false}
             files={filteredRinde} status={rindeStatus} onFiles={onUploadRinde} onRemove={onRemoveRinde} />
+          <DashFileSection title="🌧 Lluvias" hint="CSV o XLSX con Fecha, Ubicación, Valor (mm)"
+            accept=".csv,.xlsx,.xls" multiple={false}
+            files={rainFiles} status={null} onFiles={onUploadRain} onRemove={onRemoveRain} />
         </div>
 
         <div className="mt-8">
@@ -2276,9 +2420,77 @@ function DashFileSection({
   );
 }
 
+// ── PluviometroLinkModal ───────────────────────────────────────────────────────
+
+function PluviometroLinkModal({
+  rainData, knownLots, existingMap, onConfirm, onCancel,
+}: {
+  rainData: RainData;
+  knownLots: string[];
+  existingMap: Record<string, string>;
+  onConfirm: (linkMap: Record<string, string>) => void;
+  onCancel: () => void;
+}) {
+  const pluviometros = Object.keys(rainData);
+  const [linkMap, setLinkMap] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const p of pluviometros) {
+      // auto-match exact
+      if (existingMap[p]) { init[p] = existingMap[p]; continue; }
+      const exact = knownLots.find((l) => l.toLowerCase() === p.toLowerCase());
+      init[p] = exact ?? "";
+    }
+    return init;
+  });
+
+  const unlinked = pluviometros.filter((p) => !linkMap[p]);
+
+  return (
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+      <div className="rounded-2xl p-5 flex flex-col gap-4 w-full max-w-md max-h-[90vh] overflow-hidden"
+        style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+        <div>
+          <p className="text-base font-semibold" style={{ color: "#e0e0e0" }}>Vincular pluviómetros a lotes</p>
+          <p className="text-xs mt-1" style={{ color: "#6a8ab0" }}>
+            {pluviometros.length - unlinked.length} de {pluviometros.length} vinculados automáticamente
+          </p>
+        </div>
+        <div className="overflow-y-auto flex flex-col gap-2">
+          {pluviometros.map((p) => (
+            <div key={p} className="flex items-center gap-2">
+              <span className="text-xs font-mono flex-1" style={{ color: "#aac4e0" }}>{p}</span>
+              <span className="text-xs" style={{ color: "#445" }}>→</span>
+              <select
+                value={linkMap[p] ?? ""}
+                onChange={(e) => setLinkMap((prev) => ({ ...prev, [p]: e.target.value }))}
+                className="text-xs px-2 py-1 rounded flex-1"
+                style={{ background: "#0f2040", border: "1px solid #1a3460", color: "#e0e0e0" }}
+              >
+                <option value="">Sin lote asociado</option>
+                {knownLots.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm"
+            style={{ background: "#0f2040", color: "#6a8ab0", border: "1px solid #1a3460" }}>
+            Cancelar
+          </button>
+          <button onClick={() => onConfirm(linkMap)}
+            className="flex-1 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: "#3dbb6e", color: "#fff" }}>
+            Confirmar →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── SourceSelectorModal ────────────────────────────────────────────────────────
 
-const ALL_SOURCES: SourceFormat[] = ["finnegans", "synagro", "excel-propio", "generic"];
+const ALL_SOURCES: SourceFormat[] = ["finnegans", "synagro", "excel-propio", "lluvia", "generic"];
 
 function SourceSelectorModal({
   detected, selected, fileName, onSelect, onConfirm, onCancel,

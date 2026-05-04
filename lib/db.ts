@@ -2,8 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GeoCollection } from "./shapefile";
 import type { LotData, RindeData, ParsedRow, RindeRow, ColumnMapping } from "./data-parser";
 
-// ─── Workspace type ─────────────────────────────────────────────────────────
-
 export interface LotVisit {
   date: string;        // "YYYY-MM-DD"
   note: string;
@@ -17,6 +15,19 @@ export interface DriveManejo {
   type: "sheets" | "file";
   url: string;
 }
+
+// ─── Rain data ───────────────────────────────────────────────────────────────
+
+export interface RainReading {
+  date: string;       // "YYYY-MM-DD"
+  mm: number;
+  campaign: string;   // "25-26"
+  source?: string;    // "recorrida" | "upload"
+}
+
+export type RainData = Record<string, RainReading[]>; // key = pluviometro/lot name
+
+// ─── Workspace type ──────────────────────────────────────────────────────────
 
 export interface Workspace {
   fieldName: string;
@@ -36,6 +47,8 @@ export interface Workspace {
   rindeFileMeta: FileMeta[];
   driveManejo?: DriveManejo | null;
   manejoColMapping?: ColumnMapping | null;
+  rainData: RainData;
+  pluviometroMap: Record<string, string>; // pluviometro name → lot name
 }
 
 // ─── File / empresa meta ─────────────────────────────────────────────────────
@@ -107,6 +120,8 @@ export async function saveWorkspace(
       rinde_file_meta: state.rindeFileMeta,
       drive_manejo: state.driveManejo ?? null,
       manejo_col_mapping: state.manejoColMapping ?? null,
+      rain_data: state.rainData,
+      pluviometro_map: state.pluviometroMap,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" }
@@ -146,6 +161,8 @@ export async function loadWorkspace(
     rindeFileMeta: (data.rinde_file_meta ?? []) as FileMeta[],
     driveManejo: (data.drive_manejo ?? null) as DriveManejo | null,
     manejoColMapping: (data.manejo_col_mapping ?? null) as ColumnMapping | null,
+    rainData: (data.rain_data ?? {}) as RainData,
+    pluviometroMap: (data.pluviometro_map ?? {}) as Record<string, string>,
   };
 }
 
@@ -175,6 +192,8 @@ export function saveWorkspaceLocal(state: Workspace): void {
         rinde_file_meta: state.rindeFileMeta,
         drive_manejo: state.driveManejo ?? null,
         manejo_col_mapping: state.manejoColMapping ?? null,
+        rain_data: state.rainData,
+        pluviometro_map: state.pluviometroMap,
       })
     );
   } catch {
@@ -205,6 +224,8 @@ export function loadWorkspaceLocal(): Workspace | null {
       rindeFileMeta: (data.rinde_file_meta ?? []) as FileMeta[],
       driveManejo: (data.drive_manejo ?? null) as DriveManejo | null,
       manejoColMapping: (data.manejo_col_mapping ?? null) as ColumnMapping | null,
+      rainData: (data.rain_data ?? {}) as RainData,
+      pluviometroMap: (data.pluviometro_map ?? {}) as Record<string, string>,
     };
   } catch {
     return null;
