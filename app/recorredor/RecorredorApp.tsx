@@ -20,6 +20,12 @@ import {
   detectColumnMapping,
 } from "@/lib/data-parser";
 import {
+  detectSourceFormat,
+  parseWithSource,
+  SOURCE_LABELS,
+  type SourceFormat,
+} from "@/lib/source-parsers";
+import {
   tipoColor,
   isWinterCrop,
   cultivoIcon,
@@ -119,6 +125,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // Column mapper — manejo (step 2: full mapping)
   const [pendingColMapping, setPendingColMapping] = useState<ColumnMapping | null>(null);
   const [colMappingAllCols, setColMappingAllCols] = useState<string[]>([]);
+  // Source selector + preview (smart ETL path)
+  const [pendingSource, setPendingSource] = useState<SourceFormat | null>(null);
+  const [detectedSource, setDetectedSource] = useState<SourceFormat>("generic");
+  const [parsedRowsBuffer, setParsedRowsBuffer] = useState<ParsedRow[]>([]);
+  const [previewRows, setPreviewRows] = useState<ParsedRow[]>([]);
   // Column picker — rindes
   const [rindePickerCols, setRindePickerCols] = useState<string[]>([]);
   const [pendingRindeFile, setPendingRindeFile] = useState<File | null>(null);
@@ -504,14 +515,100 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }
   }
 
-  // ── Management upload: step 1 — detect columns ──────────────────────────────
+  // ── Management upload: step 1 — detect source format ────────────────────────
 
   async function handleDataFileStart(file: File) {
-    setCsvStatus({ msg: "Leyendo columnas...", ok: false });
+    setCsvStatus({ msg: "Leyendo archivo...", ok: false });
     try {
       const cols = await detectLinkColumns(file);
       setPendingFile(file);
-      setLinkPickerCols(cols);
+      const source = detectSourceFormat(cols);
+      if (source === "generic") {
+        // Generic path: ask user to pick link column
+        setLinkPickerCols(cols);
+      } else {
+        // Smart ETL path: show source selector with auto-detected suggestion
+        setDetectedSource(source);
+        setPendingSource(source);
+      }
+    } catch (err) {
+      setCsvStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
+    }
+  }
+
+  // ── Management upload: step 1b — source confirmed, parse + show preview ─────
+
+  async function handleSourceConfirmed(source: SourceFormat) {
+    setPendingSource(null);
+    if (source === "generic") {
+      // Fall back to manual column picker
+      if (pendingFile) {
+        const cols = await detectLinkColumns(pendingFile);
+        setLinkPickerCols(cols);
+      }
+      return;
+    }
+    if (!pendingFile) return;
+    setCsvStatus({ msg: "Procesando...", ok: false });
+    try {
+      const rows = await parseWithSource(pendingFile, source);
+      if (!rows || rows.length === 0) throw new Error("No se encontraron filas válidas.");
+      setParsedRowsBuffer(rows);
+      setPreviewRows(rows.slice(0, 8));
+    } catch (err) {
+      setCsvStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
+      setPendingFile(null);
+    }
+  }
+
+  // ── Management upload: common merge logic (used by both ETL and generic paths)
+
+  async function handleParsedRowsConfirmed(rows: ParsedRow[], mergeMode: "replace" | "add", csvName: string) {
+    setPreviewRows([]);
+    setParsedRowsBuffer([]);
+    setCsvStatus({ msg: "Aplicando...", ok: false });
+    try {
+      let finalRows: ParsedRow[];
+      let finalLotData: LotData;
+
+      if (mergeMode === "replace" && allRows.length > 0) {
+        const newCampaigns = new Set(rows.map((r) => r._campaign).filter(Boolean));
+        const discarded = allRows.filter((r) => newCampaigns.has(r._campaign));
+        if (discarded.length > 0) {
+          saveManagementBackup(discarded);
+          const backup = loadManagementBackup();
+          if (backup) { setPrevManagementRows(backup.rows); setPrevManagementTimestamp(backup.timestamp); }
+        }
+        const kept = allRows.filter((r) => !newCampaigns.has(r._campaign));
+        finalRows = [...kept, ...rows];
+        finalLotData = {};
+        finalRows.forEach((row) => {
+          if (!finalLotData[row._linkKey]) finalLotData[row._linkKey] = [];
+          finalLotData[row._linkKey].push(row);
+        });
+      } else {
+        finalRows = [...allRows, ...rows];
+        finalLotData = { ...lotData };
+        rows.forEach((row) => {
+          if (!finalLotData[row._linkKey]) finalLotData[row._linkKey] = [];
+          finalLotData[row._linkKey].push(row);
+        });
+      }
+
+      setAllRows(finalRows);
+      setLotData(finalLotData);
+
+      const cultivoNames = [...new Set(finalRows.map((r) => r._cultivo).filter(Boolean))];
+      const cMap = buildCultivoColorMap(cultivoNames);
+      setCultivoColorMap(cMap);
+      recolorPolygons(cMap, finalLotData);
+
+      setCsvStatus({ msg: `✓ ${finalRows.length} registros · ${Object.keys(finalLotData).length} lotes`, ok: true });
+      setCsvFiles((prev) => [...prev, csvName]);
+      setCsvFileMeta((prev) => [...prev, { name: csvName, empresaId: pendingCsvEmpresaIdRef.current ?? activeEmpresaId }]);
+      pendingCsvEmpresaIdRef.current = undefined;
+      setPendingFile(null);
+      rebuildFilters(finalRows);
     } catch (err) {
       setCsvStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
     }
@@ -528,71 +625,27 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setPendingColMapping(mapping);
   }
 
-  // ── Management upload: step 3 — confirmed mapping, parse & season-merge ──────
+  // ── Management upload: step 3 — confirmed mapping (generic path) ─────────────
 
   async function handleColMappingConfirmed(mapping: ColumnMapping, mergeMode: "replace" | "add") {
     if (!pendingFile) return;
     setPendingColMapping(null);
     setCsvStatus({ msg: "Procesando...", ok: false });
     try {
-      const { rows, lotData: newLd } = await parseManagementFile(pendingFile, mapping);
-
-      let finalRows: ParsedRow[];
-      let finalLotData: LotData;
-
-      if (mergeMode === "replace" && allRows.length > 0) {
-        // Replace only the campaigns present in the new file; keep other seasons intact
-        const newCampaigns = new Set(rows.map((r) => r._campaign).filter(Boolean));
-        const discarded = allRows.filter((r) => newCampaigns.has(r._campaign));
-        if (discarded.length > 0) {
-          saveManagementBackup(discarded);
-          const backup = loadManagementBackup();
-          if (backup) {
-            setPrevManagementRows(backup.rows);
-            setPrevManagementTimestamp(backup.timestamp);
-          }
-        }
-        const kept = allRows.filter((r) => !newCampaigns.has(r._campaign));
-        finalRows = [...kept, ...rows];
-        finalLotData = {};
-        finalRows.forEach((row) => {
-          if (!finalLotData[row._linkKey]) finalLotData[row._linkKey] = [];
-          finalLotData[row._linkKey].push(row);
-        });
-      } else {
-        // Add mode: append without removing anything
-        finalRows = [...allRows, ...rows];
-        finalLotData = { ...lotData };
-        Object.entries(newLd).forEach(([k, v]) => {
-          finalLotData[k] = [...(finalLotData[k] ?? []), ...v];
-        });
-      }
-
-      setAllRows(finalRows);
-      setLotData(finalLotData);
-
-      const cultivoNames = [...new Set(finalRows.map((r) => r._cultivo).filter(Boolean))];
-      const cMap = buildCultivoColorMap(cultivoNames);
-      setCultivoColorMap(cMap);
-      recolorPolygons(cMap, finalLotData);
-
+      const { rows } = await parseManagementFile(pendingFile, mapping);
       setManejoColMapping(mapping);
       if (pendingDriveInfo) {
+        // Drive path: special handling
+        const csvName = pendingFile.name;
+        await handleParsedRowsConfirmed(rows, mergeMode, csvName);
         setDriveManejo(pendingDriveInfo);
         setPendingDriveInfo(null);
         setCsvFiles([]);
         const time = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-        setCsvStatus({ msg: `✓ Drive · ${finalRows.length} registros · ${Object.keys(finalLotData).length} lotes · ${time}`, ok: true });
+        setCsvStatus({ msg: `✓ Drive · ${rows.length} registros · ${time}`, ok: true });
       } else {
-        setCsvStatus({ msg: `✓ ${finalRows.length} registros · ${Object.keys(finalLotData).length} lotes`, ok: true });
-        const csvName = pendingFile!.name;
-        setCsvFiles((prev) => [...prev, csvName]);
-        setCsvFileMeta((prev) => [...prev, { name: csvName, empresaId: pendingCsvEmpresaIdRef.current ?? activeEmpresaId }]);
-        pendingCsvEmpresaIdRef.current = undefined;
+        await handleParsedRowsConfirmed(rows, mergeMode, pendingFile.name);
       }
-      setPendingFile(null);
-
-      rebuildFilters(finalRows);
     } catch (err) {
       setCsvStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
     }
@@ -1203,6 +1256,30 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           );
         })()}
       </div>
+
+      {/* ── SOURCE SELECTOR MODAL ── */}
+      {pendingSource !== null && (
+        <SourceSelectorModal
+          detected={detectedSource}
+          selected={pendingSource}
+          fileName={pendingFile?.name ?? ""}
+          onSelect={setPendingSource}
+          onConfirm={handleSourceConfirmed}
+          onCancel={() => { setPendingSource(null); setPendingFile(null); setCsvStatus(null); }}
+        />
+      )}
+
+      {/* ── CSV PREVIEW MODAL ── */}
+      {previewRows.length > 0 && (
+        <CsvPreviewModal
+          rows={previewRows}
+          totalCount={parsedRowsBuffer.length}
+          fileName={pendingFile?.name ?? ""}
+          hasExistingData={allRows.length > 0}
+          onConfirm={(mergeMode) => handleParsedRowsConfirmed(parsedRowsBuffer, mergeMode, pendingFile?.name ?? "")}
+          onCancel={() => { setPreviewRows([]); setParsedRowsBuffer([]); setPendingFile(null); setCsvStatus(null); }}
+        />
+      )}
 
       {/* ── LINK COLUMN PICKER MODAL (step 1: identify lote column) ── */}
       {linkPickerCols.length > 0 && (
@@ -2195,6 +2272,171 @@ function DashFileSection({
           onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />
         + Agregar archivo
       </label>
+    </div>
+  );
+}
+
+// ── SourceSelectorModal ────────────────────────────────────────────────────────
+
+const ALL_SOURCES: SourceFormat[] = ["finnegans", "synagro", "excel-propio", "generic"];
+
+function SourceSelectorModal({
+  detected, selected, fileName, onSelect, onConfirm, onCancel,
+}: {
+  detected: SourceFormat;
+  selected: SourceFormat;
+  fileName: string;
+  onSelect: (s: SourceFormat) => void;
+  onConfirm: (s: SourceFormat) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)" }}>
+      <div className="rounded-2xl p-6 flex flex-col gap-4 w-full max-w-sm mx-4"
+        style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+        <div>
+          <p className="text-base font-semibold" style={{ color: "#e0e0e0" }}>¿De qué software viene este archivo?</p>
+          {fileName && <p className="text-xs mt-1 truncate" style={{ color: "#6a8ab0" }}>{fileName}</p>}
+        </div>
+        <div className="flex flex-col gap-2">
+          {ALL_SOURCES.map((src) => (
+            <button key={src} onClick={() => onSelect(src)}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
+              style={{
+                background: selected === src ? "#1a4a80" : "#0f2040",
+                border: `2px solid ${selected === src ? "#3dbb6e" : "#1a3460"}`,
+              }}>
+              <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
+                style={{ borderColor: selected === src ? "#3dbb6e" : "#2a4060" }}>
+                {selected === src && <div className="w-2 h-2 rounded-full" style={{ background: "#3dbb6e" }} />}
+              </div>
+              <span className="text-sm" style={{ color: selected === src ? "#e2b04a" : "#aac4e0" }}>
+                {SOURCE_LABELS[src]}
+              </span>
+              {src === detected && (
+                <span className="ml-auto text-xs px-2 py-0.5 rounded-full" style={{ background: "#0d2d1a", color: "#3dbb6e" }}>
+                  detectado
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-3 mt-1">
+          <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm"
+            style={{ background: "#0f2040", color: "#6a8ab0", border: "1px solid #1a3460" }}>
+            Cancelar
+          </button>
+          <button onClick={() => onConfirm(selected)}
+            className="flex-1 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: "#e2b04a", color: "#1a1a2e" }}>
+            Continuar →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── CsvPreviewModal ────────────────────────────────────────────────────────────
+
+function CsvPreviewModal({
+  rows, totalCount, fileName, hasExistingData, onConfirm, onCancel,
+}: {
+  rows: ParsedRow[];
+  totalCount: number;
+  fileName: string;
+  hasExistingData: boolean;
+  onConfirm: (mergeMode: "replace" | "add") => void;
+  onCancel: () => void;
+}) {
+  const [mergeMode, setMergeMode] = useState<"replace" | "add">("replace");
+
+  const PREVIEW_COLS: { key: keyof ParsedRow; label: string }[] = [
+    { key: "_linkKey", label: "Lote" },
+    { key: "_fechaStr", label: "Fecha" },
+    { key: "_labor",   label: "Labor" },
+    { key: "_prod",    label: "Producto" },
+    { key: "_tipo",    label: "Tipo" },
+    { key: "_dosis",   label: "Dosis" },
+    { key: "_unid",    label: "Unid." },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+      <div className="rounded-2xl p-5 flex flex-col gap-4 w-full max-w-2xl max-h-[90vh] overflow-hidden"
+        style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+        <div>
+          <p className="text-base font-semibold" style={{ color: "#e0e0e0" }}>
+            Preview — primeras {rows.length} filas de {totalCount} registros
+          </p>
+          {fileName && <p className="text-xs mt-0.5 truncate" style={{ color: "#6a8ab0" }}>{fileName}</p>}
+        </div>
+
+        {/* Table */}
+        <div className="overflow-auto rounded-lg" style={{ maxHeight: "280px" }}>
+          <table className="w-full text-xs border-collapse" style={{ color: "#c0d0e0" }}>
+            <thead>
+              <tr style={{ background: "#0f2040" }}>
+                {PREVIEW_COLS.map((c) => (
+                  <th key={c.key} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap"
+                    style={{ color: "#aac4e0", borderBottom: "1px solid #1a3460" }}>
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? "#0d1a30" : "#111e35" }}>
+                  {PREVIEW_COLS.map((c) => (
+                    <td key={c.key} className="px-2 py-1.5 whitespace-nowrap max-w-[140px] truncate"
+                      style={{ borderBottom: "1px solid #1a2a40" }}>
+                      {String(row[c.key] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Merge mode */}
+        {hasExistingData && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold" style={{ color: "#aac4e0" }}>¿Cómo combinarlo con los datos existentes?</p>
+            <div className="flex gap-2">
+              {(["replace", "add"] as const).map((mode) => (
+                <button key={mode} onClick={() => setMergeMode(mode)}
+                  className="flex-1 px-3 py-2 rounded-lg text-xs text-left transition-all"
+                  style={{
+                    background: mergeMode === mode ? "#1a4a80" : "#0f2040",
+                    border: `1px solid ${mergeMode === mode ? "#3dbb6e" : "#1a3460"}`,
+                    color: mergeMode === mode ? "#e2b04a" : "#6a8ab0",
+                  }}>
+                  <p className="font-semibold">{mode === "replace" ? "Reemplazar campaña" : "Agregar todo"}</p>
+                  <p className="mt-0.5 opacity-80">
+                    {mode === "replace"
+                      ? "Reemplaza los registros de las campañas presentes en este archivo"
+                      : "Agrega sin borrar nada de lo existente"}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm"
+            style={{ background: "#0f2040", color: "#6a8ab0", border: "1px solid #1a3460" }}>
+            Cancelar
+          </button>
+          <button onClick={() => onConfirm(mergeMode)}
+            className="flex-1 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: "#3dbb6e", color: "#fff" }}>
+            Confirmar →
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
