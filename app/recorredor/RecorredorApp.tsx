@@ -36,9 +36,17 @@ import {
   saveManagementBackup,
   loadManagementBackup,
   clearManagementBackup,
+  getEmpresas,
+  getSharedEmpresas,
+  acceptPendingEmpresaInvites,
+  createEmpresa,
+  inviteToEmpresa,
   type Workspace,
   type LotVisit,
   type DriveManejo,
+  type FileMeta,
+  type Empresa,
+  type SharedEmpresa,
 } from "@/lib/db";
 
 function todayStr() {
@@ -139,6 +147,21 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [manejoTab, setManejoTab] = useState<"local" | "drive">("local");
   const [driveUrlInput, setDriveUrlInput] = useState("");
 
+  // View: 'dashboard' = file management screen; 'map' = map + sidebar
+  const [view, setView] = useState<"dashboard" | "map">("dashboard");
+
+  // Empresas
+  const [myEmpresas, setMyEmpresas] = useState<Empresa[]>([]);
+  const [sharedEmpresas, setSharedEmpresas] = useState<SharedEmpresa[]>([]);
+  const [activeEmpresaId, setActiveEmpresaId] = useState<string | undefined>(undefined);
+  const [activeWorkspaceOwnerId, setActiveWorkspaceOwnerId] = useState<string | undefined>(undefined);
+
+  // File meta (parallel arrays with shpFiles/csvFiles/rindeFiles, includes empresaId)
+  const [shpFileMeta, setShpFileMeta] = useState<FileMeta[]>([]);
+  const [csvFileMeta, setCsvFileMeta] = useState<FileMeta[]>([]);
+  const [rindeFileMeta, setRindeFileMeta] = useState<FileMeta[]>([]);
+  const pendingCsvEmpresaIdRef = useRef<string | undefined>(undefined);
+
   // ── Switch to Drive tab when a Drive link is active ─────────────────────────
 
   useEffect(() => {
@@ -201,6 +224,31 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Load empresas and accept pending invites on login ───────────────────────
+
+  useEffect(() => {
+    if (!user) return;
+    setActiveWorkspaceOwnerId((prev) => prev ?? user.id);
+    acceptPendingEmpresaInvites(supabase).then(async () => {
+      const [emps, shared] = await Promise.all([
+        getEmpresas(supabase),
+        getSharedEmpresas(supabase),
+      ]);
+      setMyEmpresas(emps);
+      setSharedEmpresas(shared);
+      if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // ── Invalidate map size when switching to map view ───────────────────────────
+
+  useEffect(() => {
+    if (view === "map") {
+      setTimeout(() => mapRef.current?.invalidateSize(), 50);
+    }
+  }, [view]);
+
   // ── Load management backup from localStorage on mount ────────────────────────
 
   useEffect(() => {
@@ -226,6 +274,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setShpFiles(ws.shpFiles);
     setCsvFiles(ws.csvFiles);
     setRindeFiles(ws.rindeFiles);
+    setShpFileMeta(ws.shpFileMeta ?? []);
+    setCsvFileMeta(ws.csvFileMeta ?? []);
+    setRindeFileMeta(ws.rindeFileMeta ?? []);
     if (ws.driveManejo) setDriveManejo(ws.driveManejo);
     if (ws.manejoColMapping) setManejoColMapping(ws.manejoColMapping);
     setShpStatus({ msg: `✓ ${ws.lotCount} lotes`, ok: true });
@@ -291,12 +342,13 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       const state: Workspace = {
         fieldName, lotCount, collections, colorMap, cultivoColorMap,
         lotData, allRows, rindeData, lotVisits, shpFiles, csvFiles, rindeFiles,
+        shpFileMeta, csvFileMeta, rindeFileMeta,
         driveManejo, manejoColMapping,
       };
       saveWorkspaceLocal(state);
       if (user) {
         setIsSaving(true);
-        await saveWorkspace(supabase, effectiveUserId ?? user.id, state);
+        await saveWorkspace(supabase, activeWorkspaceOwnerId ?? effectiveUserId ?? user.id, state);
         setIsSaving(false);
       }
     }, 1500);
@@ -444,7 +496,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
 
       setShpStatus({ msg: `✓ ${total} lotes`, ok: true });
-      setShpFiles((prev) => [...prev, ...Array.from(files).map((f) => f.name)]);
+      const newFileNames = Array.from(files).map((f) => f.name);
+      setShpFiles((prev) => [...prev, ...newFileNames]);
+      setShpFileMeta((prev) => [...prev, ...newFileNames.map((name) => ({ name, empresaId: activeEmpresaId }))]);
     } catch (err) {
       setShpStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
     }
@@ -531,7 +585,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         setCsvStatus({ msg: `✓ Drive · ${finalRows.length} registros · ${Object.keys(finalLotData).length} lotes · ${time}`, ok: true });
       } else {
         setCsvStatus({ msg: `✓ ${finalRows.length} registros · ${Object.keys(finalLotData).length} lotes`, ok: true });
-        setCsvFiles((prev) => [...prev, pendingFile!.name]);
+        const csvName = pendingFile!.name;
+        setCsvFiles((prev) => [...prev, csvName]);
+        setCsvFileMeta((prev) => [...prev, { name: csvName, empresaId: pendingCsvEmpresaIdRef.current ?? activeEmpresaId }]);
+        pendingCsvEmpresaIdRef.current = undefined;
       }
       setPendingFile(null);
 
@@ -591,7 +648,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       });
       const uniqueLots = Object.keys(rd).length;
       setRindeStatus({ msg: `✓ Rindes · ${uniqueLots} lotes`, ok: true });
-      setRindeFiles((prev) => [...prev, pendingRindeFile!.name]);
+      const rindeName = pendingRindeFile!.name;
+      setRindeFiles((prev) => [...prev, rindeName]);
+      setRindeFileMeta((prev) => [...prev, { name: rindeName, empresaId: activeEmpresaId }]);
       setPendingRindeFile(null);
     } catch (err) {
       setRindeStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
@@ -647,6 +706,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setCollections(newCols);
     setColorMap(cMap);
     setShpFiles((prev) => prev.filter((f) => f !== fileName));
+    setShpFileMeta((prev) => prev.filter((m) => m.name !== fileName));
     let total = 0;
     newCols.forEach((c) => (total += c.features.length));
     setLotCount(total);
@@ -671,6 +731,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setAllRows(newRows);
     setLotData(newLotData);
     setCsvFiles((prev) => prev.filter((f) => f !== fileName));
+    setCsvFileMeta((prev) => prev.filter((m) => m.name !== fileName));
     if (newRows.length === 0) {
       setCsvStatus(null);
     } else {
@@ -861,14 +922,27 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       {/* ── TOP BAR ── */}
       <header className="flex items-center justify-between px-4 py-2 flex-shrink-0 z-50" style={{ background: "#0f3460", boxShadow: "0 2px 8px rgba(0,0,0,.4)" }}>
         <div className="flex items-center gap-3">
-          {!isMobile && (
+          {view === "map" && !isMobile && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="px-2 py-1 rounded text-sm" style={{ background: "#0f3460", color: "#aac4e0", border: "1px solid #2a5298" }}>☰</button>
           )}
+          {view === "map" && (
+            <button
+              onClick={() => setView("dashboard")}
+              className="px-2 py-1 rounded text-sm font-semibold"
+              style={{ background: "#16213e", color: "#aac4e0", border: "1px solid #2a5298" }}
+            >
+              ← Archivos
+            </button>
+          )}
           <a href="/" className="font-bold text-lg tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</a>
-          <span className="text-sm hidden sm:inline" style={{ color: "#aac4e0" }}>
-            {fieldName ? `✓ ${fieldName}` : "· Cargá un shapefile para comenzar"}
-          </span>
-          {lotCount > 0 && <span className="text-xs" style={{ color: "#6a8ab0" }}>{lotCount} lotes</span>}
+          {view === "map" && (
+            <>
+              <span className="text-sm hidden sm:inline" style={{ color: "#aac4e0" }}>
+                {fieldName ? `✓ ${fieldName}` : "· Cargá archivos para comenzar"}
+              </span>
+              {lotCount > 0 && <span className="text-xs" style={{ color: "#6a8ab0" }}>{lotCount} lotes</span>}
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {isAdmin && !asUserId && (
@@ -913,8 +987,58 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         </div>
       )}
 
-      {/* ── MAIN ── */}
-      <div className="flex-1 overflow-hidden" style={{ display: "flex", flexDirection: isMobile ? "column" : "row", position: "relative" }}>
+      {/* ── DASHBOARD VIEW ── */}
+      {view === "dashboard" && (
+        <FileDashboard
+          user={user}
+          myEmpresas={myEmpresas}
+          sharedEmpresas={sharedEmpresas}
+          activeEmpresaId={activeEmpresaId}
+          onSelectEmpresa={(id, workspaceOwnerId) => {
+            setActiveEmpresaId(id);
+            setActiveWorkspaceOwnerId(workspaceOwnerId ?? user?.id);
+          }}
+          onNewEmpresa={async (name) => {
+            const emp = await createEmpresa(supabase, name);
+            setMyEmpresas((prev) => [...prev, emp]);
+            setActiveEmpresaId(emp.id);
+            setActiveWorkspaceOwnerId(user?.id);
+          }}
+          onInvite={async (empresaId, email) => {
+            await inviteToEmpresa(supabase, empresaId, email);
+          }}
+          shpFiles={shpFiles}
+          shpFileMeta={shpFileMeta}
+          csvFiles={csvFiles}
+          csvFileMeta={csvFileMeta}
+          rindeFiles={rindeFiles}
+          rindeFileMeta={rindeFileMeta}
+          onUploadShp={handleShpFiles}
+          onUploadCsv={(fl) => {
+            pendingCsvEmpresaIdRef.current = activeEmpresaId;
+            if (fl[0]) handleDataFileStart(fl[0]);
+          }}
+          onUploadRinde={(fl) => { if (fl[0]) handleRindeFileStart(fl[0]); }}
+          onRemoveShp={removeShpFile}
+          onRemoveCsv={removeCsvFile}
+          onRemoveRinde={(name) => {
+            setRindeFiles((prev) => prev.filter((f) => f !== name));
+            setRindeFileMeta((prev) => prev.filter((m) => m.name !== name));
+            setRindeData((prev) => {
+              const next = { ...prev };
+              delete next[name];
+              return next;
+            });
+          }}
+          shpStatus={shpStatus}
+          csvStatus={csvStatus}
+          rindeStatus={rindeStatus}
+          onGoToMap={() => setView("map")}
+        />
+      )}
+
+      {/* ── MAIN MAP (always mounted, hidden when dashboard is active) ── */}
+      <div className="flex-1 overflow-hidden" style={{ display: view === "map" ? "flex" : "none", flexDirection: isMobile ? "column" : "row", position: "relative" }}>
 
         {/* ── MAP AREA — always rendered, positioned by isMobile ── */}
         <div style={isMobile
@@ -962,19 +1086,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         {(() => {
           const panelContent = (
             <>
-              <SidebarSection title="🗺 Shapefile de lotes" collapsible defaultOpen={false}>
-                <UploadZone
-                  accept=".zip,.shp,.dbf,.shx,.prj"
-                  multiple
-                  hint=".zip o seleccioná .shp + .dbf + .shx"
-                  onFiles={handleShpFiles}
-                  status={shpStatus}
-                  icon="🗺️"
-                  loadedFiles={shpFiles}
-                  onRemove={removeShpFile}
-                />
-                {lotCount > 0 && (
-                  <button className="w-full mt-2 text-xs py-1 rounded" style={{ background: "#1a4a80", color: "#e0e8f0" }}
+              {lotCount > 0 && (
+                <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
+                  <button className="w-full text-xs py-1 rounded" style={{ background: "#1a4a80", color: "#e0e8f0" }}
                     onClick={() => {
                       if (!shpLayerRef.current || !mapRef.current) return;
                       const layers = allLotLayersRef.current.map((l) => l.layer);
@@ -985,123 +1099,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                     }}>
                     📍 Centrar en los lotes
                   </button>
-                )}
-              </SidebarSection>
-
-              <SidebarSection title="📄 Manejo de lotes" collapsible defaultOpen={false}>
-                {/* Tab toggle */}
-                <div className="flex gap-1 mb-3">
-                  {(["local", "drive"] as const).map((tab) => (
-                    <button
-                      key={tab}
-                      className="flex-1 py-1 text-xs rounded"
-                      style={{
-                        background: manejoTab === tab ? "#0f3460" : "transparent",
-                        border: "1px solid #2a5298",
-                        color: manejoTab === tab ? "#e0e8f0" : "#6a8ab0",
-                      }}
-                      onClick={() => setManejoTab(tab)}
-                    >
-                      {tab === "local" ? "📁 Archivo" : "☁️ Google Drive"}
-                    </button>
-                  ))}
                 </div>
-
-                {manejoTab === "local" ? (
-                  <>
-                    <UploadZone
-                      accept=".csv,.xlsx,.xls"
-                      multiple={false}
-                      hint="CSV o XLSX — elegís columnas en el siguiente paso"
-                      onFiles={(fl) => { if (fl[0]) handleDataFileStart(fl[0]); }}
-                      status={csvStatus}
-                      icon="📄"
-                      loadedFiles={csvFiles}
-                      onRemove={removeCsvFile}
-                    />
-                    {prevManagementTimestamp > 0 && (
-                      <button
-                        className="w-full mt-2 text-xs py-1.5 px-2 rounded text-left"
-                        style={{ background: "#1a2a1a", border: "1px solid #2a4a2a", color: "#3dbb6e" }}
-                        onClick={restoreManagementBackup}
-                      >
-                        ↩ Restaurar manejo anterior ({new Date(prevManagementTimestamp).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" })})
-                      </button>
-                    )}
-                  </>
-                ) : driveManejo ? (
-                  /* Drive — ya vinculado */
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs px-2 py-2 rounded" style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
-                      <span>☁️</span>
-                      <span className="flex-1 truncate font-semibold" style={{ color: "#3dbb6e" }}>
-                        {driveManejo.type === "sheets" ? "Google Sheets" : "Google Drive"} vinculado
-                      </span>
-                    </div>
-                    {csvStatus && (
-                      <p className="text-xs px-1" style={{ color: csvStatus.ok ? "#3dbb6e" : "#e2b04a" }}>{csvStatus.msg}</p>
-                    )}
-                    {driveError && (
-                      <p className="text-xs px-2 py-1 rounded" style={{ background: "#3a1a1a", border: "1px solid #6a2a2a", color: "#e07070" }}>{driveError}</p>
-                    )}
-                    <div className="flex gap-2">
-                      <button
-                        className="flex-1 py-1.5 text-xs rounded font-semibold"
-                        style={{ background: "#1a3a2a", border: "1px solid #2a5a3a", color: "#3dbb6e", opacity: driveRefreshing ? 0.6 : 1 }}
-                        onClick={() => manejoColMapping && refreshDriveWith(driveManejo, manejoColMapping)}
-                        disabled={driveRefreshing || !manejoColMapping}
-                      >
-                        {driveRefreshing ? "Actualizando..." : "↻ Actualizar"}
-                      </button>
-                      <button
-                        className="px-3 py-1.5 text-xs rounded"
-                        style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
-                        onClick={() => { setDriveManejo(null); setManejoColMapping(null); setDriveError(null); setCsvStatus(null); }}
-                      >
-                        Desvincular
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  /* Drive — no vinculado */
-                  <div className="space-y-2">
-                    <p className="text-xs leading-relaxed" style={{ color: "#6a8ab0" }}>
-                      Compartí tu Google Sheet o archivo de Drive como <strong style={{ color: "#aac4e0" }}>"cualquiera con el link puede ver"</strong> y pegá el link acá.
-                    </p>
-                    <input
-                      className="w-full rounded px-2 py-1.5 text-xs"
-                      style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd", outline: "none" }}
-                      placeholder="https://docs.google.com/spreadsheets/d/..."
-                      value={driveUrlInput}
-                      onChange={(e) => { setDriveUrlInput(e.target.value); setDriveError(null); }}
-                      onKeyDown={(e) => { if (e.key === "Enter" && driveUrlInput.trim()) handleDriveLink(); }}
-                    />
-                    {driveError && (
-                      <p className="text-xs px-2 py-1 rounded" style={{ background: "#3a1a1a", border: "1px solid #6a2a2a", color: "#e07070" }}>{driveError}</p>
-                    )}
-                    <button
-                      className="w-full py-1.5 text-xs rounded font-semibold"
-                      style={{ background: driveUrlInput.trim() ? "#1a3460" : "#0d1b35", border: "1px solid #2a5298", color: driveUrlInput.trim() ? "#e0e8f0" : "#445" }}
-                      onClick={handleDriveLink}
-                      disabled={!driveUrlInput.trim()}
-                    >
-                      Vincular archivo
-                    </button>
-                  </div>
-                )}
-              </SidebarSection>
-
-              <SidebarSection title="🌾 Rindes históricos" optional collapsible defaultOpen={false}>
-                <UploadZone
-                  accept=".csv,.xlsx,.xls"
-                  multiple={false}
-                  hint="CSV o XLSX — te pedirá elegir la columna de enlace"
-                  onFiles={(fl) => { if (fl[0]) handleRindeFileStart(fl[0]); }}
-                  status={rindeStatus}
-                  icon="📊"
-                  loadedFiles={rindeFiles}
-                />
-              </SidebarSection>
+              )}
 
               {selectedLot && todayVisit && (
                 <SidebarSection title="📌 Recorrida de hoy" collapsible defaultOpen={true}>
@@ -1856,6 +1855,306 @@ function ColumnMappingModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── FileDashboard ─────────────────────────────────────────────────────────────
+
+function FileDashboard({
+  user,
+  myEmpresas, sharedEmpresas, activeEmpresaId,
+  onSelectEmpresa, onNewEmpresa, onInvite,
+  shpFiles, shpFileMeta, csvFiles, csvFileMeta, rindeFiles, rindeFileMeta,
+  onUploadShp, onUploadCsv, onUploadRinde,
+  onRemoveShp, onRemoveCsv, onRemoveRinde,
+  shpStatus, csvStatus, rindeStatus,
+  onGoToMap,
+}: {
+  user: import("@supabase/supabase-js").User | null;
+  myEmpresas: Empresa[];
+  sharedEmpresas: SharedEmpresa[];
+  activeEmpresaId: string | undefined;
+  onSelectEmpresa: (id: string, ownerWorkspaceId?: string) => void;
+  onNewEmpresa: (name: string) => Promise<void>;
+  onInvite: (empresaId: string, email: string) => Promise<void>;
+  shpFiles: string[]; shpFileMeta: FileMeta[];
+  csvFiles: string[]; csvFileMeta: FileMeta[];
+  rindeFiles: string[]; rindeFileMeta: FileMeta[];
+  onUploadShp: (fl: FileList) => void;
+  onUploadCsv: (fl: FileList) => void;
+  onUploadRinde: (fl: FileList) => void;
+  onRemoveShp: (name: string) => void;
+  onRemoveCsv: (name: string) => void;
+  onRemoveRinde: (name: string) => void;
+  shpStatus: { msg: string; ok: boolean } | null;
+  csvStatus: { msg: string; ok: boolean } | null;
+  rindeStatus: { msg: string; ok: boolean } | null;
+  onGoToMap: () => void;
+}) {
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteMsg, setInviteMsg] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+  const [newEmpresaName, setNewEmpresaName] = useState("");
+  const [showNewEmpresa, setShowNewEmpresa] = useState(false);
+  const [newEmpresaLoading, setNewEmpresaLoading] = useState(false);
+
+  const allEmpresas = [
+    ...myEmpresas.map((e) => ({ id: e.id, name: e.name, ownerWorkspaceId: undefined as string | undefined, isOwner: true })),
+    ...sharedEmpresas.map((e) => ({ id: e.empresaId, name: `${e.empresaName} (${e.ownerName ?? "asesor"})`, ownerWorkspaceId: e.ownerWorkspaceId, isOwner: false })),
+  ];
+
+  const activeEmpresa = allEmpresas.find((e) => e.id === activeEmpresaId);
+  const isOwner = activeEmpresa?.isOwner ?? true;
+
+  // Files filtered to active empresa
+  const filteredShp = shpFileMeta.length
+    ? shpFiles.filter((n) => {
+        const m = shpFileMeta.find((x) => x.name === n);
+        return !m?.empresaId || m.empresaId === activeEmpresaId;
+      })
+    : shpFiles;
+  const filteredCsv = csvFileMeta.length
+    ? csvFiles.filter((n) => {
+        const m = csvFileMeta.find((x) => x.name === n);
+        return !m?.empresaId || m.empresaId === activeEmpresaId;
+      })
+    : csvFiles;
+  const filteredRinde = rindeFileMeta.length
+    ? rindeFiles.filter((n) => {
+        const m = rindeFileMeta.find((x) => x.name === n);
+        return !m?.empresaId || m.empresaId === activeEmpresaId;
+      })
+    : rindeFiles;
+
+  async function handleInvite() {
+    if (!activeEmpresaId || !inviteEmail.trim()) return;
+    setInviteLoading(true);
+    setInviteMsg("");
+    try {
+      await onInvite(activeEmpresaId, inviteEmail.trim());
+      setInviteMsg(`Invitación enviada a ${inviteEmail.trim()}`);
+      setInviteEmail("");
+    } catch (e) {
+      setInviteMsg((e as Error).message);
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  async function handleNewEmpresa() {
+    if (!newEmpresaName.trim()) return;
+    setNewEmpresaLoading(true);
+    try {
+      await onNewEmpresa(newEmpresaName.trim());
+      setNewEmpresaName("");
+      setShowNewEmpresa(false);
+    } finally {
+      setNewEmpresaLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto" style={{ background: "#1a1a2e" }}>
+      <div className="max-w-2xl mx-auto px-4 py-8">
+
+        {/* Header */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold" style={{ color: "#e2b04a" }}>Archivos</h2>
+          <p className="text-sm mt-1" style={{ color: "#6a8ab0" }}>Shapes, manejo y rindes para la empresa activa</p>
+        </div>
+
+        {/* Empresa selector (only for logged-in users) */}
+        {user && allEmpresas.length > 0 && (
+          <div className="mb-6 p-4 rounded-xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresa activa</p>
+              <div className="flex gap-2">
+                {isOwner && activeEmpresaId && (
+                  <button
+                    className="text-xs px-2 py-1 rounded"
+                    style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
+                    onClick={() => { setShowInvite(!showInvite); setShowNewEmpresa(false); }}
+                  >
+                    Invitar →
+                  </button>
+                )}
+                <button
+                  className="text-xs px-2 py-1 rounded"
+                  style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
+                  onClick={() => { setShowNewEmpresa(!showNewEmpresa); setShowInvite(false); }}
+                >
+                  + Nueva
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {allEmpresas.map((emp) => (
+                <button
+                  key={emp.id}
+                  onClick={() => onSelectEmpresa(emp.id, emp.ownerWorkspaceId)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                  style={{
+                    background: emp.id === activeEmpresaId ? "#1a4a80" : "#0f2040",
+                    border: `2px solid ${emp.id === activeEmpresaId ? "#3dbb6e" : "#1a3460"}`,
+                    color: emp.id === activeEmpresaId ? "#e2b04a" : "#aac4e0",
+                  }}
+                >
+                  {emp.name}
+                </button>
+              ))}
+            </div>
+
+            {/* New empresa form */}
+            {showNewEmpresa && (
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="text"
+                  value={newEmpresaName}
+                  onChange={(e) => setNewEmpresaName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleNewEmpresa()}
+                  placeholder="Nombre de la empresa"
+                  className="flex-1 rounded px-3 py-1.5 text-sm"
+                  style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
+                  autoFocus
+                />
+                <button
+                  onClick={handleNewEmpresa}
+                  disabled={newEmpresaLoading}
+                  className="px-3 py-1.5 rounded text-sm font-semibold"
+                  style={{ background: "#3dbb6e", color: "#fff" }}
+                >
+                  {newEmpresaLoading ? "..." : "Crear"}
+                </button>
+              </div>
+            )}
+
+            {/* Invite form */}
+            {showInvite && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs" style={{ color: "#6a8ab0" }}>Invitar por email — el usuario verá esta empresa en su cuenta</p>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+                    placeholder="email@ejemplo.com"
+                    className="flex-1 rounded px-3 py-1.5 text-sm"
+                    style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleInvite}
+                    disabled={inviteLoading || !inviteEmail.trim()}
+                    className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
+                    style={{ background: "#1a4a80", color: "#e0e8f0", border: "1px solid #2a5298" }}
+                  >
+                    {inviteLoading ? "..." : "Invitar"}
+                  </button>
+                </div>
+                {inviteMsg && <p className="text-xs" style={{ color: "#3dbb6e" }}>{inviteMsg}</p>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* File sections */}
+        <div className="space-y-4">
+          <DashFileSection
+            title="🗺 Shapes / KMZ"
+            hint=".zip con .shp + .dbf + .shx, o un .kmz"
+            accept=".zip,.shp,.dbf,.shx,.prj,.kmz"
+            multiple
+            files={filteredShp}
+            status={shpStatus}
+            onFiles={onUploadShp}
+            onRemove={onRemoveShp}
+          />
+          <DashFileSection
+            title="📄 Manejo de lotes"
+            hint="CSV o XLSX — podés vincular varios archivos"
+            accept=".csv,.xlsx,.xls"
+            multiple={false}
+            files={filteredCsv}
+            status={csvStatus}
+            onFiles={onUploadCsv}
+            onRemove={onRemoveCsv}
+          />
+          <DashFileSection
+            title="🌾 Rindes históricos"
+            hint="CSV o XLSX con columna de lote y rendimiento"
+            accept=".csv,.xlsx,.xls"
+            multiple={false}
+            files={filteredRinde}
+            status={rindeStatus}
+            onFiles={onUploadRinde}
+            onRemove={onRemoveRinde}
+          />
+        </div>
+
+        {/* Go to map button */}
+        <div className="mt-8">
+          <button
+            onClick={onGoToMap}
+            className="w-full py-4 rounded-xl text-lg font-bold transition-all"
+            style={{ background: "#1a4a80", color: "#e2b04a", border: "2px solid #2a5298" }}
+          >
+            Ir a recorrer →
+          </button>
+          {filteredShp.length === 0 && (
+            <p className="text-center text-xs mt-2" style={{ color: "#4a6a8a" }}>
+              Podés explorar el mapa sin shapes cargados
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DashFileSection({
+  title, hint, accept, multiple, files, status, onFiles, onRemove,
+}: {
+  title: string; hint: string; accept: string; multiple: boolean;
+  files: string[];
+  status: { msg: string; ok: boolean } | null;
+  onFiles: (fl: FileList) => void;
+  onRemove: (name: string) => void;
+}) {
+  return (
+    <div className="rounded-xl p-4" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+      <p className="text-sm font-semibold mb-3" style={{ color: "#aac4e0" }}>{title}</p>
+
+      {files.length > 0 ? (
+        <div className="space-y-1.5 mb-3">
+          {files.map((name, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg" style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
+              <span className="truncate flex-1" style={{ color: "#3dbb6e" }}>✓ {name}</span>
+              <button
+                onClick={() => onRemove(name)}
+                className="shrink-0 w-5 h-5 flex items-center justify-center rounded hover:opacity-70 text-sm"
+                style={{ color: "#e25a5a" }}
+              >×</button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs mb-3" style={{ color: "#445" }}>Sin archivos cargados</p>
+      )}
+
+      {status && !status.ok && (
+        <p className="text-xs mb-2 px-2 py-1 rounded" style={{ background: "#3a2a0a", color: "#e2b04a" }}>{status.msg}</p>
+      )}
+
+      <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg text-xs transition-colors hover:opacity-80"
+        style={{ background: "#0d1b35", border: "1px dashed #2a5298", color: "#6a8ab0" }}>
+        <input type="file" accept={accept} multiple={multiple} className="sr-only"
+          onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />
+        + Agregar archivo
+      </label>
     </div>
   );
 }
