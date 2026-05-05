@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { getUserProfile, setOnboardingDone, createEmpresa } from "@/lib/db";
+import { getUserProfile, setOnboardingDone, createEmpresa, createWorkspace, setActiveWorkspaceId } from "@/lib/db";
 
 type Step = "role" | "empresa";
 type Role = "asesor" | "productor";
@@ -35,7 +35,11 @@ export default function OnboardingPage() {
     setLoading(true);
     setError("");
     try {
-      await createEmpresa(supabase, empresaName.trim());
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No autenticado");
+      const wsId = await createWorkspace(supabase, user.id, "Mi espacio");
+      setActiveWorkspaceId(wsId);
+      await createEmpresa(supabase, wsId, empresaName.trim());
       await setOnboardingDone(supabase, role);
       router.replace("/recorredor");
     } catch (e) {

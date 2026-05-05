@@ -41,11 +41,14 @@ import {
   loadWorkspace,
   saveWorkspaceLocal,
   loadWorkspaceLocal,
+  loadWorkspaceSummaries,
+  createWorkspace,
+  getActiveWorkspaceId,
+  setActiveWorkspaceId as persistActiveWorkspaceId,
   saveManagementBackup,
   loadManagementBackup,
   clearManagementBackup,
   getEmpresas,
-  getSharedEmpresas,
   acceptPendingEmpresaInvites,
   createEmpresa,
   inviteToEmpresa,
@@ -56,7 +59,6 @@ import {
   type DriveManejo,
   type FileMeta,
   type Empresa,
-  type SharedEmpresa,
   type RainData,
   type RainReading,
 } from "@/lib/db";
@@ -169,11 +171,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // View: 'dashboard' = file management screen; 'map' = map + sidebar
   const [view, setView] = useState<"dashboard" | "map">("dashboard");
 
-  // Empresas
+  // Empresas / workspace
   const [myEmpresas, setMyEmpresas] = useState<Empresa[]>([]);
-  const [sharedEmpresas, setSharedEmpresas] = useState<SharedEmpresa[]>([]);
   const [activeEmpresaId, setActiveEmpresaId] = useState<string | undefined>(undefined);
-  const [activeWorkspaceOwnerId, setActiveWorkspaceOwnerId] = useState<string | undefined>(undefined);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
 
   // File meta (parallel arrays with shpFiles/csvFiles/rindeFiles, includes empresaId)
   const [shpFileMeta, setShpFileMeta] = useState<FileMeta[]>([]);
@@ -255,20 +256,35 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Load empresas and accept pending invites on login ───────────────────────
+  // ── Load workspace ID + empresas on login ────────────────────────────────────
 
   useEffect(() => {
     if (!user) return;
-    setActiveWorkspaceOwnerId((prev) => prev ?? user.id);
-    acceptPendingEmpresaInvites(supabase).then(async () => {
-      const [emps, shared] = await Promise.all([
-        getEmpresas(supabase),
-        getSharedEmpresas(supabase),
-      ]);
-      setMyEmpresas(emps);
-      setSharedEmpresas(shared);
-      if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
-    });
+    acceptPendingEmpresaInvites(supabase).catch(() => {});
+
+    const storedWsId = getActiveWorkspaceId();
+    if (storedWsId) {
+      setActiveWorkspaceId(storedWsId);
+      getEmpresas(supabase, storedWsId).then((emps) => {
+        setMyEmpresas(emps);
+        if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
+      });
+    } else {
+      const uid = effectiveUserId ?? user.id;
+      loadWorkspaceSummaries(supabase, uid).then(async (summaries) => {
+        let wsId: string;
+        if (summaries.length > 0) {
+          wsId = summaries[0].id;
+        } else {
+          wsId = await createWorkspace(supabase, uid, "Mi espacio");
+        }
+        persistActiveWorkspaceId(wsId);
+        setActiveWorkspaceId(wsId);
+        const emps = await getEmpresas(supabase, wsId);
+        setMyEmpresas(emps);
+        if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
+      });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -337,9 +353,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // ── Load workspace from DB (with localStorage fallback) ──────────────────────
 
   useEffect(() => {
-    if (!user || !mapReady) return;
-    loadWorkspace(supabase, effectiveUserId ?? user.id).then(async (ws) => {
-      if (!ws || !ws.collections.length) ws = loadWorkspaceLocal();
+    if (!user || !mapReady || !activeWorkspaceId) return;
+    loadWorkspace(supabase, activeWorkspaceId).then(async (ws) => {
+      if (!ws || !ws.collections.length) ws = loadWorkspaceLocal(activeWorkspaceId);
       if (!ws || !ws.collections.length) return;
       applyWorkspace(ws);
       const layerList = await drawCollections(ws.collections, ws.colorMap, ws.cultivoColorMap, ws.lotData);
@@ -352,13 +368,13 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, mapReady]);
+  }, [user, mapReady, activeWorkspaceId]);
 
   // ── Load from localStorage when no user (after auth resolves) ────────────────
 
   useEffect(() => {
     if (!mapReady || !authLoaded || user) return;
-    const ws = loadWorkspaceLocal();
+    const ws = loadWorkspaceLocal("local");
     if (!ws || !ws.collections.length) return;
     applyWorkspace(ws);
     drawCollections(ws.collections, ws.colorMap, ws.cultivoColorMap, ws.lotData).then((layerList) => {
@@ -387,10 +403,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         driveManejo, manejoColMapping,
         rainData, pluviometroMap,
       };
-      saveWorkspaceLocal(state);
-      if (user) {
+      saveWorkspaceLocal(state, activeWorkspaceId ?? "local");
+      if (user && activeWorkspaceId) {
         setIsSaving(true);
-        await saveWorkspace(supabase, activeWorkspaceOwnerId ?? effectiveUserId ?? user.id, state);
+        await saveWorkspace(supabase, activeWorkspaceId, state);
         setIsSaving(false);
       }
     }, 1500);
@@ -1138,22 +1154,21 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       {view === "dashboard" && (
         <FileDashboard
           user={user}
+          activeWorkspaceId={activeWorkspaceId}
           workspaceName={workspaceName}
           workspaceLogo={workspaceLogo}
           onRenameWorkspace={(name) => { setWorkspaceName(name); }}
           onChangeWorkspaceLogo={(logo) => { setWorkspaceLogo(logo); }}
           myEmpresas={myEmpresas}
-          sharedEmpresas={sharedEmpresas}
           activeEmpresaId={activeEmpresaId}
-          onSelectEmpresa={(id, workspaceOwnerId) => {
+          onSelectEmpresa={(id) => {
             setActiveEmpresaId(id);
-            setActiveWorkspaceOwnerId(workspaceOwnerId ?? user?.id);
           }}
           onNewEmpresa={async (name) => {
-            const emp = await createEmpresa(supabase, name);
+            if (!activeWorkspaceId) return;
+            const emp = await createEmpresa(supabase, activeWorkspaceId, name);
             setMyEmpresas((prev) => [...prev, emp]);
             setActiveEmpresaId(emp.id);
-            setActiveWorkspaceOwnerId(user?.id);
           }}
           onRenameEmpresa={async (empresaId, newName) => {
             await renameEmpresa(supabase, empresaId, newName);
@@ -1196,6 +1211,14 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           shpStatus={shpStatus}
           csvStatus={csvStatus}
           rindeStatus={rindeStatus}
+          driveManejo={driveManejo}
+          driveError={driveError}
+          driveRefreshing={driveRefreshing}
+          driveUrlInput={driveUrlInput}
+          onDriveUrlChange={setDriveUrlInput}
+          onLinkDrive={handleDriveLink}
+          onUnlinkDrive={() => { setDriveManejo(null); setManejoColMapping(null); setDriveUrlInput(""); }}
+          onRefreshDrive={() => { if (driveManejo && manejoColMapping) refreshDriveWith(driveManejo, manejoColMapping); }}
           onGoToMap={() => setView("map")}
         />
       )}
@@ -2208,31 +2231,32 @@ function ColumnMappingModal({
 
 // ── FileDashboard ─────────────────────────────────────────────────────────────
 
-interface WorkspaceItem { id: string; label: string; isOwn: boolean }
 interface EmpresaItem  { id: string; name: string; workspaceId: string; isOwner: boolean }
 
 function FileDashboard({
-  user,
+  user, activeWorkspaceId,
   workspaceName, workspaceLogo,
   onRenameWorkspace, onChangeWorkspaceLogo,
-  myEmpresas, sharedEmpresas, activeEmpresaId,
+  myEmpresas, activeEmpresaId,
   onSelectEmpresa, onNewEmpresa, onRenameEmpresa, onDeleteEmpresa, onInvite,
   shpFiles, shpFileMeta, csvFiles, csvFileMeta, rindeFiles, rindeFileMeta,
   onUploadShp, onUploadCsv, onUploadRinde,
   onRemoveShp, onRemoveCsv, onRemoveRinde,
   rainFiles, onUploadRain, onRemoveRain,
   shpStatus, csvStatus, rindeStatus,
+  driveManejo, driveError, driveRefreshing, driveUrlInput,
+  onDriveUrlChange, onLinkDrive, onUnlinkDrive, onRefreshDrive,
   onGoToMap,
 }: {
   user: import("@supabase/supabase-js").User | null;
+  activeWorkspaceId: string | null;
   workspaceName: string;
   workspaceLogo: string;
   onRenameWorkspace: (name: string) => void;
   onChangeWorkspaceLogo: (logo: string) => void;
   myEmpresas: Empresa[];
-  sharedEmpresas: SharedEmpresa[];
   activeEmpresaId: string | undefined;
-  onSelectEmpresa: (id: string, ownerWorkspaceId?: string) => void;
+  onSelectEmpresa: (id: string) => void;
   onNewEmpresa: (name: string) => Promise<void>;
   onRenameEmpresa: (empresaId: string, newName: string) => Promise<void>;
   onDeleteEmpresa: (empresaId: string) => Promise<void>;
@@ -2252,6 +2276,14 @@ function FileDashboard({
   shpStatus: { msg: string; ok: boolean } | null;
   csvStatus: { msg: string; ok: boolean } | null;
   rindeStatus: { msg: string; ok: boolean } | null;
+  driveManejo: DriveManejo | null;
+  driveError: string | null;
+  driveRefreshing: boolean;
+  driveUrlInput: string;
+  onDriveUrlChange: (v: string) => void;
+  onLinkDrive: () => void;
+  onUnlinkDrive: () => void;
+  onRefreshDrive: () => void;
   onGoToMap: () => void;
 }) {
   const [inviteEmail, setInviteEmail] = useState("");
@@ -2289,40 +2321,29 @@ function FileDashboard({
     });
   }
 
-  // ── Workspace list (own + one per shared asesor) ───────────────────────────
-  const workspaces = useMemo<WorkspaceItem[]>(() => {
-    const ws: WorkspaceItem[] = [];
-    if (user) ws.push({ id: user.id, label: workspaceName || "Mi espacio", isOwn: true });
-    const seen = new Set<string>();
-    sharedEmpresas.forEach((e) => {
-      if (!seen.has(e.ownerWorkspaceId)) {
-        seen.add(e.ownerWorkspaceId);
-        ws.push({ id: e.ownerWorkspaceId, label: e.ownerName ?? "Espacio compartido", isOwn: false });
-      }
-    });
-    return ws;
-  }, [user, sharedEmpresas]);
-
-  // ── Multi-select: workspaces & empresas ───────────────────────────────────
+  // ── Multi-select: empresas ────────────────────────────────────────────────
   const [selWs, setSelWs] = useState<Set<string>>(() =>
-    new Set(user?.id ? [user.id] : [])
+    new Set(activeWorkspaceId ? [activeWorkspaceId] : [])
   );
+
+  // Keep selWs in sync when activeWorkspaceId changes
+  useEffect(() => {
+    if (activeWorkspaceId) setSelWs(new Set([activeWorkspaceId]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspaceId]);
   const [selEmp, setSelEmp] = useState<Set<string>>(() =>
     activeEmpresaId ? new Set([activeEmpresaId]) : new Set()
   );
 
-  // Empresas visible given selected workspaces
+  // Empresas visible in the active workspace
   const availableEmpresas = useMemo<EmpresaItem[]>(() => {
-    const result: EmpresaItem[] = [];
-    if (selWs.has(user?.id ?? "")) {
-      myEmpresas.forEach((e) => result.push({ id: e.id, name: e.name, workspaceId: e.ownerId, isOwner: true }));
-    }
-    sharedEmpresas.forEach((e) => {
-      if (selWs.has(e.ownerWorkspaceId))
-        result.push({ id: e.empresaId, name: e.empresaName, workspaceId: e.ownerWorkspaceId, isOwner: false });
-    });
-    return result;
-  }, [selWs, myEmpresas, sharedEmpresas, user]);
+    return myEmpresas.map((e) => ({
+      id: e.id,
+      name: e.name,
+      workspaceId: e.workspaceId,
+      isOwner: true,
+    }));
+  }, [myEmpresas]);
 
   // Keep selEmp in sync when workspace selection changes
   useEffect(() => {
@@ -2342,8 +2363,7 @@ function FileDashboard({
   // Notify parent when primary empresa changes
   useEffect(() => {
     if (!primaryEmpresaId) return;
-    const emp = availableEmpresas.find((e) => e.id === primaryEmpresaId);
-    onSelectEmpresa(primaryEmpresaId, emp?.workspaceId !== user?.id ? emp?.workspaceId : undefined);
+    onSelectEmpresa(primaryEmpresaId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primaryEmpresaId]);
 
@@ -2462,28 +2482,14 @@ function FileDashboard({
               </div>
             </div>
 
-            {/* Shared workspaces (read-only toggle) */}
-            {workspaces.length > 1 && (
-              <div className="mt-4 pt-3" style={{ borderTop: "1px solid #1a3460" }}>
-                <p className="text-xs mb-2" style={{ color: "#4a6a8a" }}>También tenés acceso a:</p>
-                <div className="flex flex-wrap gap-2">
-                  {workspaces.filter((ws) => !ws.isOwn).map((ws) => {
-                    const active = selWs.has(ws.id);
-                    return (
-                      <button key={ws.id} onClick={() => toggleWs(ws.id)}
-                        className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
-                        style={{
-                          background: active ? "#1a4a80" : "#0f2040",
-                          border: `2px solid ${active ? "#2a6aaa" : "#1a3460"}`,
-                          color: active ? "#e0e8f0" : "#6a8ab0",
-                        }}>
-                        🤝 {ws.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Link to configuracion for workspace management */}
+            <div className="mt-3 pt-3 flex justify-end" style={{ borderTop: "1px solid #1a3460" }}>
+              <a href="/configuracion"
+                className="text-xs px-3 py-1 rounded-lg transition-all"
+                style={{ color: "#6a8ab0", background: "#0f2040", border: "1px solid #1a3460" }}>
+                ⚙️ Administrar espacios →
+              </a>
+            </div>
           </div>
         )}
 
@@ -2501,7 +2507,7 @@ function FileDashboard({
                       Invitar →
                     </button>
                   )}
-                  {selWs.has(user.id) && (
+                  {user && (
                     <button className="text-xs px-2 py-1 rounded"
                       style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
                       onClick={() => { setShowNewEmpresa(!showNewEmpresa); setShowInvite(false); }}>
@@ -2645,7 +2651,54 @@ function FileDashboard({
             files={rainFiles} status={null} onFiles={onUploadRain} onRemove={onRemoveRain} />
         </div>
 
-        <div className="mt-8">
+        {/* ── Drive link ── */}
+        <div className="mt-4 rounded-xl p-4" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+          <p className="text-sm font-semibold mb-3" style={{ color: "#aac4e0" }}>
+            🔗 Google Drive (manejo sincronizado)
+          </p>
+          {driveManejo ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
+                style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
+                <span className="truncate flex-1" style={{ color: "#3dbb6e" }}>
+                  ✓ {driveManejo.url.slice(0, 60)}{driveManejo.url.length > 60 ? "…" : ""}
+                </span>
+                <button onClick={onRefreshDrive} disabled={driveRefreshing}
+                  className="shrink-0 px-2 py-0.5 rounded text-xs disabled:opacity-50"
+                  style={{ background: "#1a4a1a", color: "#3dbb6e", border: "1px solid #2a6a2a" }}>
+                  {driveRefreshing ? "…" : "↻"}
+                </button>
+                <button onClick={onUnlinkDrive}
+                  className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-sm hover:opacity-70"
+                  style={{ color: "#e25a5a" }}>×</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={driveUrlInput}
+                onChange={(e) => onDriveUrlChange(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && onLinkDrive()}
+                placeholder="https://docs.google.com/spreadsheets/..."
+                className="flex-1 rounded px-3 py-1.5 text-xs"
+                style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
+              />
+              <button onClick={onLinkDrive} disabled={!driveUrlInput.trim()}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                style={{ background: "#3dbb6e", color: "#fff" }}>
+                Vincular
+              </button>
+            </div>
+          )}
+          {driveError && (
+            <p className="text-xs mt-2 px-2 py-1 rounded" style={{ background: "#3a0a0a", color: "#e24a4a" }}>
+              {driveError}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-6">
           <button onClick={onGoToMap}
             className="w-full py-4 rounded-xl text-lg font-bold transition-all"
             style={{ background: "#1a4a80", color: "#e2b04a", border: "2px solid #2a5298" }}>

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GeoCollection } from "./shapefile";
-import type { LotData, RindeData, ParsedRow, RindeRow, ColumnMapping } from "./data-parser";
+import type { LotData, RindeData, ParsedRow, ColumnMapping } from "./data-parser";
 
 export interface LotVisit {
   date: string;        // "YYYY-MM-DD"
@@ -28,10 +28,10 @@ export interface RainReading {
 
 export type RainData = Record<string, RainReading[]>; // key = pluviometro/lot name
 
-// ─── Workspace type ──────────────────────────────────────────────────────────
+// ─── Workspace types ─────────────────────────────────────────────────────────
 
 export interface Workspace {
-  workspaceName: string;      // display label: "Grupo Bermejo", "Holding ABC", etc.
+  workspaceName: string;      // display label
   workspaceLogo: string;      // base64 data URL, "" if none
   fieldName: string;
   lotCount: number;
@@ -51,7 +51,14 @@ export interface Workspace {
   driveManejo?: DriveManejo | null;
   manejoColMapping?: ColumnMapping | null;
   rainData: RainData;
-  pluviometroMap: Record<string, string>; // pluviometro name → lot name
+  pluviometroMap: Record<string, string>;
+}
+
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  logo: string;
+  updatedAt: string;
 }
 
 // ─── File / empresa meta ─────────────────────────────────────────────────────
@@ -96,63 +103,12 @@ export function deserializeAllRows(rows: SerializedParsedRow[]): ParsedRow[] {
   })) as ParsedRow[];
 }
 
-// ─── Supabase save ───────────────────────────────────────────────────────────
-
-export async function saveWorkspace(
-  supabase: SupabaseClient,
-  userId: string,
-  state: Workspace
-): Promise<void> {
-  const { error } = await supabase.from("workspaces").upsert(
-    {
-      user_id: userId,
-      workspace_name: state.workspaceName || null,
-      workspace_logo: state.workspaceLogo || null,
-      field_name: state.fieldName,
-      lot_count: state.lotCount,
-      collections: state.collections,
-      color_map: state.colorMap,
-      cultivo_color_map: state.cultivoColorMap,
-      lot_data: serializeLotData(state.lotData),
-      all_rows: serializeAllRows(state.allRows),
-      rinde_data: state.rindeData,
-      lot_visits: state.lotVisits,
-      shp_files: state.shpFiles,
-      csv_files: state.csvFiles,
-      rinde_files: state.rindeFiles,
-      shp_file_meta: state.shpFileMeta,
-      csv_file_meta: state.csvFileMeta,
-      rinde_file_meta: state.rindeFileMeta,
-      drive_manejo: state.driveManejo ?? null,
-      manejo_col_mapping: state.manejoColMapping ?? null,
-      rain_data: state.rainData,
-      pluviometro_map: state.pluviometroMap,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" }
-  );
-  if (error) console.warn("[db] saveWorkspace (cloud sync):", error.message);
-}
-
-// ─── Supabase load ───────────────────────────────────────────────────────────
-
-export async function loadWorkspace(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<Workspace | null> {
-  const { data, error } = await supabase
-    .from("workspaces")
-    .select("*")
-    .eq("user_id", userId)
-    .single();
-
-  if (error || !data) return null;
-
+function deserializeWorkspaceRow(data: Record<string, unknown>): Workspace {
   return {
-    workspaceName: data.workspace_name ?? "",
-    workspaceLogo: data.workspace_logo ?? "",
-    fieldName: data.field_name ?? "",
-    lotCount: data.lot_count ?? 0,
+    workspaceName: (data.name as string) ?? "",
+    workspaceLogo: (data.logo as string) ?? "",
+    fieldName: (data.field_name as string) ?? "",
+    lotCount: (data.lot_count as number) ?? 0,
     collections: (data.collections ?? []) as GeoCollection[],
     colorMap: (data.color_map ?? {}) as Record<string, string>,
     cultivoColorMap: (data.cultivo_color_map ?? {}) as Record<string, string>,
@@ -173,14 +129,143 @@ export async function loadWorkspace(
   };
 }
 
-// ─── localStorage workspace ──────────────────────────────────────────────────
+// ─── Active workspace (localStorage) ─────────────────────────────────────────
 
-const LOCAL_KEY = "iag_workspace";
+const ACTIVE_WS_KEY = "iag_active_ws";
 
-export function saveWorkspaceLocal(state: Workspace): void {
+export function getActiveWorkspaceId(): string | null {
+  try { return localStorage.getItem(ACTIVE_WS_KEY); } catch { return null; }
+}
+
+export function setActiveWorkspaceId(id: string): void {
+  try { localStorage.setItem(ACTIVE_WS_KEY, id); } catch {}
+}
+
+export function clearActiveWorkspaceId(): void {
+  try { localStorage.removeItem(ACTIVE_WS_KEY); } catch {}
+}
+
+// ─── Workspace summaries ──────────────────────────────────────────────────────
+
+export async function loadWorkspaceSummaries(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<WorkspaceSummary[]> {
+  const { data, error } = await supabase
+    .from("workspaces")
+    .select("id, name, logo, updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return (data as Array<{ id: string; name: string; logo: string; updated_at: string }>).map((r) => ({
+    id: r.id,
+    name: r.name ?? "",
+    logo: r.logo ?? "",
+    updatedAt: r.updated_at ?? "",
+  }));
+}
+
+export async function createWorkspace(
+  supabase: SupabaseClient,
+  userId: string,
+  name: string,
+  logo = ""
+): Promise<string> {
+  const { data, error } = await supabase
+    .from("workspaces")
+    .insert({ user_id: userId, name, logo })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Error al crear espacio");
+  return (data as { id: string }).id;
+}
+
+export async function renameWorkspace(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  name: string,
+  logo: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("workspaces")
+    .update({ name, logo, updated_at: new Date().toISOString() })
+    .eq("id", workspaceId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteWorkspace(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("workspaces")
+    .delete()
+    .eq("id", workspaceId);
+  if (error) throw new Error(error.message);
+}
+
+// ─── Supabase save ────────────────────────────────────────────────────────────
+
+export async function saveWorkspace(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  state: Workspace
+): Promise<void> {
+  const { error } = await supabase
+    .from("workspaces")
+    .update({
+      name: state.workspaceName || null,
+      logo: state.workspaceLogo || null,
+      field_name: state.fieldName,
+      lot_count: state.lotCount,
+      collections: state.collections,
+      color_map: state.colorMap,
+      cultivo_color_map: state.cultivoColorMap,
+      lot_data: serializeLotData(state.lotData),
+      all_rows: serializeAllRows(state.allRows),
+      rinde_data: state.rindeData,
+      lot_visits: state.lotVisits,
+      shp_files: state.shpFiles,
+      csv_files: state.csvFiles,
+      rinde_files: state.rindeFiles,
+      shp_file_meta: state.shpFileMeta,
+      csv_file_meta: state.csvFileMeta,
+      rinde_file_meta: state.rindeFileMeta,
+      drive_manejo: state.driveManejo ?? null,
+      manejo_col_mapping: state.manejoColMapping ?? null,
+      rain_data: state.rainData,
+      pluviometro_map: state.pluviometroMap,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", workspaceId);
+  if (error) console.warn("[db] saveWorkspace:", error.message);
+}
+
+// ─── Supabase load ────────────────────────────────────────────────────────────
+
+export async function loadWorkspace(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<Workspace | null> {
+  const { data, error } = await supabase
+    .from("workspaces")
+    .select("*")
+    .eq("id", workspaceId)
+    .single();
+  if (error || !data) return null;
+  return deserializeWorkspaceRow(data as Record<string, unknown>);
+}
+
+// ─── localStorage workspace (keyed by workspace ID) ───────────────────────────
+
+function localWsKey(workspaceId: string): string {
+  return `iag_ws_${workspaceId}`;
+}
+
+export function saveWorkspaceLocal(state: Workspace, workspaceId: string): void {
   try {
     localStorage.setItem(
-      LOCAL_KEY,
+      localWsKey(workspaceId),
       JSON.stringify({
         workspaceName: state.workspaceName,
         workspaceLogo: state.workspaceLogo,
@@ -210,16 +295,16 @@ export function saveWorkspaceLocal(state: Workspace): void {
   }
 }
 
-export function loadWorkspaceLocal(): Workspace | null {
+export function loadWorkspaceLocal(workspaceId: string): Workspace | null {
   try {
-    const raw = localStorage.getItem(LOCAL_KEY);
+    const raw = localStorage.getItem(localWsKey(workspaceId));
     if (!raw) return null;
-    const data = JSON.parse(raw);
+    const data = JSON.parse(raw) as Record<string, unknown>;
     return {
-      workspaceName: data.workspaceName ?? "",
-      workspaceLogo: data.workspaceLogo ?? "",
-      fieldName: data.fieldName ?? "",
-      lotCount: data.lotCount ?? 0,
+      workspaceName: (data.workspaceName as string) ?? "",
+      workspaceLogo: (data.workspaceLogo as string) ?? "",
+      fieldName: (data.fieldName as string) ?? "",
+      lotCount: (data.lotCount as number) ?? 0,
       collections: (data.collections ?? []) as GeoCollection[],
       colorMap: (data.colorMap ?? {}) as Record<string, string>,
       cultivoColorMap: (data.cultivoColorMap ?? {}) as Record<string, string>,
@@ -296,10 +381,11 @@ export async function getUserProfile(supabase: SupabaseClient): Promise<UserProf
     .select("role, onboarding_done, display_name")
     .single();
   if (error || !data) return null;
+  const d = data as { role: string; onboarding_done: boolean; display_name: string };
   return {
-    role: data.role ?? null,
-    onboarding_done: data.onboarding_done ?? false,
-    display_name: data.display_name ?? null,
+    role: (d.role as UserProfile["role"]) ?? null,
+    onboarding_done: d.onboarding_done ?? false,
+    display_name: d.display_name ?? null,
   };
 }
 
@@ -318,31 +404,42 @@ export interface Empresa {
   id: string;
   name: string;
   ownerId: string;
+  workspaceId: string;
 }
 
-export async function getEmpresas(supabase: SupabaseClient): Promise<Empresa[]> {
+export async function getEmpresas(
+  supabase: SupabaseClient,
+  workspaceId: string
+): Promise<Empresa[]> {
   const { data, error } = await supabase
     .from("empresas")
-    .select("id, name, owner_id")
+    .select("id, name, owner_id, workspace_id")
+    .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: true });
   if (error || !data) return [];
-  return data.map((e: { id: string; name: string; owner_id: string }) => ({
+  return (data as Array<{ id: string; name: string; owner_id: string; workspace_id: string }>).map((e) => ({
     id: e.id,
     name: e.name,
     ownerId: e.owner_id,
+    workspaceId: e.workspace_id,
   }));
 }
 
-export async function createEmpresa(supabase: SupabaseClient, name: string): Promise<Empresa> {
+export async function createEmpresa(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  name: string
+): Promise<Empresa> {
   const { data: authData } = await supabase.auth.getUser();
   if (!authData.user) throw new Error("No autenticado");
   const { data, error } = await supabase
     .from("empresas")
-    .insert({ name, owner_id: authData.user.id })
-    .select("id, name, owner_id")
+    .insert({ workspace_id: workspaceId, owner_id: authData.user.id, name })
+    .select("id, name, owner_id, workspace_id")
     .single();
   if (error || !data) throw new Error(error?.message ?? "Error al crear empresa");
-  return { id: data.id, name: data.name, ownerId: data.owner_id };
+  const d = data as { id: string; name: string; owner_id: string; workspace_id: string };
+  return { id: d.id, name: d.name, ownerId: d.owner_id, workspaceId: d.workspace_id };
 }
 
 // ─── Shared empresas ──────────────────────────────────────────────────────────
@@ -350,7 +447,7 @@ export async function createEmpresa(supabase: SupabaseClient, name: string): Pro
 export interface SharedEmpresa {
   empresaId: string;
   empresaName: string;
-  ownerWorkspaceId: string; // = owner's user_id in workspaces
+  ownerWorkspaceId: string; // actual workspace UUID
   ownerName: string | null;
 }
 
@@ -360,7 +457,7 @@ export async function getSharedEmpresas(supabase: SupabaseClient): Promise<Share
     .select(`
       empresa_id,
       empresas (
-        id, name, owner_id,
+        id, name, owner_id, workspace_id,
         user_profiles ( display_name )
       )
     `)
@@ -377,7 +474,7 @@ export async function getSharedEmpresas(supabase: SupabaseClient): Promise<Share
       return {
         empresaId: emp.id,
         empresaName: emp.name,
-        ownerWorkspaceId: emp.owner_id,
+        ownerWorkspaceId: emp.workspace_id,
         ownerName: profile?.display_name ?? null,
       };
     })
@@ -417,7 +514,7 @@ export async function acceptPendingEmpresaInvites(supabase: SupabaseClient): Pro
 
   if (!invites?.length) return;
 
-  for (const inv of invites) {
+  for (const inv of invites as Array<{ id: string; empresa_id: string; invited_by: string }>) {
     await supabase.from("empresa_members").upsert(
       { empresa_id: inv.empresa_id, member_user_id: user.id, invited_by: inv.invited_by },
       { onConflict: "empresa_id,member_user_id" }
@@ -447,7 +544,6 @@ export async function deleteEmpresa(
   supabase: SupabaseClient,
   empresaId: string
 ): Promise<void> {
-  // Delete in dependency order
   await supabase.from("empresa_invites").delete().eq("empresa_id", empresaId);
   await supabase.from("empresa_members").delete().eq("empresa_id", empresaId);
   const { error } = await supabase.from("empresas").delete().eq("id", empresaId);
@@ -458,13 +554,13 @@ export async function deleteEmpresa(
 
 export async function saveFileMeta(
   supabase: SupabaseClient,
-  workspaceOwnerId: string,
+  workspaceId: string,
   field: "shp_file_meta" | "csv_file_meta" | "rinde_file_meta",
   meta: FileMeta[]
 ): Promise<void> {
   const { error } = await supabase
     .from("workspaces")
     .update({ [field]: meta })
-    .eq("user_id", workspaceOwnerId);
+    .eq("id", workspaceId);
   if (error) console.warn("[db] saveFileMeta:", error.message);
 }
