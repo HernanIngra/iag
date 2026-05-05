@@ -8,6 +8,7 @@ export interface LotVisit {
   yieldStars: number;  // 0 = not set, 1–5
   sprayTarget: string;
   sprayEffect: number; // 0 = not set, 1–5
+  fitotoxicity?: number; // undefined = not asked; 0 = sin daño … 5 = perdido
 }
 
 export interface DriveManejo {

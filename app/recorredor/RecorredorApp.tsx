@@ -1051,13 +1051,17 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const filteredRows = selectedLot ? getFilteredRows(selectedLot.lotName, activeFilters, lotData) : [];
   const allLotRows = selectedLot ? (lotData[selectedLot.lotName] ?? []) : [];
   const todayVisit = selectedLot
-    ? (lotVisits[selectedLot.lotName] ?? []).find((v) => v.date === today) ?? { date: today, note: "", yieldStars: 0, sprayTarget: "", sprayEffect: 0 }
+    ? (lotVisits[selectedLot.lotName] ?? []).find((v) => v.date === today) ?? { date: today, note: "", yieldStars: 0, sprayTarget: "", sprayEffect: 0, fitotoxicity: undefined }
     : null;
   const recentSprayingsForSelected = allLotRows.filter((r) => {
     if (!r._fecha) return false;
     const days = (Date.now() - r._fecha.getTime()) / 86400000;
     return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
   });
+  const lastAppWasHerbicide = (() => {
+    const sorted = [...allLotRows].filter((r) => r._fecha).sort((a, b) => (b._fecha!.getTime()) - (a._fecha!.getTime()));
+    return sorted[0]?._tipo?.toUpperCase() === "HERBICIDA";
+  })();
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: "#1a1a2e", color: "#e0e0e0" }}>
@@ -1268,6 +1272,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                     onSave={(u) => saveVisit(selectedLot.lotName, today, u)}
                     hasSprayingContext={recentSprayingsForSelected.length > 0}
                     recentSprayings={recentSprayingsForSelected}
+                    lastAppWasHerbicide={lastAppWasHerbicide}
                   />
                 </SidebarSection>
               )}
@@ -1325,6 +1330,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                         const days = (Date.now() - r._fecha.getTime()) / 86400000;
                         return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
                       })}
+                      lastAppWasHerbicide={lastAppWasHerbicide}
                       lotRindes={rindeData[selectedLot.lotName] ?? []}
                       rainReadings={rainData[selectedLot.lotName] ?? []}
                       onAddRain={(reading) => addRainReading(selectedLot.lotName, reading)}
@@ -1702,12 +1708,15 @@ function StarRating({ value, onChange, label }: { value: number; onChange: (n: n
   );
 }
 
-function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings }: {
+const FITO_LABELS = ["0 — Sin daño", "1 — Leve", "2 — Moderado", "3 — Importante", "4 — Severo", "5 — Perdido"];
+
+function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings, lastAppWasHerbicide }: {
   visit: LotVisit;
   onSave: (u: Partial<LotVisit>) => void;
   onDone?: () => void;
   hasSprayingContext: boolean;
   recentSprayings: ParsedRow[];
+  lastAppWasHerbicide?: boolean;
 }) {
   const [localNote, setLocalNote] = useState(visit.note);
   const [localTarget, setLocalTarget] = useState(visit.sprayTarget);
@@ -1736,6 +1745,30 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings 
           <StarRating value={visit.sprayEffect} onChange={(n) => onSave({ sprayEffect: n })} label="Efectividad" />
         </div>
       )}
+      {lastAppWasHerbicide && (
+        <div className="p-2 rounded space-y-2" style={{ background: "#1a0d0d", border: "1px solid #6a2a2a" }}>
+          <p className="text-xs font-semibold" style={{ color: "#e2804a" }}>Fitotoxicidad</p>
+          <p className="text-xs" style={{ color: "#8a6a5a" }}>La última aplicación fue un herbicida. ¿Se observa daño en el cultivo?</p>
+          <div className="flex gap-1 flex-wrap">
+            {FITO_LABELS.map((label, i) => {
+              const active = visit.fitotoxicity === i;
+              const color = i === 0 ? "#3dbb6e" : i <= 2 ? "#e2b04a" : "#e24a4a";
+              return (
+                <button key={i}
+                  onClick={() => onSave({ fitotoxicity: active ? undefined : i })}
+                  className="px-2 py-1 rounded text-xs font-semibold transition-all"
+                  style={{
+                    background: active ? color + "33" : "#0d1b35",
+                    border: `1px solid ${active ? color : "#3a2a2a"}`,
+                    color: active ? color : "#6a5a5a",
+                  }}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div>
         <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "#6a8ab0" }}>Notas</label>
         <textarea
@@ -1757,7 +1790,7 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings 
 }
 
 function LotInfo({
-  lotName, zone, color, filteredRows, allRows, visits, onSaveVisit, recentSprayings, lotRindes,
+  lotName, zone, color, filteredRows, allRows, visits, onSaveVisit, recentSprayings, lastAppWasHerbicide, lotRindes,
   rainReadings, onAddRain,
 }: {
   lotName: string; zone: string; color: string;
@@ -1765,6 +1798,7 @@ function LotInfo({
   visits: LotVisit[];
   onSaveVisit: (date: string, update: Partial<LotVisit>) => void;
   recentSprayings: ParsedRow[];
+  lastAppWasHerbicide: boolean;
   lotRindes: Array<{ campana: string; cultivo: string; tipoCorr: string; genetica: string; rinde: number }>;
   rainReadings: RainReading[];
   onAddRain: (reading: RainReading) => void;
@@ -1943,7 +1977,7 @@ function LotInfo({
                     </button>
                   </div>
                   {isEditing ? (
-                    <VisitForm visit={v} onSave={(u) => onSaveVisit(v.date, u)} onDone={() => setEditingDate(null)} hasSprayingContext={recentSprayings.length > 0} recentSprayings={recentSprayings} />
+                    <VisitForm visit={v} onSave={(u) => onSaveVisit(v.date, u)} onDone={() => setEditingDate(null)} hasSprayingContext={recentSprayings.length > 0} recentSprayings={recentSprayings} lastAppWasHerbicide={lastAppWasHerbicide} />
                   ) : (
                     <>
                       {!hasContent && <p style={{ color: "#445" }}>Sin anotaciones</p>}
@@ -1954,6 +1988,11 @@ function LotInfo({
                         <p style={{ color: "#ccd" }}>
                           Blanco: {v.sprayTarget}
                           {v.sprayEffect > 0 && <span style={{ color: "#e2b04a" }}> · {"★".repeat(v.sprayEffect)}{"☆".repeat(5 - v.sprayEffect)}</span>}
+                        </p>
+                      )}
+                      {v.fitotoxicity !== undefined && (
+                        <p style={{ color: v.fitotoxicity === 0 ? "#3dbb6e" : v.fitotoxicity <= 2 ? "#e2b04a" : "#e24a4a" }}>
+                          Fitotoxicidad: {FITO_LABELS[v.fitotoxicity]}
                         </p>
                       )}
                       {v.note && <p style={{ color: "#ccd", whiteSpace: "pre-wrap", marginTop: "4px" }}>{v.note}</p>}
