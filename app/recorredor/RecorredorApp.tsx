@@ -1165,10 +1165,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             setActiveEmpresaId(id);
           }}
           onNewEmpresa={async (name) => {
-            if (!activeWorkspaceId) return;
+            if (!activeWorkspaceId) return "";
             const emp = await createEmpresa(supabase, activeWorkspaceId, name);
             setMyEmpresas((prev) => [...prev, emp]);
             setActiveEmpresaId(emp.id);
+            return emp.id;
           }}
           onRenameEmpresa={async (empresaId, newName) => {
             await renameEmpresa(supabase, empresaId, newName);
@@ -2257,7 +2258,7 @@ function FileDashboard({
   myEmpresas: Empresa[];
   activeEmpresaId: string | undefined;
   onSelectEmpresa: (id: string) => void;
-  onNewEmpresa: (name: string) => Promise<void>;
+  onNewEmpresa: (name: string) => Promise<string>;
   onRenameEmpresa: (empresaId: string, newName: string) => Promise<void>;
   onDeleteEmpresa: (empresaId: string) => Promise<void>;
   onInvite: (empresaId: string, email: string) => Promise<void>;
@@ -2413,7 +2414,12 @@ function FileDashboard({
   async function handleNewEmpresa() {
     if (!newEmpresaName.trim()) return;
     setNewEmpresaLoading(true);
-    try { await onNewEmpresa(newEmpresaName.trim()); setNewEmpresaName(""); setShowNewEmpresa(false); }
+    try {
+      const id = await onNewEmpresa(newEmpresaName.trim());
+      setNewEmpresaName("");
+      setShowNewEmpresa(false);
+      if (id) { setEmpresaOpenId(id); onSelectEmpresa(id); }
+    }
     finally { setNewEmpresaLoading(false); }
   }
 
@@ -2622,19 +2628,19 @@ function FileDashboard({
                     {isOpen && (
                       <div className="px-3 pb-3">
                         <DashFileSection nested title="🗺 Mapa de lotes"
-                          hint="cada lote debe ser un polígono (.zip con .shp + .dbf + .shx, o .kmz)"
+                          hint="cada lote debe ser un polígono — .zip con .shp + .dbf + .shx, o .kmz"
                           accept=".zip,.shp,.dbf,.shx,.prj,.kmz" multiple
                           files={empShpFiles} status={shpStatus} onFiles={onUploadShp} onRemove={onRemoveShp} />
                         <DashFileSection nested title="📄 Manejo de lotes"
-                          hint="xlsx o csv — los nombres de los lotes deben coincidir con los del mapa"
+                          hint="acepta xlsx y csv — los nombres de los lotes deben coincidir con los del mapa"
                           accept=".csv,.xlsx,.xls" multiple={false}
                           files={empCsvFiles} status={csvStatus} onFiles={onUploadCsv} onRemove={onRemoveCsv} />
                         <DashFileSection nested title="🌾 Rindes históricos"
-                          hint="información optativa — nombres de lotes = los del mapa"
+                          hint="información optativa y complementaria — nombres de lotes = los del mapa"
                           accept=".csv,.xlsx,.xls" multiple={false}
                           files={empRindeFiles} status={rindeStatus} onFiles={onUploadRinde} onRemove={onRemoveRinde} />
                         <DashFileSection nested title="🌧 Lluvias"
-                          hint="CSV o XLSX con Fecha, Ubicación, Valor (mm)"
+                          hint="xlsx o csv con columnas Fecha, Ubicación y Valor (mm)"
                           accept=".csv,.xlsx,.xls" multiple={false}
                           files={rainFiles} status={null} onFiles={onUploadRain} onRemove={onRemoveRain} />
                       </div>
