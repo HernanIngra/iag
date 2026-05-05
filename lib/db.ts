@@ -30,6 +30,8 @@ export type RainData = Record<string, RainReading[]>; // key = pluviometro/lot n
 // ─── Workspace type ──────────────────────────────────────────────────────────
 
 export interface Workspace {
+  workspaceName: string;      // display label: "Grupo Bermejo", "Holding ABC", etc.
+  workspaceLogo: string;      // base64 data URL, "" if none
   fieldName: string;
   lotCount: number;
   collections: GeoCollection[];
@@ -103,6 +105,8 @@ export async function saveWorkspace(
   const { error } = await supabase.from("workspaces").upsert(
     {
       user_id: userId,
+      workspace_name: state.workspaceName || null,
+      workspace_logo: state.workspaceLogo || null,
       field_name: state.fieldName,
       lot_count: state.lotCount,
       collections: state.collections,
@@ -144,6 +148,8 @@ export async function loadWorkspace(
   if (error || !data) return null;
 
   return {
+    workspaceName: data.workspace_name ?? "",
+    workspaceLogo: data.workspace_logo ?? "",
     fieldName: data.field_name ?? "",
     lotCount: data.lot_count ?? 0,
     collections: (data.collections ?? []) as GeoCollection[],
@@ -175,6 +181,8 @@ export function saveWorkspaceLocal(state: Workspace): void {
     localStorage.setItem(
       LOCAL_KEY,
       JSON.stringify({
+        workspaceName: state.workspaceName,
+        workspaceLogo: state.workspaceLogo,
         fieldName: state.fieldName,
         lotCount: state.lotCount,
         collections: state.collections,
@@ -207,6 +215,8 @@ export function loadWorkspaceLocal(): Workspace | null {
     if (!raw) return null;
     const data = JSON.parse(raw);
     return {
+      workspaceName: data.workspaceName ?? "",
+      workspaceLogo: data.workspaceLogo ?? "",
       fieldName: data.fieldName ?? "",
       lotCount: data.lotCount ?? 0,
       collections: (data.collections ?? []) as GeoCollection[],
@@ -416,6 +426,31 @@ export async function acceptPendingEmpresaInvites(supabase: SupabaseClient): Pro
       .update({ accepted_at: new Date().toISOString() })
       .eq("id", inv.id);
   }
+}
+
+// ─── Empresa mutations ────────────────────────────────────────────────────────
+
+export async function renameEmpresa(
+  supabase: SupabaseClient,
+  empresaId: string,
+  newName: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("empresas")
+    .update({ name: newName })
+    .eq("id", empresaId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteEmpresa(
+  supabase: SupabaseClient,
+  empresaId: string
+): Promise<void> {
+  // Delete in dependency order
+  await supabase.from("empresa_invites").delete().eq("empresa_id", empresaId);
+  await supabase.from("empresa_members").delete().eq("empresa_id", empresaId);
+  const { error } = await supabase.from("empresas").delete().eq("id", empresaId);
+  if (error) throw new Error(error.message);
 }
 
 // ─── File meta targeted update ────────────────────────────────────────────────

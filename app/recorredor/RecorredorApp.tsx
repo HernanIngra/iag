@@ -49,6 +49,8 @@ import {
   acceptPendingEmpresaInvites,
   createEmpresa,
   inviteToEmpresa,
+  renameEmpresa,
+  deleteEmpresa,
   type Workspace,
   type LotVisit,
   type DriveManejo,
@@ -103,6 +105,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [selectedLot, setSelectedLot] = useState<SelectedLot | null>(null);
   const [lotVisits, setLotVisits] = useState<Record<string, LotVisit[]>>({});
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(DEFAULT_FILTERS);
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [workspaceLogo, setWorkspaceLogo] = useState("");
   const [fieldName, setFieldName] = useState("");
   const [lotCount, setLotCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -294,6 +298,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     for (const [k, rows] of Object.entries(ws.lotData)) {
       normalizedLotData[k] = rows.map((r) => ({ ...r, _tipo: normalizeProductType(r._tipo) }));
     }
+    setWorkspaceName(ws.workspaceName ?? "");
+    setWorkspaceLogo(ws.workspaceLogo ?? "");
     setFieldName(ws.fieldName);
     setLotCount(ws.lotCount);
     setCollections(ws.collections);
@@ -374,6 +380,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       const state: Workspace = {
+        workspaceName, workspaceLogo,
         fieldName, lotCount, collections, colorMap, cultivoColorMap,
         lotData, allRows, rindeData, lotVisits, shpFiles, csvFiles, rindeFiles,
         shpFileMeta, csvFileMeta, rindeFileMeta,
@@ -389,7 +396,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }, 1500);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, lotData, rindeData, lotVisits, driveManejo, manejoColMapping, rainData, pluviometroMap, user]);
+  }, [collections, lotData, rindeData, lotVisits, driveManejo, manejoColMapping, rainData, pluviometroMap, workspaceName, workspaceLogo, user]);
 
   // ── Dim/highlight lots based on tipo/product filter ─────────────────────────
 
@@ -1127,6 +1134,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       {view === "dashboard" && (
         <FileDashboard
           user={user}
+          workspaceName={workspaceName}
+          workspaceLogo={workspaceLogo}
+          onRenameWorkspace={(name) => { setWorkspaceName(name); }}
+          onChangeWorkspaceLogo={(logo) => { setWorkspaceLogo(logo); }}
           myEmpresas={myEmpresas}
           sharedEmpresas={sharedEmpresas}
           activeEmpresaId={activeEmpresaId}
@@ -1139,6 +1150,15 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             setMyEmpresas((prev) => [...prev, emp]);
             setActiveEmpresaId(emp.id);
             setActiveWorkspaceOwnerId(user?.id);
+          }}
+          onRenameEmpresa={async (empresaId, newName) => {
+            await renameEmpresa(supabase, empresaId, newName);
+            setMyEmpresas((prev) => prev.map((e) => e.id === empresaId ? { ...e, name: newName } : e));
+          }}
+          onDeleteEmpresa={async (empresaId) => {
+            await deleteEmpresa(supabase, empresaId);
+            setMyEmpresas((prev) => prev.filter((e) => e.id !== empresaId));
+            if (activeEmpresaId === empresaId) setActiveEmpresaId(undefined);
           }}
           onInvite={async (empresaId, email) => {
             await inviteToEmpresa(supabase, empresaId, email);
@@ -2154,8 +2174,10 @@ interface EmpresaItem  { id: string; name: string; workspaceId: string; isOwner:
 
 function FileDashboard({
   user,
+  workspaceName, workspaceLogo,
+  onRenameWorkspace, onChangeWorkspaceLogo,
   myEmpresas, sharedEmpresas, activeEmpresaId,
-  onSelectEmpresa, onNewEmpresa, onInvite,
+  onSelectEmpresa, onNewEmpresa, onRenameEmpresa, onDeleteEmpresa, onInvite,
   shpFiles, shpFileMeta, csvFiles, csvFileMeta, rindeFiles, rindeFileMeta,
   onUploadShp, onUploadCsv, onUploadRinde,
   onRemoveShp, onRemoveCsv, onRemoveRinde,
@@ -2164,11 +2186,17 @@ function FileDashboard({
   onGoToMap,
 }: {
   user: import("@supabase/supabase-js").User | null;
+  workspaceName: string;
+  workspaceLogo: string;
+  onRenameWorkspace: (name: string) => void;
+  onChangeWorkspaceLogo: (logo: string) => void;
   myEmpresas: Empresa[];
   sharedEmpresas: SharedEmpresa[];
   activeEmpresaId: string | undefined;
   onSelectEmpresa: (id: string, ownerWorkspaceId?: string) => void;
   onNewEmpresa: (name: string) => Promise<void>;
+  onRenameEmpresa: (empresaId: string, newName: string) => Promise<void>;
+  onDeleteEmpresa: (empresaId: string) => Promise<void>;
   onInvite: (empresaId: string, email: string) => Promise<void>;
   shpFiles: string[]; shpFileMeta: FileMeta[];
   csvFiles: string[]; csvFileMeta: FileMeta[];
@@ -2195,10 +2223,37 @@ function FileDashboard({
   const [showNewEmpresa, setShowNewEmpresa] = useState(false);
   const [newEmpresaLoading, setNewEmpresaLoading] = useState(false);
 
+  // ── Workspace edit state ──────────────────────────────────────────────────
+  const [editingWsName, setEditingWsName] = useState(false);
+  const [wsNameDraft, setWsNameDraft] = useState("");
+  const [renamingEmpresaId, setRenamingEmpresaId] = useState<string | null>(null);
+  const [empresaNameDraft, setEmpresaNameDraft] = useState("");
+  const [deletingEmpresaId, setDeletingEmpresaId] = useState<string | null>(null);
+  const [empresaMutating, setEmpresaMutating] = useState(false);
+
+  async function resizeLogoToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const MAX = 180;
+        const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Error al cargar imagen")); };
+      img.src = url;
+    });
+  }
+
   // ── Workspace list (own + one per shared asesor) ───────────────────────────
   const workspaces = useMemo<WorkspaceItem[]>(() => {
     const ws: WorkspaceItem[] = [];
-    if (user) ws.push({ id: user.id, label: "Mi espacio", isOwn: true });
+    if (user) ws.push({ id: user.id, label: workspaceName || "Mi espacio", isOwn: true });
     const seen = new Set<string>();
     sharedEmpresas.forEach((e) => {
       if (!seen.has(e.ownerWorkspaceId)) {
@@ -2306,19 +2361,74 @@ function FileDashboard({
     <div className="flex-1 overflow-y-auto" style={{ background: "#1a1a2e" }}>
       <div className="max-w-2xl mx-auto px-4 py-8">
 
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold" style={{ color: "#e2b04a" }}>Archivos</h2>
-          <p className="text-sm mt-1" style={{ color: "#6a8ab0" }}>Seleccioná workspace y empresa para ver y gestionar archivos</p>
-        </div>
-
+        {/* ── Espacio de trabajo header ── */}
         {user && (
-          <>
-            {/* ── Workspace selector ── */}
-            {workspaces.length > 0 && (
-              <div className="mb-4 p-4 rounded-xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
-                <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#6a8ab0" }}>Workspace</p>
+          <div className="mb-6 p-5 rounded-2xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+            <div className="flex items-center gap-4">
+              {/* Logo */}
+              <label className="cursor-pointer flex-shrink-0 relative group" title="Cambiar logo">
+                <input type="file" accept="image/*" className="sr-only"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    try { onChangeWorkspaceLogo(await resizeLogoToBase64(f)); } catch { /* ignore */ }
+                  }} />
+                <div className="w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center"
+                  style={{ background: "#0d1b35", border: "2px solid #2a4a6a" }}>
+                  {workspaceLogo
+                    ? <img src={workspaceLogo} alt="logo" className="w-full h-full object-cover" />
+                    : <span className="text-2xl select-none">🏢</span>
+                  }
+                </div>
+                <div className="absolute inset-0 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ background: "rgba(0,0,0,0.55)", fontSize: 18 }}>✏️</div>
+              </label>
+
+              {/* Name */}
+              <div className="flex-1 min-w-0">
+                {editingWsName ? (
+                  <div className="flex gap-2">
+                    <input autoFocus value={wsNameDraft}
+                      onChange={(e) => setWsNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { onRenameWorkspace(wsNameDraft.trim()); setEditingWsName(false); }
+                        if (e.key === "Escape") setEditingWsName(false);
+                      }}
+                      className="flex-1 rounded px-3 py-1.5 text-lg font-bold"
+                      style={{ background: "#0d1b35", border: "1px solid #3a6aaa", color: "#e2b04a", outline: "none" }} />
+                    <button onClick={() => { onRenameWorkspace(wsNameDraft.trim()); setEditingWsName(false); }}
+                      className="px-3 py-1.5 rounded font-semibold text-sm"
+                      style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
+                    <button onClick={() => setEditingWsName(false)}
+                      className="px-3 py-1.5 rounded text-sm"
+                      style={{ background: "#1a2a4a", color: "#6a8ab0" }}>✕</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 group">
+                    <h2 className="text-xl font-bold truncate" style={{ color: "#e2b04a" }}>
+                      {workspaceName || "Mi espacio"}
+                    </h2>
+                    <button
+                      onClick={() => { setWsNameDraft(workspaceName); setEditingWsName(true); }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-1.5 py-0.5 rounded"
+                      style={{ color: "#6a8ab0", background: "#0d1b35" }}>✏️</button>
+                    {workspaceLogo && (
+                      <button onClick={() => onChangeWorkspaceLogo("")}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-1.5 py-0.5 rounded"
+                        style={{ color: "#6a8ab0", background: "#0d1b35" }} title="Quitar logo">✕ logo</button>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs mt-0.5" style={{ color: "#4a6a8a" }}>Espacio de trabajo</p>
+              </div>
+            </div>
+
+            {/* Shared workspaces (read-only toggle) */}
+            {workspaces.length > 1 && (
+              <div className="mt-4 pt-3" style={{ borderTop: "1px solid #1a3460" }}>
+                <p className="text-xs mb-2" style={{ color: "#4a6a8a" }}>También tenés acceso a:</p>
                 <div className="flex flex-wrap gap-2">
-                  {workspaces.map((ws) => {
+                  {workspaces.filter((ws) => !ws.isOwn).map((ws) => {
                     const active = selWs.has(ws.id);
                     return (
                       <button key={ws.id} onClick={() => toggleWs(ws.id)}
@@ -2328,101 +2438,155 @@ function FileDashboard({
                           border: `2px solid ${active ? "#2a6aaa" : "#1a3460"}`,
                           color: active ? "#e0e8f0" : "#6a8ab0",
                         }}>
-                        {ws.isOwn ? "📁 " : "🤝 "}{ws.label}
-                        {active && selWs.size > 1 && <span className="ml-1 text-xs opacity-60">✓</span>}
+                        🤝 {ws.label}
                       </button>
                     );
                   })}
                 </div>
               </div>
             )}
+          </div>
+        )}
 
-            {/* ── Empresa selector ── */}
-            {availableEmpresas.length > 0 && (
-              <div className="mb-4 p-4 rounded-xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresa</p>
-                  <div className="flex gap-2">
-                    {primaryEmpresa?.isOwner && primaryEmpresaId && (
-                      <button className="text-xs px-2 py-1 rounded"
-                        style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
-                        onClick={() => { setShowInvite(!showInvite); setShowNewEmpresa(false); }}>
-                        Invitar →
-                      </button>
-                    )}
-                    {selWs.has(user.id) && (
-                      <button className="text-xs px-2 py-1 rounded"
-                        style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
-                        onClick={() => { setShowNewEmpresa(!showNewEmpresa); setShowInvite(false); }}>
-                        + Nueva
-                      </button>
-                    )}
-                  </div>
+        {user && (
+          <>
+            {/* ── Empresas ── */}
+            <div className="mb-4 p-4 rounded-xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresas</p>
+                <div className="flex gap-2">
+                  {primaryEmpresa?.isOwner && primaryEmpresaId && (
+                    <button className="text-xs px-2 py-1 rounded"
+                      style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
+                      onClick={() => { setShowInvite(!showInvite); setShowNewEmpresa(false); }}>
+                      Invitar →
+                    </button>
+                  )}
+                  {selWs.has(user.id) && (
+                    <button className="text-xs px-2 py-1 rounded"
+                      style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
+                      onClick={() => { setShowNewEmpresa(!showNewEmpresa); setShowInvite(false); }}>
+                      + Nueva
+                    </button>
+                  )}
                 </div>
+              </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {availableEmpresas.map((emp) => {
-                    const active = selEmp.has(emp.id);
-                    const isPrimary = emp.id === primaryEmpresaId;
+              {/* Empresa list with inline edit/delete */}
+              <div className="space-y-1.5">
+                {availableEmpresas.map((emp) => {
+                  const active = selEmp.has(emp.id);
+                  const isPrimary = emp.id === primaryEmpresaId;
+                  const isRenaming = renamingEmpresaId === emp.id;
+                  const isDeleting = deletingEmpresaId === emp.id;
+
+                  if (isRenaming) {
                     return (
-                      <button key={emp.id} onClick={() => toggleEmp(emp.id)}
-                        className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                      <div key={emp.id} className="flex gap-2">
+                        <input autoFocus value={empresaNameDraft}
+                          onChange={(e) => setEmpresaNameDraft(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key === "Enter" && empresaNameDraft.trim()) {
+                              setEmpresaMutating(true);
+                              await onRenameEmpresa(emp.id, empresaNameDraft.trim());
+                              setRenamingEmpresaId(null);
+                              setEmpresaMutating(false);
+                            }
+                            if (e.key === "Escape") setRenamingEmpresaId(null);
+                          }}
+                          className="flex-1 rounded px-3 py-1.5 text-sm"
+                          style={{ background: "#0d1b35", border: "1px solid #3a6aaa", color: "#e0e0e0", outline: "none" }} />
+                        <button disabled={empresaMutating || !empresaNameDraft.trim()}
+                          onClick={async () => {
+                            setEmpresaMutating(true);
+                            await onRenameEmpresa(emp.id, empresaNameDraft.trim());
+                            setRenamingEmpresaId(null);
+                            setEmpresaMutating(false);
+                          }}
+                          className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
+                          style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
+                        <button onClick={() => setRenamingEmpresaId(null)}
+                          className="px-2 py-1.5 rounded text-sm"
+                          style={{ background: "#1a2a4a", color: "#6a8ab0" }}>✕</button>
+                      </div>
+                    );
+                  }
+
+                  if (isDeleting) {
+                    return (
+                      <div key={emp.id} className="flex items-center gap-2 p-2 rounded-lg"
+                        style={{ background: "#2a0a0a", border: "1px solid #6a1a1a" }}>
+                        <span className="flex-1 text-sm" style={{ color: "#e24a4a" }}>
+                          ¿Eliminar <strong>{emp.name}</strong>? Esta acción no se puede deshacer.
+                        </span>
+                        <button disabled={empresaMutating}
+                          onClick={async () => {
+                            setEmpresaMutating(true);
+                            await onDeleteEmpresa(emp.id);
+                            setDeletingEmpresaId(null);
+                            setEmpresaMutating(false);
+                          }}
+                          className="px-3 py-1 rounded text-sm font-semibold disabled:opacity-50"
+                          style={{ background: "#e24a4a", color: "#fff" }}>
+                          {empresaMutating ? "..." : "Eliminar"}
+                        </button>
+                        <button onClick={() => setDeletingEmpresaId(null)}
+                          className="px-2 py-1 rounded text-sm"
+                          style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={emp.id} className="flex items-center gap-2 group">
+                      <button onClick={() => toggleEmp(emp.id)}
+                        className="flex-1 text-left px-3 py-2 rounded-lg text-sm font-semibold transition-all"
                         style={{
                           background: active ? "#1a3a60" : "#0f2040",
                           border: `2px solid ${isPrimary ? "#3dbb6e" : active ? "#2a5298" : "#1a3460"}`,
                           color: active ? "#e2b04a" : "#6a8ab0",
                         }}>
                         {emp.name}
+                        {isPrimary && selEmp.size > 1 && <span className="ml-1 text-xs opacity-60">(principal)</span>}
                       </button>
-                    );
-                  })}
-                </div>
-
-                {selEmp.size > 1 && (
-                  <p className="text-xs mt-2" style={{ color: "#4a6a8a" }}>
-                    Mostrando archivos de {selEmp.size} empresas · los nuevos archivos van a <strong style={{ color: "#aac4e0" }}>{primaryEmpresa?.name}</strong>
-                  </p>
-                )}
-
-                {showNewEmpresa && (
-                  <div className="mt-3 flex gap-2">
-                    <input type="text" value={newEmpresaName} autoFocus
-                      onChange={(e) => setNewEmpresaName(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleNewEmpresa()}
-                      placeholder="Nombre de la empresa"
-                      className="flex-1 rounded px-3 py-1.5 text-sm"
-                      style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
-                    <button onClick={handleNewEmpresa} disabled={newEmpresaLoading}
-                      className="px-3 py-1.5 rounded text-sm font-semibold"
-                      style={{ background: "#3dbb6e", color: "#fff" }}>
-                      {newEmpresaLoading ? "..." : "Crear"}
-                    </button>
-                  </div>
-                )}
-
-                {showInvite && (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-xs" style={{ color: "#6a8ab0" }}>
-                      Invitar a <strong style={{ color: "#aac4e0" }}>{primaryEmpresa?.name}</strong> — el usuario verá esta empresa en su cuenta
-                    </p>
-                    <div className="flex gap-2">
-                      <input type="email" value={inviteEmail} autoFocus
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                        placeholder="email@ejemplo.com"
-                        className="flex-1 rounded px-3 py-1.5 text-sm"
-                        style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
-                      <button onClick={handleInvite} disabled={inviteLoading || !inviteEmail.trim()}
-                        className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                        style={{ background: "#1a4a80", color: "#e0e8f0", border: "1px solid #2a5298" }}>
-                        {inviteLoading ? "..." : "Invitar"}
-                      </button>
+                      {emp.isOwner && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => { setEmpresaNameDraft(emp.name); setRenamingEmpresaId(emp.id); }}
+                            className="p-1.5 rounded text-sm" style={{ background: "#1a2a4a", color: "#6a8ab0" }}
+                            title="Renombrar">✏️</button>
+                          <button onClick={() => setDeletingEmpresaId(emp.id)}
+                            className="p-1.5 rounded text-sm" style={{ background: "#2a0a0a", color: "#e24a4a" }}
+                            title="Eliminar">🗑</button>
+                        </div>
+                      )}
                     </div>
-                    {inviteMsg && <p className="text-xs" style={{ color: "#3dbb6e" }}>{inviteMsg}</p>}
-                  </div>
-                )}
+                  );
+                })}
               </div>
-            )}
+
+              {selEmp.size > 1 && (
+                <p className="text-xs mt-2" style={{ color: "#4a6a8a" }}>
+                  Mostrando archivos de {selEmp.size} empresas · los nuevos archivos van a <strong style={{ color: "#aac4e0" }}>{primaryEmpresa?.name}</strong>
+                </p>
+              )}
+
+              {showNewEmpresa && (
+                <div className="mt-3 flex gap-2">
+                  <input type="text" value={newEmpresaName} autoFocus
+                    onChange={(e) => setNewEmpresaName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleNewEmpresa()}
+                    placeholder="Nombre de la empresa"
+                    className="flex-1 rounded px-3 py-1.5 text-sm"
+                    style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
+                  <button onClick={handleNewEmpresa} disabled={newEmpresaLoading}
+                    className="px-3 py-1.5 rounded text-sm font-semibold"
+                    style={{ background: "#3dbb6e", color: "#fff" }}>
+                    {newEmpresaLoading ? "..." : "Crear"}
+                  </button>
+                </div>
+              )}
+
+            </div>
           </>
         )}
 
