@@ -2411,6 +2411,14 @@ function FileDashboard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primaryEmpresaId]);
 
+  // Auto-open first empresa so file sections are always visible on entry
+  useEffect(() => {
+    if (availableEmpresas.length > 0 && !empresaOpenId) {
+      setEmpresaOpenId(availableEmpresas[0].id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableEmpresas]);
+
   function toggleWs(id: string) {
     setSelWs((prev) => {
       const next = new Set(prev);
@@ -2624,6 +2632,19 @@ function FileDashboard({
                   className="px-3 py-1.5 rounded text-sm font-semibold"
                   style={{ background: "#3dbb6e", color: "#fff" }}>
                   {newEmpresaLoading ? "..." : "Crear"}
+                </button>
+              </div>
+            )}
+
+            {availableEmpresas.length === 0 && !showNewEmpresa && (
+              <div className="mb-4 p-4 rounded-xl text-center" style={{ background: "#16213e", border: "1px dashed #2a4a6a" }}>
+                <p className="text-sm mb-3" style={{ color: "#6a8ab0" }}>
+                  Creá una empresa para empezar a cargar archivos
+                </p>
+                <button onClick={() => setShowNewEmpresa(true)}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold"
+                  style={{ background: "#e2b04a", color: "#1a1a2e" }}>
+                  + Crear empresa
                 </button>
               </div>
             )}
