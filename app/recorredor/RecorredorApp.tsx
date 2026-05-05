@@ -170,8 +170,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [manejoTab, setManejoTab] = useState<"local" | "drive">("local");
   const [driveUrlInput, setDriveUrlInput] = useState("");
 
-  // View: 'dashboard' = file management screen; 'map' = map + sidebar
-  const [view, setView] = useState<"dashboard" | "map">("dashboard");
+  // View: 'picker' = workspace/empresa selector; 'dashboard' = file mgmt; 'map' = map
+  const [view, setView] = useState<"picker" | "dashboard" | "map">("picker");
+  const [pickerSelectedEmpIds, setPickerSelectedEmpIds] = useState<string[]>([]);
 
   // Empresas / workspace
   const [myEmpresas, setMyEmpresas] = useState<Empresa[]>([]);
@@ -251,9 +252,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user);
       setAuthLoaded(true);
+      if (!data.user) setView("dashboard"); // skip picker for anonymous
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null);
+      if (!session?.user) setView("dashboard");
     });
     return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -300,6 +303,15 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     const emps = await getEmpresas(supabase, wsId);
     setMyEmpresas(emps);
     if (emps.length > 0) setActiveEmpresaId(emps[0].id);
+  }
+
+  async function handlePickerConfirm(wsId: string, empIds: string[], allEmps: Empresa[]) {
+    persistActiveWorkspaceId(wsId);
+    setActiveWorkspaceId(wsId);
+    setMyEmpresas(allEmps);
+    setPickerSelectedEmpIds(empIds);
+    setActiveEmpresaId(empIds[0] ?? allEmps[0]?.id);
+    setView("dashboard");
   }
 
   // ── Invalidate map size when switching to map view ───────────────────────────
@@ -1164,6 +1176,22 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         </div>
       )}
 
+      {/* ── PICKER VIEW ── */}
+      {view === "picker" && authLoaded && (
+        <WorkspacePicker
+          supabase={supabase}
+          workspaceSummaries={workspaceSummaries}
+          defaultWsId={activeWorkspaceId ?? getActiveWorkspaceId() ?? undefined}
+          defaultEmpIds={pickerSelectedEmpIds}
+          onConfirm={handlePickerConfirm}
+        />
+      )}
+      {view === "picker" && !authLoaded && (
+        <div className="flex-1 flex items-center justify-center" style={{ background: "#1a1a2e" }}>
+          <span className="text-2xl font-bold tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</span>
+        </div>
+      )}
+
       {/* ── DASHBOARD VIEW ── */}
       {view === "dashboard" && (
         <FileDashboard
@@ -1235,6 +1263,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           onUnlinkDrive={() => { setDriveManejo(null); setManejoColMapping(null); setDriveUrlInput(""); }}
           onRefreshDrive={() => { if (driveManejo && manejoColMapping) refreshDriveWith(driveManejo, manejoColMapping); }}
           onGoToMap={() => setView("map")}
+          onGoToPicker={() => setView("picker")}
+          initialEmpresaIds={pickerSelectedEmpIds}
           workspaceSummaries={workspaceSummaries}
           onSwitchWorkspace={switchWorkspace}
           onCreateWorkspace={async (name) => {
@@ -2268,6 +2298,8 @@ function FileDashboard({
   myEmpresas, activeEmpresaId,
   onSelectEmpresa, onNewEmpresa, onRenameEmpresa, onDeleteEmpresa, onInvite,
   onUpdateEmpresaLogo,
+  initialEmpresaIds,
+  onGoToPicker,
   workspaceSummaries, onSwitchWorkspace, onCreateWorkspace,
   shpFiles, shpFileMeta, csvFiles, csvFileMeta, rindeFiles, rindeFileMeta,
   onUploadShp, onUploadCsv, onUploadRinde,
@@ -2292,6 +2324,8 @@ function FileDashboard({
   onDeleteEmpresa: (empresaId: string) => Promise<void>;
   onInvite: (empresaId: string, email: string) => Promise<void>;
   onUpdateEmpresaLogo: (empresaId: string, logo: string) => Promise<void>;
+  initialEmpresaIds: string[];
+  onGoToPicker: () => void;
   workspaceSummaries: WorkspaceSummary[];
   onSwitchWorkspace: (wsId: string) => Promise<void>;
   onCreateWorkspace: (name: string) => Promise<void>;
@@ -2375,7 +2409,8 @@ function FileDashboard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspaceId]);
   const [selEmp, setSelEmp] = useState<Set<string>>(() =>
-    activeEmpresaId ? new Set([activeEmpresaId]) : new Set()
+    initialEmpresaIds.length > 0 ? new Set(initialEmpresaIds)
+    : activeEmpresaId ? new Set([activeEmpresaId]) : new Set()
   );
 
   // Empresas visible in the active workspace
@@ -2597,12 +2632,17 @@ function FileDashboard({
               </>
             )}
 
-            {/* Link to configuracion */}
-            <div className="mt-3 pt-3 flex justify-end" style={{ borderTop: "1px solid #1a3460" }}>
+            {/* Link to configuracion + back to picker */}
+            <div className="mt-3 pt-3 flex justify-between items-center" style={{ borderTop: "1px solid #1a3460" }}>
+              <button onClick={onGoToPicker}
+                className="text-xs px-3 py-1 rounded-lg transition-all"
+                style={{ color: "#e2b04a", background: "#1a3060", border: "1px solid #2a5298" }}>
+                ↩ Cambiar espacio / empresa
+              </button>
               <a href="/configuracion"
                 className="text-xs px-3 py-1 rounded-lg transition-all"
                 style={{ color: "#6a8ab0", background: "#0f2040", border: "1px solid #1a3460" }}>
-                ⚙️ Administrar espacios →
+                ⚙️ Administrar →
               </a>
             </div>
           </div>
@@ -2844,6 +2884,176 @@ function FileDashboard({
             Ir a recorrer →
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── WorkspacePicker ────────────────────────────────────────────────────────────
+
+function WorkspacePicker({
+  supabase, workspaceSummaries, defaultWsId, defaultEmpIds, onConfirm,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any;
+  workspaceSummaries: WorkspaceSummary[];
+  defaultWsId?: string;
+  defaultEmpIds: string[];
+  onConfirm: (wsId: string, empIds: string[], allEmps: Empresa[]) => void;
+}) {
+  const [step, setStep] = useState<"workspace" | "empresa">("workspace");
+  const [selectedWsId, setSelectedWsId] = useState<string>(defaultWsId ?? "");
+  const [empresas, setEmpresas] = useState<Empresa[]>([]);
+  const [loadingEmps, setLoadingEmps] = useState(false);
+  const [selectedEmpIds, setSelectedEmpIds] = useState<Set<string>>(
+    new Set(defaultEmpIds)
+  );
+
+  async function loadEmpresas(wsId: string) {
+    setLoadingEmps(true);
+    const emps = await getEmpresas(supabase, wsId);
+    setEmpresas(emps);
+    setSelectedEmpIds((prev) => {
+      const valid = new Set(emps.map((e) => e.id));
+      const kept = new Set([...prev].filter((id) => valid.has(id)));
+      if (kept.size === 0 && emps.length > 0) return new Set([emps[0].id]);
+      return kept;
+    });
+    setLoadingEmps(false);
+  }
+
+  function selectWorkspace(wsId: string) {
+    setSelectedWsId(wsId);
+    loadEmpresas(wsId);
+    setStep("empresa");
+  }
+
+  function toggleEmpresa(id: string) {
+    setSelectedEmpIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) { if (next.size > 1) next.delete(id); }
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function confirm() {
+    onConfirm(selectedWsId, [...selectedEmpIds], empresas);
+  }
+
+  const selectedWs = workspaceSummaries.find((w) => w.id === selectedWsId);
+
+  if (workspaceSummaries.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center" style={{ background: "#1a1a2e" }}>
+        <div className="text-center">
+          <span className="text-2xl font-bold tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</span>
+          <p className="text-sm mt-2" style={{ color: "#6a8ab0" }}>Cargando espacios...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto" style={{ background: "#1a1a2e" }}>
+      <div className="w-full max-w-sm">
+
+        {/* Logo + title */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold tracking-widest mb-1" style={{ color: "#e2b04a" }}>I.Ag</h1>
+          <p className="text-sm" style={{ color: "#6a8ab0" }}>
+            {step === "workspace" ? "¿Con qué espacio de trabajo querés trabajar?" : `¿Qué empresa(s) de "${selectedWs?.name}"?`}
+          </p>
+        </div>
+
+        {/* Step: Workspace */}
+        {step === "workspace" && (
+          <div className="flex flex-col gap-3">
+            {workspaceSummaries.map((ws) => (
+              <button key={ws.id} onClick={() => selectWorkspace(ws.id)}
+                className="flex items-center gap-3 p-4 rounded-xl text-left transition-all hover:scale-[1.01]"
+                style={{ background: "#16213e", border: `2px solid ${ws.id === defaultWsId ? "#e2b04a" : "#0f3460"}` }}>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0"
+                  style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
+                  {ws.logo ? <img src={ws.logo} alt="" className="w-full h-full object-cover" /> : <span className="text-2xl">🏢</span>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-base truncate" style={{ color: ws.id === defaultWsId ? "#e2b04a" : "#e0e0e0" }}>
+                    {ws.name}
+                    {ws.id === defaultWsId && <span className="ml-2 text-xs font-normal" style={{ color: "#6a8ab0" }}>(actual)</span>}
+                  </p>
+                </div>
+                <span style={{ color: "#4a6a8a" }}>→</span>
+              </button>
+            ))}
+            <a href="/configuracion"
+              className="text-center text-xs py-2 rounded-lg mt-1"
+              style={{ color: "#4a6a8a", border: "1px dashed #1a3460" }}>
+              + Administrar espacios
+            </a>
+          </div>
+        )}
+
+        {/* Step: Empresa */}
+        {step === "empresa" && (
+          <div className="flex flex-col gap-3">
+            {loadingEmps ? (
+              <p className="text-center text-sm py-4" style={{ color: "#6a8ab0" }}>Cargando empresas...</p>
+            ) : empresas.length === 0 ? (
+              <div className="p-4 rounded-xl text-center" style={{ background: "#16213e", border: "1px dashed #2a4a6a" }}>
+                <p className="text-sm mb-2" style={{ color: "#6a8ab0" }}>Este espacio no tiene empresas aún.</p>
+                <a href="/configuracion" className="text-xs px-3 py-1.5 rounded-lg font-semibold"
+                  style={{ background: "#e2b04a", color: "#1a1a2e" }}>Crear empresa →</a>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>
+                    Seleccioná una o varias
+                  </p>
+                  <button onClick={() => setSelectedEmpIds(new Set(empresas.map((e) => e.id)))}
+                    className="text-xs px-2 py-1 rounded" style={{ color: "#aac4e0", background: "#0f2040" }}>
+                    Todas
+                  </button>
+                </div>
+                {empresas.map((emp) => {
+                  const sel = selectedEmpIds.has(emp.id);
+                  return (
+                    <button key={emp.id} onClick={() => toggleEmpresa(emp.id)}
+                      className="flex items-center gap-3 p-3.5 rounded-xl text-left transition-all"
+                      style={{ background: sel ? "#1a3a60" : "#16213e", border: `2px solid ${sel ? "#3dbb6e" : "#0f3460"}` }}>
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0"
+                        style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
+                        {emp.logo ? <img src={emp.logo} alt="" className="w-full h-full object-cover" /> : <span className="text-lg">🏛</span>}
+                      </div>
+                      <span className="flex-1 font-semibold text-sm" style={{ color: sel ? "#e2b04a" : "#aac4e0" }}>
+                        {emp.name}
+                      </span>
+                      <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                        style={{ borderColor: sel ? "#3dbb6e" : "#2a4a6a", background: sel ? "#3dbb6e" : "transparent" }}>
+                        {sel && <span className="text-xs font-bold" style={{ color: "#fff" }}>✓</span>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
+            <div className="flex gap-3 mt-2">
+              <button onClick={() => setStep("workspace")}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold"
+                style={{ background: "#16213e", color: "#6a8ab0", border: "1px solid #0f3460" }}>
+                ← Volver
+              </button>
+              <button onClick={confirm} disabled={selectedEmpIds.size === 0 || empresas.length === 0}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40"
+                style={{ background: "#3dbb6e", color: "#fff" }}>
+                Recorrer ({selectedEmpIds.size}) →
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
