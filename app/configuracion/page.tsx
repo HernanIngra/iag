@@ -13,6 +13,7 @@ import {
   createEmpresa,
   renameEmpresa,
   deleteEmpresa,
+  updateEmpresaLogo,
   inviteToEmpresa,
   acceptPendingEmpresaInvites,
   type WorkspaceSummary,
@@ -78,6 +79,7 @@ export default function ConfiguracionPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteMsg, setInviteMsg] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null);
 
   const _tab: Tab = "workspaces"; // single tab for now
 
@@ -216,8 +218,22 @@ export default function ConfiguracionPage() {
     }
   }
 
+  async function handleEmpresaLogo(empId: string, file: File) {
+    try {
+      const logo = await resizeLogoToBase64(file);
+      await updateEmpresaLogo(supabase, empId, logo);
+      setEmpresas((prev) => prev.map((e) => e.id === empId ? { ...e, logo } : e));
+    } catch { /* ignore */ }
+  }
+
   function goToRecorredor(wsId: string) {
     setActiveWorkspaceId(wsId);
+    window.location.href = "/recorredor";
+  }
+
+  function goToRecorredorWithEmpresa(wsId: string, empId: string) {
+    setActiveWorkspaceId(wsId);
+    localStorage.setItem("iag_pending_empresa_open", empId);
     window.location.href = "/recorredor";
   }
 
@@ -475,10 +491,32 @@ export default function ConfiguracionPage() {
                             }
 
                             return (
-                              <div key={emp.id}>
-                                <div className="flex items-center gap-2 group px-3 py-2 rounded-lg"
-                                  style={{ background: "#0f2040", border: "1px solid #1a3460" }}>
-                                  <span className="flex-1 text-sm" style={{ color: "#aac4e0" }}>{emp.name}</span>
+                              <div key={emp.id} className="rounded-lg overflow-hidden"
+                                style={{ background: "#0f2040", border: `1px solid ${expandedEmpId === emp.id ? "#2a5298" : "#1a3460"}` }}>
+                                {/* Empresa header row */}
+                                <div className="flex items-center gap-2 px-3 py-2 group">
+                                  {/* Logo */}
+                                  <label className="cursor-pointer group/logo relative flex-shrink-0" title="Cambiar logo">
+                                    <input type="file" accept="image/*" className="sr-only"
+                                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEmpresaLogo(emp.id, f); }} />
+                                    <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"
+                                      style={{ background: "#16213e", border: "1px solid #2a4a6a" }}>
+                                      {emp.logo
+                                        ? <img src={emp.logo} alt="" className="w-full h-full object-cover" />
+                                        : <span className="text-sm">🏛</span>
+                                      }
+                                    </div>
+                                    <div className="absolute inset-0 rounded-lg flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity"
+                                      style={{ background: "rgba(0,0,0,0.6)", fontSize: 11 }}>🖼</div>
+                                  </label>
+                                  <button className="flex-1 text-left text-sm font-semibold"
+                                    style={{ color: "#aac4e0" }}
+                                    onClick={() => setExpandedEmpId(expandedEmpId === emp.id ? null : emp.id)}>
+                                    {emp.name}
+                                    <span className="ml-2 text-xs" style={{ color: "#4a6a8a" }}>
+                                      {expandedEmpId === emp.id ? "▲" : "▼"}
+                                    </span>
+                                  </button>
                                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => { setInviteEmail(""); setInviteMsg(""); setShowInvite(showInvite === emp.id ? null : emp.id); }}
                                       className="px-2 py-1 rounded text-xs"
@@ -486,13 +524,30 @@ export default function ConfiguracionPage() {
                                       Invitar
                                     </button>
                                     <button onClick={() => { setEmpNameDraft(emp.name); setRenamingEmpId(emp.id); }}
-                                      className="p-1.5 rounded text-sm" style={{ color: "#6a8ab0", background: "#0d1b35" }}>✏️</button>
+                                      className="p-1.5 rounded text-xs" style={{ color: "#6a8ab0", background: "#0d1b35" }}>✏️</button>
                                     <button onClick={() => setDeletingEmpId(emp.id)}
-                                      className="p-1.5 rounded text-sm" style={{ color: "#e24a4a", background: "#2a0a0a" }}>🗑</button>
+                                      className="p-1.5 rounded text-xs" style={{ color: "#e24a4a", background: "#2a0a0a" }}>🗑</button>
                                   </div>
                                 </div>
+
+                                {/* Expanded: file management */}
+                                {expandedEmpId === emp.id && (
+                                  <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid #1a3460" }}>
+                                    <p className="text-xs mb-2 mt-2" style={{ color: "#6a8ab0" }}>
+                                      Subí y gestioná los archivos de esta empresa desde el Recorredor.
+                                    </p>
+                                    <button
+                                      onClick={() => goToRecorredorWithEmpresa(ws.id, emp.id)}
+                                      className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+                                      style={{ background: "#1a4a80", color: "#e2b04a", border: "1px solid #2a5298" }}>
+                                      📂 Gestionar archivos (Mapa, Manejo, Rindes, Lluvias) →
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Invite panel */}
                                 {showInvite === emp.id && (
-                                  <div className="mt-1 mx-1 p-3 rounded-lg flex gap-2 flex-col"
+                                  <div className="mx-2 mb-2 p-3 rounded-lg flex gap-2 flex-col"
                                     style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
                                     <div className="flex gap-2">
                                       <input type="email" value={inviteEmail}

@@ -54,6 +54,8 @@ import {
   inviteToEmpresa,
   renameEmpresa,
   deleteEmpresa,
+  updateEmpresaLogo,
+  type WorkspaceSummary,
   type Workspace,
   type LotVisit,
   type DriveManejo,
@@ -175,6 +177,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [myEmpresas, setMyEmpresas] = useState<Empresa[]>([]);
   const [activeEmpresaId, setActiveEmpresaId] = useState<string | undefined>(undefined);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [workspaceSummaries, setWorkspaceSummaries] = useState<WorkspaceSummary[]>([]);
 
   // File meta (parallel arrays with shpFiles/csvFiles/rindeFiles, includes empresaId)
   const [shpFileMeta, setShpFileMeta] = useState<FileMeta[]>([]);
@@ -262,6 +265,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     if (!user) return;
     acceptPendingEmpresaInvites(supabase).catch(() => {});
 
+    const uid = effectiveUserId ?? user.id;
+    loadWorkspaceSummaries(supabase, uid).then((s) => setWorkspaceSummaries(s));
+
     const storedWsId = getActiveWorkspaceId();
     if (storedWsId) {
       setActiveWorkspaceId(storedWsId);
@@ -270,7 +276,6 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
       });
     } else {
-      const uid = effectiveUserId ?? user.id;
       loadWorkspaceSummaries(supabase, uid).then(async (summaries) => {
         let wsId: string;
         if (summaries.length > 0) {
@@ -287,6 +292,15 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  async function switchWorkspace(wsId: string) {
+    persistActiveWorkspaceId(wsId);
+    setActiveWorkspaceId(wsId);
+    setActiveEmpresaId(undefined);
+    const emps = await getEmpresas(supabase, wsId);
+    setMyEmpresas(emps);
+    if (emps.length > 0) setActiveEmpresaId(emps[0].id);
+  }
 
   // ── Invalidate map size when switching to map view ───────────────────────────
 
@@ -1221,6 +1235,19 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           onUnlinkDrive={() => { setDriveManejo(null); setManejoColMapping(null); setDriveUrlInput(""); }}
           onRefreshDrive={() => { if (driveManejo && manejoColMapping) refreshDriveWith(driveManejo, manejoColMapping); }}
           onGoToMap={() => setView("map")}
+          workspaceSummaries={workspaceSummaries}
+          onSwitchWorkspace={switchWorkspace}
+          onCreateWorkspace={async (name) => {
+            if (!user) return;
+            const wsId = await createWorkspace(supabase, user.id, name);
+            const summaries = await loadWorkspaceSummaries(supabase, user.id);
+            setWorkspaceSummaries(summaries);
+            await switchWorkspace(wsId);
+          }}
+          onUpdateEmpresaLogo={async (empresaId, logo) => {
+            await updateEmpresaLogo(supabase, empresaId, logo);
+            setMyEmpresas((prev) => prev.map((e) => e.id === empresaId ? { ...e, logo } : e));
+          }}
         />
       )}
 
@@ -2232,7 +2259,7 @@ function ColumnMappingModal({
 
 // ── FileDashboard ─────────────────────────────────────────────────────────────
 
-interface EmpresaItem  { id: string; name: string; workspaceId: string; isOwner: boolean }
+interface EmpresaItem  { id: string; name: string; logo: string; workspaceId: string; isOwner: boolean }
 
 function FileDashboard({
   user, activeWorkspaceId,
@@ -2240,6 +2267,8 @@ function FileDashboard({
   onRenameWorkspace, onChangeWorkspaceLogo,
   myEmpresas, activeEmpresaId,
   onSelectEmpresa, onNewEmpresa, onRenameEmpresa, onDeleteEmpresa, onInvite,
+  onUpdateEmpresaLogo,
+  workspaceSummaries, onSwitchWorkspace, onCreateWorkspace,
   shpFiles, shpFileMeta, csvFiles, csvFileMeta, rindeFiles, rindeFileMeta,
   onUploadShp, onUploadCsv, onUploadRinde,
   onRemoveShp, onRemoveCsv, onRemoveRinde,
@@ -2262,6 +2291,10 @@ function FileDashboard({
   onRenameEmpresa: (empresaId: string, newName: string) => Promise<void>;
   onDeleteEmpresa: (empresaId: string) => Promise<void>;
   onInvite: (empresaId: string, email: string) => Promise<void>;
+  onUpdateEmpresaLogo: (empresaId: string, logo: string) => Promise<void>;
+  workspaceSummaries: WorkspaceSummary[];
+  onSwitchWorkspace: (wsId: string) => Promise<void>;
+  onCreateWorkspace: (name: string) => Promise<void>;
   shpFiles: string[]; shpFileMeta: FileMeta[];
   csvFiles: string[]; csvFileMeta: FileMeta[];
   rindeFiles: string[]; rindeFileMeta: FileMeta[];
@@ -2302,7 +2335,15 @@ function FileDashboard({
   const [empresaNameDraft, setEmpresaNameDraft] = useState("");
   const [deletingEmpresaId, setDeletingEmpresaId] = useState<string | null>(null);
   const [empresaMutating, setEmpresaMutating] = useState(false);
-  const [empresaOpenId, setEmpresaOpenId] = useState<string | null>(null);
+  const [empresaOpenId, setEmpresaOpenId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const pending = localStorage.getItem("iag_pending_empresa_open");
+    if (pending) { localStorage.removeItem("iag_pending_empresa_open"); return pending; }
+    return null;
+  });
+  const [wsSwitcherOpen, setWsSwitcherOpen] = useState(false);
+  const [newWsSwitcherName, setNewWsSwitcherName] = useState("");
+  const [newWsSwitcherLoading, setNewWsSwitcherLoading] = useState(false);
 
   async function resizeLogoToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -2342,6 +2383,7 @@ function FileDashboard({
     return myEmpresas.map((e) => ({
       id: e.id,
       name: e.name,
+      logo: e.logo ?? "",
       workspaceId: e.workspaceId,
       isOwner: true,
     }));
@@ -2429,28 +2471,23 @@ function FileDashboard({
 
         {/* ── Espacio de trabajo header ── */}
         {user && (
-          <div className="mb-6 p-5 rounded-2xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+          <div className="mb-6 p-5 rounded-2xl relative" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
             <div className="flex items-center gap-4">
-              {/* Logo */}
-              <label className="cursor-pointer flex-shrink-0 relative group" title="Cambiar logo">
-                <input type="file" accept="image/*" className="sr-only"
-                  onChange={async (e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    try { onChangeWorkspaceLogo(await resizeLogoToBase64(f)); } catch { /* ignore */ }
-                  }} />
+              {/* Logo — click to open workspace switcher */}
+              <button className="flex-shrink-0 relative group" title="Cambiar espacio de trabajo"
+                onClick={() => setWsSwitcherOpen((v) => !v)}>
                 <div className="w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center"
-                  style={{ background: "#0d1b35", border: "2px solid #2a4a6a" }}>
+                  style={{ background: "#0d1b35", border: `2px solid ${wsSwitcherOpen ? "#e2b04a" : "#2a4a6a"}` }}>
                   {workspaceLogo
                     ? <img src={workspaceLogo} alt="logo" className="w-full h-full object-cover" />
                     : <span className="text-2xl select-none">🏢</span>
                   }
                 </div>
                 <div className="absolute inset-0 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ background: "rgba(0,0,0,0.55)", fontSize: 18 }}>✏️</div>
-              </label>
+                  style={{ background: "rgba(0,0,0,0.55)", fontSize: 13 }}>↕</div>
+              </button>
 
-              {/* Name */}
+              {/* Name + edit */}
               <div className="flex-1 min-w-0">
                 {editingWsName ? (
                   <div className="flex gap-2">
@@ -2474,22 +2511,85 @@ function FileDashboard({
                     <h2 className="text-xl font-bold truncate" style={{ color: "#e2b04a" }}>
                       {workspaceName || "Mi espacio"}
                     </h2>
-                    <button
-                      onClick={() => { setWsNameDraft(workspaceName); setEditingWsName(true); }}
+                    <button onClick={() => { setWsNameDraft(workspaceName); setEditingWsName(true); }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-1.5 py-0.5 rounded"
                       style={{ color: "#6a8ab0", background: "#0d1b35" }}>✏️</button>
-                    {workspaceLogo && (
-                      <button onClick={() => onChangeWorkspaceLogo("")}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-1.5 py-0.5 rounded"
-                        style={{ color: "#6a8ab0", background: "#0d1b35" }} title="Quitar logo">✕ logo</button>
-                    )}
                   </div>
                 )}
-                <p className="text-xs mt-0.5" style={{ color: "#4a6a8a" }}>Espacio de trabajo</p>
+                <p className="text-xs mt-0.5" style={{ color: "#4a6a8a" }}>Espacio de trabajo · tocá el logo para cambiar</p>
               </div>
+
+              {/* Logo upload (small button) */}
+              <label className="cursor-pointer text-xs px-2 py-1 rounded flex-shrink-0"
+                style={{ background: "#0d1b35", color: "#6a8ab0", border: "1px solid #1a3460" }}
+                title="Cambiar logo">
+                <input type="file" accept="image/*" className="sr-only"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    try { onChangeWorkspaceLogo(await resizeLogoToBase64(f)); } catch { /* ignore */ }
+                  }} />
+                🖼
+              </label>
             </div>
 
-            {/* Link to configuracion for workspace management */}
+            {/* Workspace switcher dropdown */}
+            {wsSwitcherOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setWsSwitcherOpen(false)} />
+                <div className="absolute left-5 top-20 z-20 rounded-xl overflow-hidden w-64 shadow-xl"
+                  style={{ background: "#0f2040", border: "1px solid #2a5298" }}>
+                  {workspaceSummaries.map((ws) => (
+                    <button key={ws.id} onClick={async () => { await onSwitchWorkspace(ws.id); setWsSwitcherOpen(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#1a3060] transition-colors"
+                      style={{ borderBottom: "1px solid #1a3460" }}>
+                      <div className="w-7 h-7 rounded overflow-hidden flex items-center justify-center flex-shrink-0"
+                        style={{ background: "#1a2a4a" }}>
+                        {ws.logo ? <img src={ws.logo} alt="" className="w-full h-full object-cover" /> : <span className="text-sm">🏢</span>}
+                      </div>
+                      <span className="text-sm truncate" style={{ color: ws.id === activeWorkspaceId ? "#e2b04a" : "#aac4e0" }}>
+                        {ws.name}
+                        {ws.id === activeWorkspaceId && <span className="ml-1 text-xs opacity-60">✓</span>}
+                      </span>
+                    </button>
+                  ))}
+                  <div className="p-2">
+                    {newWsSwitcherLoading ? (
+                      <p className="text-xs text-center py-1" style={{ color: "#6a8ab0" }}>Creando...</p>
+                    ) : newWsSwitcherName !== "" ? (
+                      <div className="flex gap-1">
+                        <input autoFocus value={newWsSwitcherName}
+                          onChange={(e) => setNewWsSwitcherName(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key === "Enter" && newWsSwitcherName.trim()) {
+                              setNewWsSwitcherLoading(true);
+                              await onCreateWorkspace(newWsSwitcherName.trim());
+                              setNewWsSwitcherName(""); setNewWsSwitcherLoading(false); setWsSwitcherOpen(false);
+                            }
+                            if (e.key === "Escape") setNewWsSwitcherName("");
+                          }}
+                          placeholder="Nombre"
+                          className="flex-1 rounded px-2 py-1 text-xs"
+                          style={{ background: "#0d1b35", border: "1px solid #2a5298", color: "#e0e0e0", outline: "none" }} />
+                        <button onClick={async () => {
+                          if (!newWsSwitcherName.trim()) return;
+                          setNewWsSwitcherLoading(true);
+                          await onCreateWorkspace(newWsSwitcherName.trim());
+                          setNewWsSwitcherName(""); setNewWsSwitcherLoading(false); setWsSwitcherOpen(false);
+                        }} className="px-2 py-1 rounded text-xs font-semibold"
+                          style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setNewWsSwitcherName(" ")}
+                        className="w-full text-xs py-1.5 rounded hover:bg-[#1a3060] transition-colors"
+                        style={{ color: "#6a8ab0" }}>+ Nuevo espacio</button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Link to configuracion */}
             <div className="mt-3 pt-3 flex justify-end" style={{ borderTop: "1px solid #1a3460" }}>
               <a href="/configuracion"
                 className="text-xs px-3 py-1 rounded-lg transition-all"
@@ -2599,7 +2699,24 @@ function FileDashboard({
                   <div key={emp.id} className="rounded-xl overflow-hidden"
                     style={{ background: "#16213e", border: `1px solid ${isOpen ? "#2a5298" : "#0f3460"}` }}>
                     {/* Folder header */}
-                    <div className="flex items-center gap-2 px-3 py-2.5">
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      {/* Empresa logo — upload on click */}
+                      <label className="cursor-pointer group relative flex-shrink-0" title="Cambiar logo">
+                        <input type="file" accept="image/*" className="sr-only"
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0]; if (!f) return;
+                            try { await onUpdateEmpresaLogo(emp.id, await resizeLogoToBase64(f)); } catch { /* ignore */ }
+                          }} />
+                        <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"
+                          style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
+                          {emp.logo
+                            ? <img src={emp.logo} alt="" className="w-full h-full object-cover" />
+                            : <span className="text-sm">🏛</span>
+                          }
+                        </div>
+                        <div className="absolute inset-0 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ background: "rgba(0,0,0,0.6)", fontSize: 11 }}>🖼</div>
+                      </label>
                       <button
                         onClick={() => {
                           const next = isOpen ? null : emp.id;
@@ -2607,10 +2724,10 @@ function FileDashboard({
                           if (next) onSelectEmpresa(emp.id);
                         }}
                         className="flex-1 flex items-center gap-2 text-left min-w-0">
-                        <span className="text-xs shrink-0" style={{ color: "#6a8ab0" }}>{isOpen ? "▼" : "▶"}</span>
                         <span className="text-sm font-semibold truncate" style={{ color: isOpen ? "#e2b04a" : "#aac4e0" }}>
                           {emp.name}
                         </span>
+                        <span className="text-xs shrink-0" style={{ color: "#4a6a8a" }}>{isOpen ? "▲" : "▼"}</span>
                       </button>
                       {emp.isOwner && (
                         <div className="flex gap-1 shrink-0">

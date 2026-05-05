@@ -403,6 +403,7 @@ export async function setOnboardingDone(supabase: SupabaseClient, role: string):
 export interface Empresa {
   id: string;
   name: string;
+  logo: string;
   ownerId: string;
   workspaceId: string;
 }
@@ -413,13 +414,14 @@ export async function getEmpresas(
 ): Promise<Empresa[]> {
   const { data, error } = await supabase
     .from("empresas")
-    .select("id, name, owner_id, workspace_id")
+    .select("id, name, logo, owner_id, workspace_id")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: true });
   if (error || !data) return [];
-  return (data as Array<{ id: string; name: string; owner_id: string; workspace_id: string }>).map((e) => ({
+  return (data as Array<{ id: string; name: string; logo: string; owner_id: string; workspace_id: string }>).map((e) => ({
     id: e.id,
     name: e.name,
+    logo: e.logo ?? "",
     ownerId: e.owner_id,
     workspaceId: e.workspace_id,
   }));
@@ -434,12 +436,21 @@ export async function createEmpresa(
   if (!authData.user) throw new Error("No autenticado");
   const { data, error } = await supabase
     .from("empresas")
-    .insert({ workspace_id: workspaceId, owner_id: authData.user.id, name })
-    .select("id, name, owner_id, workspace_id")
+    .insert({ workspace_id: workspaceId, owner_id: authData.user.id, name, logo: "" })
+    .select("id, name, logo, owner_id, workspace_id")
     .single();
   if (error || !data) throw new Error(error?.message ?? "Error al crear empresa");
-  const d = data as { id: string; name: string; owner_id: string; workspace_id: string };
-  return { id: d.id, name: d.name, ownerId: d.owner_id, workspaceId: d.workspace_id };
+  const d = data as { id: string; name: string; logo: string; owner_id: string; workspace_id: string };
+  return { id: d.id, name: d.name, logo: d.logo ?? "", ownerId: d.owner_id, workspaceId: d.workspace_id };
+}
+
+export async function updateEmpresaLogo(
+  supabase: SupabaseClient,
+  empresaId: string,
+  logo: string
+): Promise<void> {
+  const { error } = await supabase.from("empresas").update({ logo }).eq("id", empresaId);
+  if (error) throw new Error(error.message);
 }
 
 // ─── Shared empresas ──────────────────────────────────────────────────────────
