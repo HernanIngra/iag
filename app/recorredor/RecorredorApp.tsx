@@ -2301,6 +2301,7 @@ function FileDashboard({
   const [empresaNameDraft, setEmpresaNameDraft] = useState("");
   const [deletingEmpresaId, setDeletingEmpresaId] = useState<string | null>(null);
   const [empresaMutating, setEmpresaMutating] = useState(false);
+  const [empresaOpenId, setEmpresaOpenId] = useState<string | null>(null);
 
   async function resizeLogoToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -2495,161 +2496,155 @@ function FileDashboard({
 
         {user && (
           <>
-            {/* ── Empresas ── */}
-            <div className="mb-4 p-4 rounded-xl" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresas</p>
-                <div className="flex gap-2">
-                  {primaryEmpresa?.isOwner && primaryEmpresaId && (
-                    <button className="text-xs px-2 py-1 rounded"
-                      style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
-                      onClick={() => { setShowInvite(!showInvite); setShowNewEmpresa(false); }}>
-                      Invitar →
-                    </button>
-                  )}
-                  {user && (
-                    <button className="text-xs px-2 py-1 rounded"
-                      style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
-                      onClick={() => { setShowNewEmpresa(!showNewEmpresa); setShowInvite(false); }}>
-                      + Nueva
-                    </button>
-                  )}
-                </div>
+            {/* ── Empresas con archivos anidados ── */}
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresas</p>
+              <button className="text-xs px-2 py-1 rounded"
+                style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
+                onClick={() => { setShowNewEmpresa(!showNewEmpresa); setShowInvite(false); }}>
+                + Nueva
+              </button>
+            </div>
+
+            {showNewEmpresa && (
+              <div className="mb-3 flex gap-2">
+                <input type="text" value={newEmpresaName} autoFocus
+                  onChange={(e) => setNewEmpresaName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleNewEmpresa()}
+                  placeholder="Nombre de la empresa"
+                  className="flex-1 rounded px-3 py-1.5 text-sm"
+                  style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
+                <button onClick={handleNewEmpresa} disabled={newEmpresaLoading}
+                  className="px-3 py-1.5 rounded text-sm font-semibold"
+                  style={{ background: "#3dbb6e", color: "#fff" }}>
+                  {newEmpresaLoading ? "..." : "Crear"}
+                </button>
               </div>
+            )}
 
-              {/* Empresa list with inline edit/delete */}
-              <div className="space-y-1.5">
-                {availableEmpresas.map((emp) => {
-                  const active = selEmp.has(emp.id);
-                  const isPrimary = emp.id === primaryEmpresaId;
-                  const isRenaming = renamingEmpresaId === emp.id;
-                  const isDeleting = deletingEmpresaId === emp.id;
+            <div className="flex flex-col gap-2 mb-4">
+              {availableEmpresas.map((emp) => {
+                const isOpen = empresaOpenId === emp.id;
+                const isRenaming = renamingEmpresaId === emp.id;
+                const isDeleting = deletingEmpresaId === emp.id;
 
-                  if (isRenaming) {
-                    return (
-                      <div key={emp.id} className="flex gap-2">
-                        <input autoFocus value={empresaNameDraft}
-                          onChange={(e) => setEmpresaNameDraft(e.target.value)}
-                          onKeyDown={async (e) => {
-                            if (e.key === "Enter" && empresaNameDraft.trim()) {
-                              setEmpresaMutating(true);
-                              await onRenameEmpresa(emp.id, empresaNameDraft.trim());
-                              setRenamingEmpresaId(null);
-                              setEmpresaMutating(false);
-                            }
-                            if (e.key === "Escape") setRenamingEmpresaId(null);
-                          }}
-                          className="flex-1 rounded px-3 py-1.5 text-sm"
-                          style={{ background: "#0d1b35", border: "1px solid #3a6aaa", color: "#e0e0e0", outline: "none" }} />
-                        <button disabled={empresaMutating || !empresaNameDraft.trim()}
-                          onClick={async () => {
+                const empShpFiles = shpFiles.filter((n) => shpFileMeta.find((m) => m.name === n)?.empresaId === emp.id);
+                const empCsvFiles = csvFiles.filter((n) => csvFileMeta.find((m) => m.name === n)?.empresaId === emp.id);
+                const empRindeFiles = rindeFiles.filter((n) => rindeFileMeta.find((m) => m.name === n)?.empresaId === emp.id);
+
+                if (isRenaming) {
+                  return (
+                    <div key={emp.id} className="flex gap-2">
+                      <input autoFocus value={empresaNameDraft}
+                        onChange={(e) => setEmpresaNameDraft(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter" && empresaNameDraft.trim()) {
                             setEmpresaMutating(true);
                             await onRenameEmpresa(emp.id, empresaNameDraft.trim());
                             setRenamingEmpresaId(null);
                             setEmpresaMutating(false);
-                          }}
-                          className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                          style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
-                        <button onClick={() => setRenamingEmpresaId(null)}
-                          className="px-2 py-1.5 rounded text-sm"
-                          style={{ background: "#1a2a4a", color: "#6a8ab0" }}>✕</button>
-                      </div>
-                    );
-                  }
+                          }
+                          if (e.key === "Escape") setRenamingEmpresaId(null);
+                        }}
+                        className="flex-1 rounded px-3 py-1.5 text-sm"
+                        style={{ background: "#0d1b35", border: "1px solid #3a6aaa", color: "#e0e0e0", outline: "none" }} />
+                      <button disabled={empresaMutating || !empresaNameDraft.trim()}
+                        onClick={async () => {
+                          setEmpresaMutating(true);
+                          await onRenameEmpresa(emp.id, empresaNameDraft.trim());
+                          setRenamingEmpresaId(null);
+                          setEmpresaMutating(false);
+                        }}
+                        className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
+                        style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
+                      <button onClick={() => setRenamingEmpresaId(null)}
+                        className="px-2 py-1.5 rounded text-sm"
+                        style={{ background: "#1a2a4a", color: "#6a8ab0" }}>✕</button>
+                    </div>
+                  );
+                }
 
-                  if (isDeleting) {
-                    return (
-                      <div key={emp.id} className="flex items-center gap-2 p-2 rounded-lg"
-                        style={{ background: "#2a0a0a", border: "1px solid #6a1a1a" }}>
-                        <span className="flex-1 text-sm" style={{ color: "#e24a4a" }}>
-                          ¿Eliminar <strong>{emp.name}</strong>? Esta acción no se puede deshacer.
-                        </span>
-                        <button disabled={empresaMutating}
-                          onClick={async () => {
-                            setEmpresaMutating(true);
-                            await onDeleteEmpresa(emp.id);
-                            setDeletingEmpresaId(null);
-                            setEmpresaMutating(false);
-                          }}
-                          className="px-3 py-1 rounded text-sm font-semibold disabled:opacity-50"
-                          style={{ background: "#e24a4a", color: "#fff" }}>
-                          {empresaMutating ? "..." : "Eliminar"}
-                        </button>
-                        <button onClick={() => setDeletingEmpresaId(null)}
-                          className="px-2 py-1 rounded text-sm"
-                          style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
-                      </div>
-                    );
-                  }
-
+                if (isDeleting) {
                   return (
-                    <div key={emp.id} className="flex items-center gap-2 group">
-                      <button onClick={() => toggleEmp(emp.id)}
-                        className="flex-1 text-left px-3 py-2 rounded-lg text-sm font-semibold transition-all"
-                        style={{
-                          background: active ? "#1a3a60" : "#0f2040",
-                          border: `2px solid ${isPrimary ? "#3dbb6e" : active ? "#2a5298" : "#1a3460"}`,
-                          color: active ? "#e2b04a" : "#6a8ab0",
-                        }}>
-                        {emp.name}
-                        {isPrimary && selEmp.size > 1 && <span className="ml-1 text-xs opacity-60">(principal)</span>}
+                    <div key={emp.id} className="flex items-center gap-2 p-2 rounded-lg"
+                      style={{ background: "#2a0a0a", border: "1px solid #6a1a1a" }}>
+                      <span className="flex-1 text-sm" style={{ color: "#e24a4a" }}>
+                        ¿Eliminar <strong>{emp.name}</strong>? Esta acción no se puede deshacer.
+                      </span>
+                      <button disabled={empresaMutating}
+                        onClick={async () => {
+                          setEmpresaMutating(true);
+                          await onDeleteEmpresa(emp.id);
+                          setDeletingEmpresaId(null);
+                          setEmpresaMutating(false);
+                        }}
+                        className="px-3 py-1 rounded text-sm font-semibold disabled:opacity-50"
+                        style={{ background: "#e24a4a", color: "#fff" }}>
+                        {empresaMutating ? "..." : "Eliminar"}
+                      </button>
+                      <button onClick={() => setDeletingEmpresaId(null)}
+                        className="px-2 py-1 rounded text-sm"
+                        style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={emp.id} className="rounded-xl overflow-hidden"
+                    style={{ background: "#16213e", border: `1px solid ${isOpen ? "#2a5298" : "#0f3460"}` }}>
+                    {/* Folder header */}
+                    <div className="flex items-center gap-2 px-3 py-2.5">
+                      <button
+                        onClick={() => {
+                          const next = isOpen ? null : emp.id;
+                          setEmpresaOpenId(next);
+                          if (next) onSelectEmpresa(emp.id);
+                        }}
+                        className="flex-1 flex items-center gap-2 text-left min-w-0">
+                        <span className="text-xs shrink-0" style={{ color: "#6a8ab0" }}>{isOpen ? "▼" : "▶"}</span>
+                        <span className="text-sm font-semibold truncate" style={{ color: isOpen ? "#e2b04a" : "#aac4e0" }}>
+                          {emp.name}
+                        </span>
                       </button>
                       {emp.isOwner && (
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-1 shrink-0">
                           <button onClick={() => { setEmpresaNameDraft(emp.name); setRenamingEmpresaId(emp.id); }}
-                            className="p-1.5 rounded text-sm" style={{ background: "#1a2a4a", color: "#6a8ab0" }}
+                            className="p-1.5 rounded text-xs" style={{ background: "#1a2a4a", color: "#6a8ab0" }}
                             title="Renombrar">✏️</button>
                           <button onClick={() => setDeletingEmpresaId(emp.id)}
-                            className="p-1.5 rounded text-sm" style={{ background: "#2a0a0a", color: "#e24a4a" }}
+                            className="p-1.5 rounded text-xs" style={{ background: "#2a0a0a", color: "#e24a4a" }}
                             title="Eliminar">🗑</button>
                         </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
 
-              {selEmp.size > 1 && (
-                <p className="text-xs mt-2" style={{ color: "#4a6a8a" }}>
-                  Mostrando archivos de {selEmp.size} empresas · los nuevos archivos van a <strong style={{ color: "#aac4e0" }}>{primaryEmpresa?.name}</strong>
-                </p>
-              )}
-
-              {showNewEmpresa && (
-                <div className="mt-3 flex gap-2">
-                  <input type="text" value={newEmpresaName} autoFocus
-                    onChange={(e) => setNewEmpresaName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleNewEmpresa()}
-                    placeholder="Nombre de la empresa"
-                    className="flex-1 rounded px-3 py-1.5 text-sm"
-                    style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
-                  <button onClick={handleNewEmpresa} disabled={newEmpresaLoading}
-                    className="px-3 py-1.5 rounded text-sm font-semibold"
-                    style={{ background: "#3dbb6e", color: "#fff" }}>
-                    {newEmpresaLoading ? "..." : "Crear"}
-                  </button>
-                </div>
-              )}
-
+                    {/* Nested file sections */}
+                    {isOpen && (
+                      <div className="px-3 pb-3">
+                        <DashFileSection nested title="🗺 Mapa de lotes"
+                          hint="cada lote debe ser un polígono (.zip con .shp + .dbf + .shx, o .kmz)"
+                          accept=".zip,.shp,.dbf,.shx,.prj,.kmz" multiple
+                          files={empShpFiles} status={shpStatus} onFiles={onUploadShp} onRemove={onRemoveShp} />
+                        <DashFileSection nested title="📄 Manejo de lotes"
+                          hint="xlsx o csv — los nombres de los lotes deben coincidir con los del mapa"
+                          accept=".csv,.xlsx,.xls" multiple={false}
+                          files={empCsvFiles} status={csvStatus} onFiles={onUploadCsv} onRemove={onRemoveCsv} />
+                        <DashFileSection nested title="🌾 Rindes históricos"
+                          hint="información optativa — nombres de lotes = los del mapa"
+                          accept=".csv,.xlsx,.xls" multiple={false}
+                          files={empRindeFiles} status={rindeStatus} onFiles={onUploadRinde} onRemove={onRemoveRinde} />
+                        <DashFileSection nested title="🌧 Lluvias"
+                          hint="CSV o XLSX con Fecha, Ubicación, Valor (mm)"
+                          accept=".csv,.xlsx,.xls" multiple={false}
+                          files={rainFiles} status={null} onFiles={onUploadRain} onRemove={onRemoveRain} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
-
-        {/* ── File sections ── */}
-        <div className="space-y-4">
-          <DashFileSection title="🗺 Shapes / KMZ" hint=".zip con .shp + .dbf + .shx"
-            accept=".zip,.shp,.dbf,.shx,.prj,.kmz" multiple
-            files={filteredShp} status={shpStatus} onFiles={onUploadShp} onRemove={onRemoveShp} />
-          <DashFileSection title="📄 Manejo de lotes" hint="CSV o XLSX — elegís columnas en el siguiente paso"
-            accept=".csv,.xlsx,.xls" multiple={false}
-            files={filteredCsv} status={csvStatus} onFiles={onUploadCsv} onRemove={onRemoveCsv} />
-          <DashFileSection title="🌾 Rindes históricos" hint="CSV o XLSX con columna de lote y rendimiento"
-            accept=".csv,.xlsx,.xls" multiple={false}
-            files={filteredRinde} status={rindeStatus} onFiles={onUploadRinde} onRemove={onRemoveRinde} />
-          <DashFileSection title="🌧 Lluvias" hint="CSV o XLSX con Fecha, Ubicación, Valor (mm)"
-            accept=".csv,.xlsx,.xls" multiple={false}
-            files={rainFiles} status={null} onFiles={onUploadRain} onRemove={onRemoveRain} />
-        </div>
 
         {/* ── Drive link ── */}
         <div className="mt-4 rounded-xl p-4" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
@@ -2711,21 +2706,25 @@ function FileDashboard({
 }
 
 function DashFileSection({
-  title, hint, accept, multiple, files, status, onFiles, onRemove,
+  title, hint, accept, multiple, files, status, onFiles, onRemove, nested,
 }: {
   title: string; hint: string; accept: string; multiple: boolean;
   files: string[];
   status: { msg: string; ok: boolean } | null;
   onFiles: (fl: FileList) => void;
   onRemove: (name: string) => void;
+  nested?: boolean;
 }) {
-  return (
-    <div className="rounded-xl p-4" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
-      <p className="text-sm font-semibold mb-3" style={{ color: "#aac4e0" }}>{title}</p>
+  const inner = (
+    <>
+      <div className={nested ? "mb-2" : "mb-3"}>
+        <p className="text-xs font-semibold" style={{ color: "#aac4e0" }}>{title}</p>
+        {hint && <p className="text-xs mt-0.5" style={{ color: "#4a6a8a" }}>{hint}</p>}
+      </div>
       {files.length > 0 ? (
-        <div className="space-y-1.5 mb-3">
+        <div className="space-y-1 mb-2">
           {files.map((name, i) => (
-            <div key={i} className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
+            <div key={i} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded"
               style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
               <span className="truncate flex-1" style={{ color: "#3dbb6e" }}>✓ {name}</span>
               <button onClick={() => onRemove(name)}
@@ -2735,7 +2734,7 @@ function DashFileSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs mb-3" style={{ color: "#445" }}>Sin archivos cargados</p>
+        <p className="text-xs mb-2" style={{ color: "#445" }}>Sin archivos cargados</p>
       )}
       {status && !status.ok && (
         <p className="text-xs mb-2 px-2 py-1 rounded" style={{ background: "#3a2a0a", color: "#e2b04a" }}>{status.msg}</p>
@@ -2746,6 +2745,16 @@ function DashFileSection({
           onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />
         + Agregar archivo
       </label>
+    </>
+  );
+
+  if (nested) {
+    return <div className="pt-3" style={{ borderTop: "1px solid #0f3460" }}>{inner}</div>;
+  }
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+      {inner}
     </div>
   );
 }
