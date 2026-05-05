@@ -213,10 +213,18 @@ function AppScreen({
                     <p className="text-xs font-semibold" style={{ color: "#e2b04a" }}>{name}</p>
                     <p className="text-xs truncate" style={{ color: "#445566" }}>{user.email}</p>
                   </div>
+                  <Link
+                    href="/configuracion"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[#1a3060] flex items-center gap-2"
+                    style={{ color: "#aac4e0" }}
+                  >
+                    ⚙️ Mis espacios
+                  </Link>
                   <button
                     onClick={signOut}
-                    className="w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[#1a3060]"
-                    style={{ color: "#aac4e0" }}
+                    className="w-full text-left px-4 py-2 text-sm transition-colors hover:bg-[#1a3060] border-t"
+                    style={{ color: "#aac4e0", borderColor: "#0f3460" }}
                   >
                     Cerrar sesión
                   </button>
