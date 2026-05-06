@@ -389,54 +389,106 @@ function HybridSelect({
 // ── IA Range Slider ───────────────────────────────────────────────────────────
 
 function IASlider({
-  iaMin, iaMax, iaLow, iaHigh, onChangeLow, onChangeHigh,
+  iaMin, iaMax, iaLow, iaHigh, iaVals, localidadesConIA, totalLocalidades,
+  onChangeLow, onChangeHigh,
 }: {
   iaMin: number; iaMax: number; iaLow: number; iaHigh: number;
+  iaVals: number[]; localidadesConIA: number; totalLocalidades: number;
   onChangeLow: (v: number) => void; onChangeHigh: (v: number) => void;
 }) {
   if (iaMin >= iaMax) return null;
-  const pctLow = ((iaLow - iaMin) / (iaMax - iaMin)) * 100;
-  const pctHigh = ((iaHigh - iaMin) / (iaMax - iaMin)) * 100;
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  function makeThumbHandlers(thumb: "low" | "high") {
+    return {
+      onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      },
+      onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        const rect = trackRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const val = Math.round((iaMin + pct * (iaMax - iaMin)) / 100) * 100;
+        if (thumb === "low" && val < iaHigh) onChangeLow(val);
+        if (thumb === "high" && val > iaLow) onChangeHigh(val);
+      },
+      onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      },
+    };
+  }
+
+  const pctLow = (iaLow - iaMin) / (iaMax - iaMin);
+  const pctHigh = (iaHigh - iaMin) / (iaMax - iaMin);
+
+  // Histogram buckets
+  const BUCKETS = 12;
+  const bucketCounts = Array(BUCKETS).fill(0) as number[];
+  for (const v of iaVals) {
+    const idx = Math.min(BUCKETS - 1, Math.floor(((v - iaMin) / (iaMax - iaMin)) * BUCKETS));
+    bucketCounts[idx]++;
+  }
+  const maxCount = Math.max(...bucketCounts, 1);
+  const histH = 36;
+  const barW = 100 / BUCKETS;
+
+  const allInRange = localidadesConIA === totalLocalidades;
 
   return (
     <div style={{ background: "#16213e", borderRadius: 10, padding: "12px 16px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <span style={{ color: "#e2b04a", fontSize: 12, fontWeight: 600 }}>Filtro por IA</span>
-        <span style={{ color: "#6a8ab0", fontSize: 12 }}>
-          {Math.round(iaLow).toLocaleString("es-AR")} — {Math.round(iaHigh).toLocaleString("es-AR")} kg/ha
+        <span style={{ fontSize: 12, color: allInRange ? "#6a8ab0" : "#e2b04a" }}>
+          {allInRange
+            ? `${totalLocalidades} localidad${totalLocalidades !== 1 ? "es" : ""}`
+            : `${localidadesConIA} de ${totalLocalidades} localidades`}
         </span>
       </div>
-      {/* Track with colored range */}
-      <div style={{ position: "relative", height: 6, background: "#0f2040", borderRadius: 3, margin: "8px 0 20px" }}>
-        <div style={{ position: "absolute", left: `${pctLow}%`, right: `${100 - pctHigh}%`, height: "100%", background: "#3dbb6e", borderRadius: 3 }} />
+
+      {/* Selected range values */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 11, color: "#3dbb6e", fontWeight: 600 }}>{Math.round(iaLow).toLocaleString("es-AR")}</span>
+        <span style={{ fontSize: 10, color: "#4a6a8a" }}>kg/ha</span>
+        <span style={{ fontSize: 11, color: "#3dbb6e", fontWeight: 600 }}>{Math.round(iaHigh).toLocaleString("es-AR")}</span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div>
-          <label style={{ fontSize: 10, color: "#4a6a8a", display: "block", marginBottom: 4 }}>Mínimo</label>
-          <input
-            type="range"
-            min={iaMin} max={iaMax} step={100}
-            value={iaLow}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              if (v < iaHigh) onChangeLow(v);
-            }}
-            style={{ width: "100%", accentColor: "#3dbb6e" }}
-          />
-        </div>
-        <div>
-          <label style={{ fontSize: 10, color: "#4a6a8a", display: "block", marginBottom: 4 }}>Máximo</label>
-          <input
-            type="range"
-            min={iaMin} max={iaMax} step={100}
-            value={iaHigh}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              if (v > iaLow) onChangeHigh(v);
-            }}
-            style={{ width: "100%", accentColor: "#3dbb6e" }}
-          />
-        </div>
+
+      {/* Histogram (desktop/tablet only) */}
+      <div className="hidden md:block" style={{ marginBottom: 4 }}>
+        <svg width="100%" height={histH} viewBox={`0 0 100 ${histH}`} preserveAspectRatio="none" style={{ display: "block", overflow: "visible" }}>
+          {bucketCounts.map((count, i) => {
+            const barH = (count / maxCount) * histH;
+            const bucketMin = iaMin + (i / BUCKETS) * (iaMax - iaMin);
+            const bucketMax = iaMin + ((i + 1) / BUCKETS) * (iaMax - iaMin);
+            const inRange = bucketMax > iaLow && bucketMin < iaHigh;
+            return (
+              <rect key={i} x={i * barW + 0.3} y={histH - barH} width={barW - 0.6} height={barH} fill={inRange ? "#3dbb6e" : "#1a4a80"} rx={0.8} />
+            );
+          })}
+        </svg>
+      </div>
+
+      {/* Dual-range track */}
+      <div ref={trackRef} style={{ position: "relative", height: 20, userSelect: "none" }}>
+        <div style={{ position: "absolute", top: 7, left: 0, right: 0, height: 6, background: "#0f2040", borderRadius: 3 }} />
+        <div style={{ position: "absolute", top: 7, left: `${pctLow * 100}%`, right: `${(1 - pctHigh) * 100}%`, height: 6, background: "#3dbb6e", borderRadius: 3 }} />
+        {/* Low thumb */}
+        <div
+          style={{ position: "absolute", top: 2, left: `${pctLow * 100}%`, transform: "translateX(-50%)", width: 16, height: 16, background: "#3dbb6e", border: "2px solid #1a1a2e", borderRadius: "50%", cursor: "grab", touchAction: "none", zIndex: pctLow > 0.9 ? 2 : 1 }}
+          {...makeThumbHandlers("low")}
+        />
+        {/* High thumb */}
+        <div
+          style={{ position: "absolute", top: 2, left: `${pctHigh * 100}%`, transform: "translateX(-50%)", width: 16, height: 16, background: "#3dbb6e", border: "2px solid #1a1a2e", borderRadius: "50%", cursor: "grab", touchAction: "none", zIndex: pctLow > 0.9 ? 1 : 2 }}
+          {...makeThumbHandlers("high")}
+        />
+      </div>
+
+      {/* Min/Max axis labels */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+        <span style={{ fontSize: 10, color: "#4a6a8a" }}>{Math.round(iaMin).toLocaleString("es-AR")}</span>
+        <span style={{ fontSize: 10, color: "#4a6a8a" }}>{Math.round(iaMax).toLocaleString("es-AR")}</span>
       </div>
     </div>
   );
@@ -901,13 +953,11 @@ export default function ComparacionApp() {
             <IASlider
               iaMin={iaAbsMin} iaMax={iaAbsMax}
               iaLow={iaLow} iaHigh={iaHigh}
+              iaVals={iaVals}
+              localidadesConIA={localidadesConIA}
+              totalLocalidades={Object.keys(ia).length}
               onChangeLow={setIaLow} onChangeHigh={setIaHigh}
             />
-            {localidadesConIA < Object.keys(ia).length && (
-              <p style={{ color: "#4a6a8a", fontSize: 11, marginTop: 6, textAlign: "right" }}>
-                {localidadesConIA} de {Object.keys(ia).length} localidades en rango
-              </p>
-            )}
           </div>
         )}
 

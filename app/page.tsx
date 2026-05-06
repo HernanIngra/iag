@@ -27,14 +27,14 @@ const apps = [
     badge: null,
   },
   {
-    href: "/presupuesto",
+    href: "/analisis",
     icon: "/icons/modulos/analisis.svg",
     action: "Analizar",
-    subtitle: "Presupuesto y análisis",
+    subtitle: "Análisis",
     description:
-      "Armá el presupuesto de la campaña, seguí la ejecución y cerrá el resultado por lote, campo o empresa.",
-    available: false,
-    badge: "Próximamente",
+      "Seguí el mercado de granos, analizá tu posición comercial y armá el presupuesto de la campaña.",
+    available: true,
+    badge: null,
   },
 ];
 
