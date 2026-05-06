@@ -170,6 +170,8 @@ function RegressionChart({ sA, sB, ia }: { sA: HybridStats; sB: HybridStats; ia:
 
 // ── SVG Diverging Bar Chart ───────────────────────────────────────────────────
 
+// ── Horizontal diverging bar chart (mobile) ───────────────────────────────────
+
 function DivergingBarChart({ results, headName }: { results: DiffResult[]; headName: string }) {
   if (results.length === 0) return null;
   const maxAbs = Math.max(...results.map((r) => Math.abs(r.diff)), 1);
@@ -200,6 +202,117 @@ function DivergingBarChart({ results, headName }: { results: DiffResult[]; headN
               {wins ? "+" : ""}{Math.round(r.diff).toLocaleString("es-AR")} kg/ha
             </text>
             <text x={annotX} y={y + rowH / 2 + 15} textAnchor={annotAnchor} fontSize={9} fill="#4a6a8a">n={r.n}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ── Vertical bar chart (tablet / desktop) ────────────────────────────────────
+
+function VerticalDivergingBarChart({ results, headName }: { results: DiffResult[]; headName: string }) {
+  if (results.length === 0) return null;
+  const maxAbs = Math.max(...results.map((r) => Math.abs(r.diff)), 1);
+
+  const colW = 52;
+  const barMaxH = 120;
+  const topM = 44;   // room for value labels above positive bars
+  const botM = 90;   // room for rotated x-axis labels
+  const leftM = 58;
+  const rightM = 12;
+  const totalW = leftM + results.length * colW + rightM;
+  const totalH = topM + barMaxH * 2 + botM;
+  const centerY = topM + barMaxH;
+  const zeroX = leftM - 4;
+
+  // Y-axis ticks: 3–4 steps
+  const rawStep = maxAbs / 3.5;
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const tickStep = Math.ceil(rawStep / mag) * mag;
+  const ticks: number[] = [];
+  for (let v = tickStep; v <= maxAbs * 1.01; v += tickStep) ticks.push(Math.round(v));
+
+  function fmtKg(v: number) {
+    return Math.abs(v) >= 1000
+      ? `${v > 0 ? "+" : ""}${(v / 1000).toFixed(1)}k`
+      : `${v > 0 ? "+" : ""}${v}`;
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${totalW} ${totalH}`}
+      style={{ width: totalW, minWidth: totalW, height: totalH, display: "block" }}
+    >
+      {/* Y-axis title */}
+      <text transform={`rotate(-90,14,${centerY})`} x={14} y={centerY}
+        textAnchor="middle" fontSize={9} fill="#4a6a8a">kg/ha</text>
+
+      {/* Grid + tick labels */}
+      {ticks.map((v) => (
+        <g key={v}>
+          {[v, -v].map((tv) => {
+            const ty = centerY - (tv / maxAbs) * barMaxH;
+            return (
+              <g key={tv}>
+                <line x1={zeroX} x2={totalW - rightM} y1={ty} y2={ty}
+                  stroke="#1a3050" strokeWidth={0.5} strokeDasharray="3 3" />
+                <text x={zeroX - 4} y={ty + 4} textAnchor="end" fontSize={9} fill="#4a6a8a">
+                  {fmtKg(tv)}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      ))}
+
+      {/* Center line (0) */}
+      <line x1={zeroX} x2={totalW - rightM} y1={centerY} y2={centerY}
+        stroke="#2a4060" strokeWidth={1.5} />
+      <text x={zeroX - 4} y={centerY + 4} textAnchor="end" fontSize={9} fill="#4a6a8a">0</text>
+
+      {/* "gana" labels */}
+      <text x={leftM + 4} y={topM - 6} fontSize={8} fill="#4a6a8a">
+        {headName.length > 15 ? headName.slice(0, 14) + "…" : headName} gana ↑
+      </text>
+      <text x={leftM + 4} y={centerY + barMaxH + 14} fontSize={8} fill="#4a6a8a">otro gana ↓</text>
+
+      {/* Bars */}
+      {results.map((r, i) => {
+        const cx = leftM + i * colW + colW / 2;
+        const barW = colW * 0.65;
+        const bx = cx - barW / 2;
+        const barH = (Math.abs(r.diff) / maxAbs) * barMaxH;
+        const wins = r.diff >= 0;
+        const color = wins ? "#3dbb6e" : "#e24a7a";
+        const barY = wins ? centerY - barH : centerY;
+
+        // value / n= label positioning
+        const valY = wins ? barY - (barH > 18 ? 4 : 16) : barY + barH + (barH > 18 ? 12 : 12);
+        const nY   = wins ? valY - 11 : valY + 11;
+
+        // rotated name at bottom of chart area
+        const rotY = centerY + barMaxH + 6;
+
+        return (
+          <g key={r.name}>
+            {barH > 0 && (
+              <rect x={bx} y={barY} width={barW} height={barH} rx={3}
+                fill={color} fillOpacity={0.82} />
+            )}
+            <text x={cx} y={valY} textAnchor="middle" fontSize={9} fill={color} fontWeight="600">
+              {wins ? "+" : ""}{Math.round(r.diff).toLocaleString("es-AR")}
+            </text>
+            <text x={cx} y={nY} textAnchor="middle" fontSize={8} fill="#4a6a8a">n={r.n}</text>
+            <text
+              transform={`rotate(-45,${cx},${rotY})`}
+              x={cx} y={rotY}
+              textAnchor="end"
+              fontSize={10}
+              fill="#aac4e0"
+            >
+              {r.name.length > 12 ? r.name.slice(0, 11) + "…" : r.name}
+            </text>
           </g>
         );
       })}
@@ -352,6 +465,72 @@ function CompanyFilter({
   );
 }
 
+// ── Redes filter (in-comparison multi-select) ─────────────────────────────────
+
+function RedesFilter({ redes, selected, onChange }: {
+  redes: string[]; selected: string[]; onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  if (redes.length <= 1) return null;
+
+  const label = selected.length === 0
+    ? "Todas las redes"
+    : selected.length === 1 ? selected[0] : `${selected.length} redes`;
+
+  function toggle(r: string) {
+    onChange(selected.includes(r) ? selected.filter((x) => x !== r) : [...selected, r]);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative" }} ref={ref}>
+      <label style={{ fontSize: 11, color: "#6a8ab0", fontWeight: 600, flexShrink: 0 }}>Red</label>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          flex: 1, background: "#0f2040", border: `1px solid ${selected.length > 0 ? "#3dbb6e" : "#1a4a80"}`,
+          borderRadius: 8, padding: "7px 10px", color: selected.length > 0 ? "#e0e0e0" : "#4a6a8a",
+          fontSize: 13, outline: "none", textAlign: "left", cursor: "pointer", display: "flex", justifyContent: "space-between",
+        }}
+      >
+        <span>{label}</span>
+        <span style={{ color: "#4a6a8a", fontSize: 10 }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 40, right: 0, zIndex: 50,
+          background: "#16213e", border: "1px solid #1a4a80", borderRadius: 8,
+          marginTop: 4, padding: "4px 0", boxShadow: "0 4px 16px #000a",
+        }}>
+          {selected.length > 0 && (
+            <button
+              onClick={() => onChange([])}
+              style={{ width: "100%", textAlign: "left", padding: "8px 12px", background: "none", border: "none", borderBottom: "1px solid #0f3060", color: "#4a6a8a", fontSize: 11, cursor: "pointer" }}
+            >
+              ✕ Limpiar selección
+            </button>
+          )}
+          {redes.map((r) => {
+            const checked = selected.includes(r);
+            return (
+              <label key={r} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", cursor: "pointer", color: checked ? "#e0e0e0" : "#aac4e0", fontSize: 13, background: checked ? "#1a3060" : "transparent" }}>
+                <input type="checkbox" checked={checked} onChange={() => toggle(r)} style={{ accentColor: "#3dbb6e" }} />
+                {r || "(sin red)"}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Map view ──────────────────────────────────────────────────────────────────
 
 function LocalidadMap({ ensayos, selectedLocalidades, onToggle }: {
@@ -441,6 +620,7 @@ export default function ComparacionApp() {
   const [hibridoB, setHibridoB] = useState("");
   const [hibridoHead, setHibridoHead] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("");
+  const [selectedRedesComp, setSelectedRedesComp] = useState<string[]>([]);
 
   // IA slider
   const [iaLow, setIaLow] = useState(0);
@@ -502,14 +682,26 @@ export default function ComparacionApp() {
     });
   }, [ensayosFiltrados, ia, iaLow, iaHigh, iaVals.length]);
 
-  // All hybrids in IA-filtered ensayos
+  // Redes available after IA filter, for the in-comparison filter
+  const redesDisponibles = useMemo(
+    () => [...new Set(ensayosFiltradosConIA.map((e) => e.red))].sort(),
+    [ensayosFiltradosConIA]
+  );
+
+  // Ensayos further filtered by selected redes (in-comparison filter)
+  const ensayosFiltradosFinal = useMemo(() => {
+    if (selectedRedesComp.length === 0) return ensayosFiltradosConIA;
+    return ensayosFiltradosConIA.filter((e) => selectedRedesComp.includes(e.red));
+  }, [ensayosFiltradosConIA, selectedRedesComp]);
+
+  // All hybrids in final filtered ensayos
   const hibridosDisponibles = useMemo(() => {
     const set = new Set<string>();
-    for (const e of ensayosFiltradosConIA) {
+    for (const e of ensayosFiltradosFinal) {
       for (const entry of e.entradas) set.add(entry.hibrido);
     }
     return [...set].sort();
-  }, [ensayosFiltradosConIA]);
+  }, [ensayosFiltradosFinal]);
 
   // Map hybrid → company from INASE catalog
   const hybridCompanyMap = useMemo(() => {
@@ -535,14 +727,14 @@ export default function ComparacionApp() {
     return hibridosDisponibles.filter((h) => hybridCompanyMap[h] === selectedCompany);
   }, [hibridosDisponibles, selectedCompany, hybridCompanyMap]);
 
-  // Stats (use IA-filtered ensayos)
+  // Stats (use final filtered ensayos — after IA range + red filter)
   const statsA = useMemo(
-    () => (hibridoA ? computeHybridStats(hibridoA, ensayosFiltradosConIA) : null),
-    [hibridoA, ensayosFiltradosConIA]
+    () => (hibridoA ? computeHybridStats(hibridoA, ensayosFiltradosFinal) : null),
+    [hibridoA, ensayosFiltradosFinal]
   );
   const statsB = useMemo(
-    () => (hibridoB ? computeHybridStats(hibridoB, ensayosFiltradosConIA) : null),
-    [hibridoB, ensayosFiltradosConIA]
+    () => (hibridoB ? computeHybridStats(hibridoB, ensayosFiltradosFinal) : null),
+    [hibridoB, ensayosFiltradosFinal]
   );
   const h2hResult = useMemo(
     () => (statsA && statsB ? headToHead(statsA, statsB) : null),
@@ -550,17 +742,17 @@ export default function ComparacionApp() {
   );
 
   const statsHead = useMemo(
-    () => (hibridoHead ? computeHybridStats(hibridoHead, ensayosFiltradosConIA) : null),
-    [hibridoHead, ensayosFiltradosConIA]
+    () => (hibridoHead ? computeHybridStats(hibridoHead, ensayosFiltradosFinal) : null),
+    [hibridoHead, ensayosFiltradosFinal]
   );
   const vsAllResults = useMemo((): DiffResult[] => {
     if (!statsHead) return [];
     return hibridosDisponibles
       .filter((h) => h !== hibridoHead)
-      .map((h) => headToHead(statsHead, computeHybridStats(h, ensayosFiltradosConIA)))
+      .map((h) => headToHead(statsHead, computeHybridStats(h, ensayosFiltradosFinal)))
       .filter((r) => r.n > 0)
       .sort((a, b) => b.diff - a.diff);
-  }, [statsHead, hibridosDisponibles, hibridoHead, ensayosFiltradosConIA]);
+  }, [statsHead, hibridosDisponibles, hibridoHead, ensayosFiltradosFinal]);
 
   const canProceed = filterMode === "mapa" ? selectedLocalidades.length > 0 : selectedRedes.length > 0;
   const toggleLocalidad = useCallback((loc: string) => {
@@ -568,7 +760,7 @@ export default function ComparacionApp() {
   }, []);
 
   function resetCompare() {
-    setCompareMode(null); setHibridoA(""); setHibridoB(""); setHibridoHead(""); setSelectedCompany("");
+    setCompareMode(null); setHibridoA(""); setHibridoB(""); setHibridoHead(""); setSelectedCompany(""); setSelectedRedesComp([]);
   }
   function goStep1() {
     setStep(1); setCultivo(null); setFilterMode(null); setSelectedLocalidades([]); setSelectedRedes([]);
@@ -746,6 +938,7 @@ export default function ComparacionApp() {
             </div>
 
             <div style={{ background: "#16213e", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
+              <RedesFilter redes={redesDisponibles} selected={selectedRedesComp} onChange={setSelectedRedesComp} />
               <CompanyFilter companies={empresasDisponibles} selected={selectedCompany} onChange={setSelectedCompany} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }} className="h2h-selectors">
                 <HybridSelect label="Híbrido A" value={hibridoA} onChange={setHibridoA} options={hibridosFiltradosPorEmpresa.filter((h) => h !== hibridoB)} color={COLOR_A} />
@@ -805,6 +998,7 @@ export default function ComparacionApp() {
             </div>
 
             <div style={{ background: "#16213e", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
+              <RedesFilter redes={redesDisponibles} selected={selectedRedesComp} onChange={setSelectedRedesComp} />
               <CompanyFilter companies={empresasDisponibles} selected={selectedCompany} onChange={setSelectedCompany} />
               <div style={{ maxWidth: 400 }}>
                 <HybridSelect label="Híbrido cabeza" value={hibridoHead} onChange={setHibridoHead} options={hibridosFiltradosPorEmpresa} color={COLOR_A} />
@@ -825,7 +1019,13 @@ export default function ComparacionApp() {
                   </h3>
                   <span style={{ color: "#4a6a8a", fontSize: 12 }}>{vsAllResults.length} comparaciones</span>
                 </div>
-                <DivergingBarChart results={vsAllResults} headName={hibridoHead} />
+                {/* Vertical bars on tablet/desktop, horizontal on mobile */}
+                <div className="hidden md:block overflow-x-auto">
+                  <VerticalDivergingBarChart results={vsAllResults} headName={hibridoHead} />
+                </div>
+                <div className="block md:hidden">
+                  <DivergingBarChart results={vsAllResults} headName={hibridoHead} />
+                </div>
               </div>
             )}
 
