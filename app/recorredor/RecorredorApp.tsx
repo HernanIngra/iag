@@ -99,6 +99,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const selectedLayerRef = useRef<LeafletGeoJSON | null>(null);
   const lotDimmedRef = useRef<Set<string>>(new Set());
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tilesAddedRef = useRef(false);
 
   const [collections, setCollections] = useState<GeoCollection[]>([]);
   const [colorMap, setColorMap] = useState<Record<string, string>>({});
@@ -231,14 +232,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         zoom: 6,
         zoomControl: true,
       });
-      L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        { attribution: "Tiles © Esri", maxZoom: 19 }
-      ).addTo(map);
-      L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-        { attribution: "", maxZoom: 19, opacity: 0.8 }
-      ).addTo(map);
+      // Tile layers are added lazily when the user opens the map view,
+      // so they load at the correct zoom for the loaded lotes (not at zoom 6).
       mapRef.current = map;
       setMapReady(true);
     });
@@ -324,12 +319,42 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setView("dashboard");
   }
 
-  // ── Invalidate map size when switching to map view ───────────────────────────
+  // ── Add tiles + invalidate size when switching to map view ──────────────────
+  // Tiles are added lazily here (not in map init) so they load at the correct
+  // zoom after fitBounds has already positioned the map over the lotes.
 
   useEffect(() => {
-    if (view === "map") {
-      setTimeout(() => mapRef.current?.invalidateSize(), 50);
+    if (view !== "map" || !mapRef.current) return;
+    if (!tilesAddedRef.current) {
+      tilesAddedRef.current = true;
+      import("leaflet").then((L) => {
+        if (!mapRef.current) return;
+        L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          {
+            attribution: "Tiles © Esri",
+            maxZoom: 19,
+            maxNativeZoom: 17,
+            updateWhenIdle: false,
+            keepBuffer: 4,
+            crossOrigin: "anonymous",
+          }
+        ).addTo(mapRef.current);
+        L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+          {
+            attribution: "",
+            maxZoom: 19,
+            maxNativeZoom: 17,
+            opacity: 0.8,
+            updateWhenIdle: false,
+            keepBuffer: 4,
+            crossOrigin: "anonymous",
+          }
+        ).addTo(mapRef.current);
+      });
     }
+    setTimeout(() => mapRef.current?.invalidateSize(), 50);
   }, [view]);
 
   // ── Load management backup from localStorage on mount ────────────────────────
