@@ -211,10 +211,11 @@ export async function saveWorkspace(
   workspaceId: string,
   state: Workspace
 ): Promise<void> {
+  const nameField = state.workspaceName ? { name: state.workspaceName } : {};
   const { error } = await supabase
     .from("workspaces")
     .update({
-      name: state.workspaceName || null,
+      ...nameField,
       logo: state.workspaceLogo || null,
       field_name: state.fieldName,
       lot_count: state.lotCount,

@@ -171,7 +171,12 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [driveUrlInput, setDriveUrlInput] = useState("");
 
   // View: 'picker' = workspace/empresa selector; 'dashboard' = file mgmt; 'map' = map
-  const [view, setView] = useState<"picker" | "dashboard" | "map">("picker");
+  const [view, setView] = useState<"picker" | "dashboard" | "map">(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("iag_pending_empresa_open")) {
+      return "dashboard";
+    }
+    return "picker";
+  });
   const [pickerSelectedEmpIds, setPickerSelectedEmpIds] = useState<string[]>([]);
 
   // Empresas / workspace
@@ -269,7 +274,12 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     acceptPendingEmpresaInvites(supabase).catch(() => {});
 
     const uid = effectiveUserId ?? user.id;
-    loadWorkspaceSummaries(supabase, uid).then((s) => setWorkspaceSummaries(s));
+    loadWorkspaceSummaries(supabase, uid).then((s) => {
+      setWorkspaceSummaries(s);
+      const storedWsId = getActiveWorkspaceId();
+      const active = s.find((ws) => ws.id === storedWsId);
+      if (active) setWorkspaceName(active.name);
+    });
 
     const storedWsId = getActiveWorkspaceId();
     if (storedWsId) {
@@ -1021,6 +1031,32 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }
   }
 
+  // ── Drive rindes / lluvia (one-shot load) ────────────────────────────────────
+
+  async function handleDriveRinde(url: string) {
+    const parsed = parseDriveUrl(url);
+    if (!parsed) throw new Error("Link inválido. Usá el link compartido de Google Drive.");
+    const res = await fetch(`/api/drive-fetch?fileId=${parsed.fileId}&type=${parsed.type}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    await handleRindeFileStart(new File([blob], "drive-rinde.xlsx", { type: blob.type }));
+  }
+
+  async function handleDriveLluvia(url: string) {
+    const parsed = parseDriveUrl(url);
+    if (!parsed) throw new Error("Link inválido. Usá el link compartido de Google Drive.");
+    const res = await fetch(`/api/drive-fetch?fileId=${parsed.fileId}&type=${parsed.type}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    await handleRainFileStart(new File([blob], "drive-lluvia.xlsx", { type: blob.type }));
+  }
+
   // ── Export visits CSV ────────────────────────────────────────────────────────
 
   function downloadVisitsCSV() {
@@ -1278,6 +1314,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             await updateEmpresaLogo(supabase, empresaId, logo);
             setMyEmpresas((prev) => prev.map((e) => e.id === empresaId ? { ...e, logo } : e));
           }}
+          onDriveRinde={handleDriveRinde}
+          onDriveLluvia={handleDriveLluvia}
         />
       )}
 
@@ -2308,6 +2346,7 @@ function FileDashboard({
   shpStatus, csvStatus, rindeStatus,
   driveManejo, driveError, driveRefreshing, driveUrlInput,
   onDriveUrlChange, onLinkDrive, onUnlinkDrive, onRefreshDrive,
+  onDriveRinde, onDriveLluvia,
   onGoToMap,
 }: {
   user: import("@supabase/supabase-js").User | null;
@@ -2352,6 +2391,8 @@ function FileDashboard({
   onLinkDrive: () => void;
   onUnlinkDrive: () => void;
   onRefreshDrive: () => void;
+  onDriveRinde: (url: string) => Promise<void>;
+  onDriveLluvia: (url: string) => Promise<void>;
   onGoToMap: () => void;
 }) {
   const [inviteEmail, setInviteEmail] = useState("");
@@ -2378,6 +2419,14 @@ function FileDashboard({
   const [wsSwitcherOpen, setWsSwitcherOpen] = useState(false);
   const [newWsSwitcherName, setNewWsSwitcherName] = useState("");
   const [newWsSwitcherLoading, setNewWsSwitcherLoading] = useState(false);
+
+  // Drive URL state for Rindes and Lluvias (one-shot, no persistent link)
+  const [driveRindeUrl, setDriveRindeUrl] = useState("");
+  const [driveRindeError, setDriveRindeError] = useState<string | null>(null);
+  const [driveRindeLoading, setDriveRindeLoading] = useState(false);
+  const [driveLluviaUrl, setDriveLluviaUrl] = useState("");
+  const [driveLluviaError, setDriveLluviaError] = useState<string | null>(null);
+  const [driveLluviaLoading, setDriveLluviaLoading] = useState(false);
 
   async function resizeLogoToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -2552,7 +2601,7 @@ function FileDashboard({
                 ) : (
                   <div className="flex items-center gap-2 group">
                     <h2 className="text-xl font-bold truncate" style={{ color: "#e2b04a" }}>
-                      {workspaceName || "Mi espacio"}
+                      {workspaceSummaries.find((w) => w.id === activeWorkspaceId)?.name || workspaceName || "Mi espacio"}
                     </h2>
                     <button onClick={() => { setWsNameDraft(workspaceName); setEditingWsName(true); }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-1.5 py-0.5 rounded"
@@ -2812,15 +2861,53 @@ function FileDashboard({
                         <DashFileSection nested title="📄 Manejo de lotes"
                           hint="acepta xlsx y csv — los nombres de los lotes deben coincidir con los del mapa"
                           accept=".csv,.xlsx,.xls" multiple={false}
-                          files={empCsvFiles} status={csvStatus} onFiles={onUploadCsv} onRemove={onRemoveCsv} />
+                          files={empCsvFiles} status={csvStatus} onFiles={onUploadCsv} onRemove={onRemoveCsv}
+                          driveProps={{
+                            linked: driveManejo,
+                            urlInput: driveUrlInput,
+                            onUrlChange: onDriveUrlChange,
+                            onLink: onLinkDrive,
+                            onUnlink: onUnlinkDrive,
+                            onRefresh: onRefreshDrive,
+                            refreshing: driveRefreshing,
+                            error: driveError,
+                          }} />
                         <DashFileSection nested title="🌾 Rindes históricos"
                           hint="información optativa y complementaria — nombres de lotes = los del mapa"
                           accept=".csv,.xlsx,.xls" multiple={false}
-                          files={empRindeFiles} status={rindeStatus} onFiles={onUploadRinde} onRemove={onRemoveRinde} />
+                          files={empRindeFiles} status={rindeStatus} onFiles={onUploadRinde} onRemove={onRemoveRinde}
+                          driveProps={{
+                            linked: null,
+                            urlInput: driveRindeUrl,
+                            onUrlChange: setDriveRindeUrl,
+                            onLink: async () => {
+                              setDriveRindeLoading(true);
+                              setDriveRindeError(null);
+                              try { await onDriveRinde(driveRindeUrl.trim()); setDriveRindeUrl(""); }
+                              catch (e) { setDriveRindeError((e as Error).message); }
+                              finally { setDriveRindeLoading(false); }
+                            },
+                            refreshing: driveRindeLoading,
+                            error: driveRindeError,
+                          }} />
                         <DashFileSection nested title="🌧 Lluvias"
                           hint="xlsx o csv con columnas Fecha, Ubicación y Valor (mm)"
                           accept=".csv,.xlsx,.xls" multiple={false}
-                          files={rainFiles} status={null} onFiles={onUploadRain} onRemove={onRemoveRain} />
+                          files={rainFiles} status={null} onFiles={onUploadRain} onRemove={onRemoveRain}
+                          driveProps={{
+                            linked: null,
+                            urlInput: driveLluviaUrl,
+                            onUrlChange: setDriveLluviaUrl,
+                            onLink: async () => {
+                              setDriveLluviaLoading(true);
+                              setDriveLluviaError(null);
+                              try { await onDriveLluvia(driveLluviaUrl.trim()); setDriveLluviaUrl(""); }
+                              catch (e) { setDriveLluviaError((e as Error).message); }
+                              finally { setDriveLluviaLoading(false); }
+                            },
+                            refreshing: driveLluviaLoading,
+                            error: driveLluviaError,
+                          }} />
                       </div>
                     )}
                   </div>
@@ -2829,53 +2916,6 @@ function FileDashboard({
             </div>
           </>
         )}
-
-        {/* ── Drive link ── */}
-        <div className="mt-4 rounded-xl p-4" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
-          <p className="text-sm font-semibold mb-3" style={{ color: "#aac4e0" }}>
-            🔗 Google Drive (manejo sincronizado)
-          </p>
-          {driveManejo ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
-                style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
-                <span className="truncate flex-1" style={{ color: "#3dbb6e" }}>
-                  ✓ {driveManejo.url.slice(0, 60)}{driveManejo.url.length > 60 ? "…" : ""}
-                </span>
-                <button onClick={onRefreshDrive} disabled={driveRefreshing}
-                  className="shrink-0 px-2 py-0.5 rounded text-xs disabled:opacity-50"
-                  style={{ background: "#1a4a1a", color: "#3dbb6e", border: "1px solid #2a6a2a" }}>
-                  {driveRefreshing ? "…" : "↻"}
-                </button>
-                <button onClick={onUnlinkDrive}
-                  className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-sm hover:opacity-70"
-                  style={{ color: "#e25a5a" }}>×</button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <input
-                type="url"
-                value={driveUrlInput}
-                onChange={(e) => onDriveUrlChange(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && onLinkDrive()}
-                placeholder="https://docs.google.com/spreadsheets/..."
-                className="flex-1 rounded px-3 py-1.5 text-xs"
-                style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
-              />
-              <button onClick={onLinkDrive} disabled={!driveUrlInput.trim()}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
-                style={{ background: "#3dbb6e", color: "#fff" }}>
-                Vincular
-              </button>
-            </div>
-          )}
-          {driveError && (
-            <p className="text-xs mt-2 px-2 py-1 rounded" style={{ background: "#3a0a0a", color: "#e24a4a" }}>
-              {driveError}
-            </p>
-          )}
-        </div>
 
         <div className="mt-6">
           <button onClick={onGoToMap}
@@ -3059,8 +3099,19 @@ function WorkspacePicker({
   );
 }
 
+interface SectionDriveProps {
+  linked: DriveManejo | null;
+  urlInput: string;
+  onUrlChange: (v: string) => void;
+  onLink: () => void;
+  onUnlink?: () => void;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  error: string | null;
+}
+
 function DashFileSection({
-  title, hint, accept, multiple, files, status, onFiles, onRemove, nested,
+  title, hint, accept, multiple, files, status, onFiles, onRemove, nested, driveProps,
 }: {
   title: string; hint: string; accept: string; multiple: boolean;
   files: string[];
@@ -3068,13 +3119,18 @@ function DashFileSection({
   onFiles: (fl: FileList) => void;
   onRemove: (name: string) => void;
   nested?: boolean;
+  driveProps?: SectionDriveProps;
 }) {
+  const [driveOpen, setDriveOpen] = useState(false);
+
   const inner = (
     <>
       <div className={nested ? "mb-2" : "mb-3"}>
         <p className="text-xs font-semibold" style={{ color: "#aac4e0" }}>{title}</p>
         {hint && <p className="text-xs mt-0.5" style={{ color: "#4a6a8a" }}>{hint}</p>}
       </div>
+
+      {/* File list */}
       {files.length > 0 ? (
         <div className="space-y-1 mb-2">
           {files.map((name, i) => (
@@ -3093,12 +3149,71 @@ function DashFileSection({
       {status && !status.ok && (
         <p className="text-xs mb-2 px-2 py-1 rounded" style={{ background: "#3a2a0a", color: "#e2b04a" }}>{status.msg}</p>
       )}
+
+      {/* Upload button */}
       <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg text-xs hover:opacity-80"
         style={{ background: "#0d1b35", border: "1px dashed #2a5298", color: "#6a8ab0" }}>
         <input type="file" accept={accept} multiple={multiple} className="sr-only"
           onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />
         + Agregar archivo
       </label>
+
+      {/* Drive section */}
+      {driveProps && (
+        <div className="mt-2">
+          {driveProps.linked ? (
+            <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
+              style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
+              <span className="text-xs shrink-0" style={{ color: "#4a7a5a" }}>🔗</span>
+              <span className="truncate flex-1 text-xs" style={{ color: "#3dbb6e" }}>
+                {driveProps.linked.url.slice(0, 50)}{driveProps.linked.url.length > 50 ? "…" : ""}
+              </span>
+              {driveProps.onRefresh && (
+                <button onClick={driveProps.onRefresh} disabled={driveProps.refreshing}
+                  className="shrink-0 px-1.5 py-0.5 rounded text-xs disabled:opacity-50"
+                  style={{ background: "#1a4a1a", color: "#3dbb6e", border: "1px solid #2a6a2a" }}>
+                  {driveProps.refreshing ? "…" : "↻"}
+                </button>
+              )}
+              {driveProps.onUnlink && (
+                <button onClick={driveProps.onUnlink}
+                  className="shrink-0 w-5 h-5 flex items-center justify-center rounded text-sm hover:opacity-70"
+                  style={{ color: "#e25a5a" }}>×</button>
+              )}
+            </div>
+          ) : driveOpen ? (
+            <div className="flex gap-2">
+              <input type="url" value={driveProps.urlInput}
+                onChange={(e) => driveProps.onUrlChange(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && driveProps.onLink()}
+                placeholder="https://docs.google.com/..."
+                className="flex-1 rounded px-2 py-1.5 text-xs"
+                style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
+                autoFocus />
+              <button onClick={driveProps.onLink}
+                disabled={!driveProps.urlInput.trim() || driveProps.refreshing}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 shrink-0"
+                style={{ background: "#3dbb6e", color: "#fff" }}>
+                {driveProps.refreshing ? "…" : "Vincular"}
+              </button>
+              <button onClick={() => setDriveOpen(false)}
+                className="px-2 py-1.5 rounded-lg text-xs shrink-0"
+                style={{ color: "#6a8ab0" }}>✕</button>
+            </div>
+          ) : (
+            <button onClick={() => setDriveOpen(true)}
+              className="flex items-center gap-1.5 text-xs hover:opacity-80 mt-1"
+              style={{ color: "#4a7aba" }}>
+              🔗 vincular con Google Drive
+            </button>
+          )}
+          {driveProps.error && !driveProps.linked && (
+            <p className="text-xs mt-1.5 px-2 py-1 rounded" style={{ background: "#3a0a0a", color: "#e24a4a" }}>
+              {driveProps.error}
+            </p>
+          )}
+        </div>
+      )}
     </>
   );
 
