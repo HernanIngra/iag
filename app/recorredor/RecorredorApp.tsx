@@ -100,6 +100,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const lotDimmedRef = useRef<Set<string>>(new Set());
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tilesAddedRef = useRef(false);
+  const hasHydratedRef = useRef(false); // true once workspace is loaded (prevents premature auto-save)
 
   const [collections, setCollections] = useState<GeoCollection[]>([]);
   const [colorMap, setColorMap] = useState<Record<string, string>>({});
@@ -126,6 +127,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [authLoaded, setAuthLoaded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [wsRestoring, setWsRestoring] = useState(true); // true while workspace is loading from DB
   const supabase = useState(() => createSupabaseBrowserClient())[0];
 
   // Admin helpers (computed after user is known)
@@ -415,10 +417,17 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
   useEffect(() => {
     if (!user || !mapReady || !activeWorkspaceId) return;
+    setWsRestoring(true);
     loadWorkspace(supabase, activeWorkspaceId).then(async (ws) => {
       if (!ws || !ws.collections.length) ws = loadWorkspaceLocal(activeWorkspaceId);
-      if (!ws || !ws.collections.length) return;
+      if (!ws || !ws.collections.length) {
+        hasHydratedRef.current = true;
+        setWsRestoring(false);
+        return;
+      }
       applyWorkspace(ws);
+      hasHydratedRef.current = true;
+      setWsRestoring(false);
       const layerList = await drawCollections(ws.collections, ws.colorMap, ws.cultivoColorMap, ws.lotData);
       import("leaflet").then((mod) => {
         const bounds = mod.default.featureGroup(layerList as LeafletGeoJSON[]).getBounds();
@@ -427,6 +436,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       if (ws.driveManejo && ws.manejoColMapping) {
         refreshDriveWith(ws.driveManejo, ws.manejoColMapping);
       }
+    }).catch(() => {
+      hasHydratedRef.current = true;
+      setWsRestoring(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, mapReady, activeWorkspaceId]);
@@ -436,8 +448,14 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   useEffect(() => {
     if (!mapReady || !authLoaded || user) return;
     const ws = loadWorkspaceLocal("local");
-    if (!ws || !ws.collections.length) return;
+    if (!ws || !ws.collections.length) {
+      hasHydratedRef.current = true;
+      setWsRestoring(false);
+      return;
+    }
     applyWorkspace(ws);
+    hasHydratedRef.current = true;
+    setWsRestoring(false);
     drawCollections(ws.collections, ws.colorMap, ws.cultivoColorMap, ws.lotData).then((layerList) => {
       import("leaflet").then((mod) => {
         const bounds = mod.default.featureGroup(layerList as LeafletGeoJSON[]).getBounds();
@@ -453,7 +471,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // ── Auto-save (always localStorage; also Supabase when logged in) ─────────────
 
   useEffect(() => {
-    if (!collections.length) return;
+    if (!hasHydratedRef.current) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       const state: Workspace = {
@@ -1341,6 +1359,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           }}
           onDriveRinde={handleDriveRinde}
           onDriveLluvia={handleDriveLluvia}
+          wsRestoring={wsRestoring}
         />
       )}
 
@@ -2373,6 +2392,7 @@ function FileDashboard({
   onDriveUrlChange, onLinkDrive, onUnlinkDrive, onRefreshDrive,
   onDriveRinde, onDriveLluvia,
   onGoToMap,
+  wsRestoring,
 }: {
   user: import("@supabase/supabase-js").User | null;
   activeWorkspaceId: string | null;
@@ -2419,6 +2439,7 @@ function FileDashboard({
   onDriveRinde: (url: string) => Promise<void>;
   onDriveLluvia: (url: string) => Promise<void>;
   onGoToMap: () => void;
+  wsRestoring: boolean;
 }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteMsg, setInviteMsg] = useState("");
@@ -2580,6 +2601,14 @@ function FileDashboard({
       if (id) { setEmpresaOpenId(id); onSelectEmpresa(id); }
     }
     finally { setNewEmpresaLoading(false); }
+  }
+
+  if (wsRestoring) {
+    return (
+      <div className="flex-1 flex items-center justify-center" style={{ background: "#1a1a2e" }}>
+        <p className="text-sm" style={{ color: "#4a6a8a" }}>Cargando espacio de trabajo...</p>
+      </div>
+    );
   }
 
   return (
@@ -2769,9 +2798,9 @@ function FileDashboard({
                 const isRenaming = renamingEmpresaId === emp.id;
                 const isDeleting = deletingEmpresaId === emp.id;
 
-                const empShpFiles = shpFiles.filter((n) => shpFileMeta.find((m) => m.name === n)?.empresaId === emp.id);
-                const empCsvFiles = csvFiles.filter((n) => csvFileMeta.find((m) => m.name === n)?.empresaId === emp.id);
-                const empRindeFiles = rindeFiles.filter((n) => rindeFileMeta.find((m) => m.name === n)?.empresaId === emp.id);
+                const empShpFiles = shpFiles.filter((n) => { const m = shpFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
+                const empCsvFiles = csvFiles.filter((n) => { const m = csvFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
+                const empRindeFiles = rindeFiles.filter((n) => { const m = rindeFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
 
                 if (isRenaming) {
                   return (
