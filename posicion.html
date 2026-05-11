@@ -9,7 +9,12 @@
   body { background: #f0f4f8; color: #1e293b; font-family: system-ui, -apple-system, sans-serif; padding: 32px 20px; min-height: 100vh; }
   .wrap { max-width: 760px; margin: 0 auto; }
   h1 { font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
-  .sub { font-size: 14px; color: #64748b; margin-bottom: 26px; }
+  .sub { font-size: 14px; color: #64748b; margin-bottom: 18px; }
+
+  /* Mode switcher */
+  .mode-bar { display: flex; gap: 0; background: #e2e8f0; border-radius: 11px; padding: 3px; margin-bottom: 20px; max-width: 340px; }
+  .mbtn { flex: 1; border: none; background: none; padding: 9px 18px; font-size: 14px; font-weight: 700; color: #64748b; border-radius: 9px; cursor: pointer; font-family: inherit; }
+  .mbtn.active { background: #fff; color: #0f172a; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
 
   /* Tabs */
   .tabs { display: flex; gap: 2px; border-bottom: 2px solid #e2e8f0; margin-bottom: 26px; }
@@ -107,6 +112,12 @@
   <h1>Posición comercial</h1>
   <p class="sub">Los datos se guardan automáticamente en el navegador</p>
 
+  <!-- Selector de modo -->
+  <div class="mode-bar">
+    <button id="btn-granos" class="mbtn active" onclick="switchMode('granos')">Granos</button>
+    <button id="btn-esp" class="mbtn" onclick="switchMode('especialidades')">Especialidades</button>
+  </div>
+
   <div class="tabs">
     <button class="tab active" onclick="switchTab('analisis')">📊 Análisis</button>
     <button class="tab" onclick="switchTab('decisiones')">📋 Decisiones</button>
@@ -136,7 +147,6 @@
         <div class="block-title">Superficie · Rinde · Producción</div>
       </div>
       <div class="g2">
-        <!-- Superficie -->
         <div class="stack">
           <div class="sl">Superficie</div>
           <div class="field">
@@ -152,7 +162,6 @@
             <div class="cr-right"><span class="cv neutral" id="r_A3">—</span><div class="cu">ha</div></div>
           </div>
         </div>
-        <!-- Rinde -->
         <div class="stack">
           <div class="sl">Rinde</div>
           <div class="cr green">
@@ -169,7 +178,6 @@
           </div>
         </div>
       </div>
-      <!-- Producción total — full width -->
       <div style="margin-top:14px">
         <div class="cr green" style="border-width:2px">
           <div class="cr-left"><div class="cl" style="font-size:15px">Producción total</div><div class="cf">Rend. general × Superficie sembrada</div></div>
@@ -228,24 +236,26 @@
           <div class="cr-right"><span class="cv red" id="r_B6">—</span><div class="cu">tn</div></div>
         </div>
 
-        <hr />
-
-        <div class="g2">
-          <div class="cr purple">
-            <div class="cr-left"><div class="cl">Opciones (put + call)</div><div class="cf">Del registro</div></div>
-            <div class="cr-right"><span class="cv purple" id="r_B7">—</span><div class="cu">tn</div></div>
-          </div>
-          <div class="cr purple">
-            <div class="cr-left"><div class="cl">Precio de opción (pond.)</div><div class="cf">Ponderado por volumen</div></div>
-            <div class="cr-right"><span class="cv purple" id="r_B8">—</span><div class="cu">USD/tn</div></div>
-          </div>
-          <div class="cr purple">
-            <div class="cr-left"><div class="cl">Prima pagada (pond.)</div><div class="cf">Ponderada por volumen</div></div>
-            <div class="cr-right"><span class="cv purple" id="r_B9">—</span><div class="cu">USD/tn</div></div>
-          </div>
-          <div class="cr blue">
-            <div class="cr-left"><div class="cl">Precio neto de opción</div><div class="cf">Precio opción − Prima</div></div>
-            <div class="cr-right"><span class="cv blue" id="r_B10">—</span><div class="cu">USD/tn</div></div>
+        <!-- Opciones — oculto en Especialidades -->
+        <div id="opciones-section">
+          <hr />
+          <div class="g2">
+            <div class="cr purple">
+              <div class="cr-left"><div class="cl">Opciones (put + call)</div><div class="cf">Del registro</div></div>
+              <div class="cr-right"><span class="cv purple" id="r_B7">—</span><div class="cu">tn</div></div>
+            </div>
+            <div class="cr purple">
+              <div class="cr-left"><div class="cl">Precio de opción (pond.)</div><div class="cf">Ponderado por volumen</div></div>
+              <div class="cr-right"><span class="cv purple" id="r_B8">—</span><div class="cu">USD/tn</div></div>
+            </div>
+            <div class="cr purple">
+              <div class="cr-left"><div class="cl">Prima pagada (pond.)</div><div class="cf">Ponderada por volumen</div></div>
+              <div class="cr-right"><span class="cv purple" id="r_B9">—</span><div class="cu">USD/tn</div></div>
+            </div>
+            <div class="cr blue">
+              <div class="cr-left"><div class="cl">Precio neto de opción</div><div class="cf">Precio opción − Prima</div></div>
+              <div class="cr-right"><span class="cv blue" id="r_B10">—</span><div class="cu">USD/tn</div></div>
+            </div>
           </div>
         </div>
 
@@ -337,6 +347,11 @@
           <div class="cr-left"><div class="cl" style="font-size:15px;font-weight:800">Margen bruto</div><div class="cf">Precio alcanzado × Rend. general − Costo/ha</div></div>
           <div class="cr-right"><span class="cv green" id="r_C5">—</span><div class="cu">USD/ha</div></div>
         </div>
+
+        <div class="cr" id="row_roi" style="background:#f0fdf4;border:1px solid #bbf7d0">
+          <div class="cr-left"><div class="cl" style="font-size:15px;font-weight:800">Rentabilidad estimada</div><div class="cf">Margen bruto ÷ Costo/ha</div></div>
+          <div class="cr-right"><span class="cv green" id="r_roi">—</span><div class="cu">%</div></div>
+        </div>
       </div>
     </div>
 
@@ -392,8 +407,11 @@
         <div class="field"><label class="fl">Precio (USD/tn)</label><input type="number" id="df-precio" value="0" min="0" step="0.5" /></div>
         <div class="field"><label class="fl">Estrategia</label>
           <select id="df-estrat" onchange="togglePrima()">
-            <option value="disponible">Disponible</option><option value="forward">Forward</option>
-            <option value="futuro">Futuro</option><option value="put">Put</option><option value="call">Call</option>
+            <option value="disponible">Disponible</option>
+            <option value="forward">Forward</option>
+            <option value="futuro">Futuro</option>
+            <option id="opt-put"  value="put">Put</option>
+            <option id="opt-call" value="call">Call</option>
           </select>
         </div>
         <div class="field" id="df-prima-wrap" style="display:none"><label class="fl">Costo de la prima <span class="fu">USD/tn</span></label><input type="number" id="df-prima" value="0" min="0" step="any" /></div>
@@ -408,17 +426,89 @@
 </div>
 
 <script>
+// ── State ────────────────────────────────────────────────────────────────────
+let currentMode = localStorage.getItem('iag_mode') || 'granos';
 let refMode = 'disponible';
-let decisions = JSON.parse(localStorage.getItem('iag_decisiones') || '[]');
 
+// Migrate legacy key
+const _legacy = localStorage.getItem('iag_decisiones');
+if (_legacy && !localStorage.getItem('iag_decisiones_granos')) {
+  localStorage.setItem('iag_decisiones_granos', _legacy);
+}
+
+let decisions = {
+  granos: JSON.parse(localStorage.getItem('iag_decisiones_granos') || '[]'),
+  esp:    JSON.parse(localStorage.getItem('iag_decisiones_esp')    || '[]'),
+};
+
+const decKey = () => currentMode === 'granos' ? 'granos' : 'esp';
+const storageKey = () => `iag_decisiones_${decKey()}`;
+const inputKey  = () => `iag_inputs_${currentMode}`;
+const curDecisions = () => decisions[decKey()];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 const n = id => parseFloat(document.getElementById(id).value) || 0;
 const fmt = (v, d=2) => isFinite(v) && !isNaN(v)
   ? v.toLocaleString('es-AR', {minimumFractionDigits:d, maximumFractionDigits:d}) : '—';
 function setVal(id, text) { document.getElementById(id).textContent = text; }
 
+// ── Input persistence per mode ───────────────────────────────────────────────
+const INPUT_IDS = ['A1','A2','A5','A6','B1','B11','B13','C1','C6','D1'];
+
+function saveInputs() {
+  const obj = {};
+  INPUT_IDS.forEach(id => { obj[id] = document.getElementById(id).value; });
+  obj._refMode = refMode;
+  localStorage.setItem(inputKey(), JSON.stringify(obj));
+}
+
+function loadInputs() {
+  const saved = JSON.parse(localStorage.getItem(inputKey()) || '{}');
+  INPUT_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (saved[id] !== undefined) el.value = saved[id];
+    else el.value = id === 'D1' ? '5' : '0';
+  });
+  if (saved._refMode) {
+    refMode = saved._refMode;
+    document.getElementById('btn-disp').classList.toggle('active', refMode==='disponible');
+    document.getElementById('btn-fut').classList.toggle('active', refMode==='futuro');
+  }
+}
+
+// ── Mode switch ───────────────────────────────────────────────────────────────
+function switchMode(mode) {
+  saveInputs();
+  currentMode = mode;
+  localStorage.setItem('iag_mode', mode);
+  loadInputs();
+
+  document.getElementById('btn-granos').classList.toggle('active', mode==='granos');
+  document.getElementById('btn-esp').classList.toggle('active',    mode==='especialidades');
+
+  // Show/hide opciones block
+  document.getElementById('opciones-section').style.display = mode==='granos' ? '' : 'none';
+
+  // Show/hide put/call in decisions form
+  const showOpts = mode === 'granos';
+  document.getElementById('opt-put').style.display  = showOpts ? '' : 'none';
+  document.getElementById('opt-call').style.display = showOpts ? '' : 'none';
+  // If current selection is put/call but we switched to esp, reset to disponible
+  const estrat = document.getElementById('df-estrat').value;
+  if (!showOpts && (estrat === 'put' || estrat === 'call')) {
+    document.getElementById('df-estrat').value = 'disponible';
+    togglePrima();
+  }
+
+  recalc();
+  renderDecisions();
+  fetchCBOT(false);
+}
+
+// ── Position derivation from decisions ───────────────────────────────────────
 function derivePositions() {
   const cultivo = document.getElementById('cultivo').value;
-  const filt = decisions.filter(d => d.grano === cultivo);
+  const filt = curDecisions().filter(d => d.grano === cultivo);
 
   const fijadas = filt.filter(d => d.estrategia === 'disponible' || d.estrategia === 'forward');
   const B2 = fijadas.reduce((s,d) => s+d.toneladas, 0);
@@ -437,14 +527,15 @@ function derivePositions() {
   return { B2, B5, B4, B12, B7, B8, B9 };
 }
 
+// ── Main calculation ──────────────────────────────────────────────────────────
 function recalc() {
+  saveInputs();
   const A1=n('A1'), A2=n('A2'), A5=n('A5'), A6=n('A6');
   const B1=n('B1'), B11=n('B11'), B13=n('B13');
   const C1=n('C1'), C6=n('C6'), D1=n('D1');
   const { B2, B5, B4, B12, B7, B8, B9 } = derivePositions();
 
   const A3 = A1 - A2;
-  // A5/A6 in kg/ha → divide by 1000 for tn/ha
   const A4 = A1 !== 0 ? (A2*A5 + A3*A6) / (A1 * 1000) : 0;
   const A7 = A4 * A1;
   const B3  = A7 - B1 - B2;
@@ -463,37 +554,47 @@ function recalc() {
   const C4 = calcPrice(ref);
   const C5 = C4 * A4 - C1;
   const C7 = A4 !== 0 ? C1 * (1 + C6/100) / A4 : 0;
+  const roi = C1 > 0 ? (C5 / C1) * 100 : 0;
   const D1f = D1 / 100;
   const D2  = calcPrice(ref*(1-D1f)) * A4 - C1;
   const D3  = calcPrice(ref*(1+D1f)) * A4 - C1;
 
-  setVal('r_A3', fmt(A3,1));
-  setVal('r_A4', fmt(A4,2));
-  setVal('r_A7', fmt(A7,1));
-  setVal('r_B2', fmt(B2,1));
-  setVal('r_B5', fmt(B5,2));
-  setVal('r_B3', fmt(B3,1));
-  setVal('r_B4', fmt(B4,1));
+  setVal('r_A3',  fmt(A3,1));
+  setVal('r_A4',  fmt(A4,2));
+  setVal('r_A7',  fmt(A7,1));
+  setVal('r_B2',  fmt(B2,1));
+  setVal('r_B5',  fmt(B5,2));
+  setVal('r_B3',  fmt(B3,1));
+  setVal('r_B4',  fmt(B4,1));
   setVal('r_B12', fmt(B12,2));
-  setVal('r_B6', fmt(B6,1));
-  setVal('r_B7', fmt(B7,1));
-  setVal('r_B8', fmt(B8,2));
-  setVal('r_B9', fmt(B9,2));
+  setVal('r_B6',  fmt(B6,1));
+  setVal('r_B7',  fmt(B7,1));
+  setVal('r_B8',  fmt(B8,2));
+  setVal('r_B9',  fmt(B9,2));
   setVal('r_B10', fmt(B10,2));
   setVal('r_ref', fmt(ref,2));
-  setVal('r_C2', fmt(C2,2));
-  setVal('r_C4', fmt(C4,2));
-  setVal('r_C7', fmt(C7,2));
+  setVal('r_C2',  fmt(C2,2));
+  setVal('r_C4',  fmt(C4,2));
+  setVal('r_C7',  fmt(C7,2));
 
+  // Margen bruto
   const c5El = document.getElementById('r_C5');
   const rowC5 = document.getElementById('row_C5');
   c5El.textContent = fmt(C5,2);
   if (C5 < 0) { c5El.className='cv red'; rowC5.style.cssText='background:#fff1f2;border:1px solid #fecdd3'; }
   else        { c5El.className='cv green'; rowC5.style.cssText='background:#f0fdf4;border:1px solid #bbf7d0'; }
 
+  // Rentabilidad
+  const roiEl  = document.getElementById('r_roi');
+  const rowRoi = document.getElementById('row_roi');
+  roiEl.textContent = C1 > 0 ? fmt(roi,1) : '—';
+  if (roi < 0)       { roiEl.className='cv red';   rowRoi.style.cssText='background:#fff1f2;border:1px solid #fecdd3'; }
+  else if (roi < 15) { roiEl.className='cv amber';  rowRoi.style.cssText='background:#fffbeb;border:1px solid #fde68a'; }
+  else               { roiEl.className='cv green';  rowRoi.style.cssText='background:#f0fdf4;border:1px solid #bbf7d0'; }
+
+  // Sensibilidad
   document.getElementById('lbl_D2').textContent = `El margen bruto si baja ${D1}%`;
   document.getElementById('lbl_D3').textContent = `El margen bruto si sube ${D1}%`;
-
   const d2El = document.getElementById('r_D2');
   const d3El = document.getElementById('r_D3');
   d2El.textContent = fmt(D2,2);
@@ -504,6 +605,7 @@ function recalc() {
   drawCoverageChart(A7, B2, B4, B7);
 }
 
+// ── Coverage chart ────────────────────────────────────────────────────────────
 function drawCoverageChart(A7, B2, B4, B7) {
   const el = document.getElementById('coverage-chart');
   const sinFijar = Math.max(0, A7 - B2 - B4 - B7);
@@ -514,35 +616,35 @@ function drawCoverageChart(A7, B2, B4, B7) {
     { value: sinFijar, color: '#ef4444', label: 'A fijar',      sub: 'sin precio fijado' },
   ].filter(s => s.value > 0);
 
-  const total = segments.reduce((s, v) => s + v.value, 0);
+  const total = segments.reduce((s,v) => s+v.value, 0);
   if (total === 0 || A7 === 0) {
     el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:28px 0;font-size:13px">Cargá la producción en el bloque 1 para ver la cobertura</div>';
     return;
   }
 
-  const cx = 100, cy = 100, r = 85, ri = 52;
-  let paths = '', startAngle = -Math.PI / 2;
+  const cx=100, cy=100, r=85, ri=52;
+  let paths='', startAngle = -Math.PI/2;
   for (const seg of segments) {
-    const angle = (seg.value / total) * 2 * Math.PI;
+    const angle = (seg.value/total)*2*Math.PI;
     if (angle < 0.001) continue;
     const endAngle = startAngle + angle;
     const la = angle > Math.PI ? 1 : 0;
-    const p = (a, rad) => [cx + rad * Math.cos(a), cy + rad * Math.sin(a)];
-    const [x1,y1] = p(startAngle, r), [x2,y2] = p(endAngle, r);
-    const [xi1,yi1] = p(endAngle, ri), [xi2,yi2] = p(startAngle, ri);
+    const p = (a,rad) => [cx+rad*Math.cos(a), cy+rad*Math.sin(a)];
+    const [x1,y1]=p(startAngle,r), [x2,y2]=p(endAngle,r);
+    const [xi1,yi1]=p(endAngle,ri), [xi2,yi2]=p(startAngle,ri);
     paths += `<path d="M${x1},${y1} A${r},${r},0,${la},1,${x2},${y2} L${xi1},${yi1} A${ri},${ri},0,${la},0,${xi2},${yi2}Z" fill="${seg.color}" opacity="0.88" stroke="#fff" stroke-width="2"/>`;
     startAngle = endAngle;
   }
 
   const svg = `<svg viewBox="0 0 200 200" width="180" height="180" style="flex-shrink:0">
     ${paths}
-    <text x="${cx}" y="${cy-9}" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui,sans-serif">producción</text>
-    <text x="${cx}" y="${cy+8}" text-anchor="middle" fill="#0f172a" font-size="15" font-weight="800" font-family="system-ui,sans-serif">${total.toLocaleString('es-AR',{maximumFractionDigits:0})}</text>
+    <text x="${cx}" y="${cy-9}"  text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui,sans-serif">producción</text>
+    <text x="${cx}" y="${cy+8}"  text-anchor="middle" fill="#0f172a" font-size="15" font-weight="800" font-family="system-ui,sans-serif">${total.toLocaleString('es-AR',{maximumFractionDigits:0})}</text>
     <text x="${cx}" y="${cy+23}" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui,sans-serif">toneladas</text>
   </svg>`;
 
   const legend = segments.map(s => {
-    const pct = Math.round((s.value / total) * 100);
+    const pct = Math.round((s.value/total)*100);
     return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
       <div style="width:13px;height:13px;border-radius:4px;background:${s.color};flex-shrink:0"></div>
       <div>
@@ -555,6 +657,7 @@ function drawCoverageChart(A7, B2, B4, B7) {
   el.innerHTML = `<div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap">${svg}<div style="flex:1;min-width:140px">${legend}</div></div>`;
 }
 
+// ── UI helpers ────────────────────────────────────────────────────────────────
 function setRef(mode) {
   refMode = mode;
   document.getElementById('btn-disp').classList.toggle('active', mode==='disponible');
@@ -570,12 +673,13 @@ function switchTab(name) {
   if (name==='decisiones') renderDecisions();
 }
 
+// ── Decisions ─────────────────────────────────────────────────────────────────
 const SC = { disponible:'#166534', forward:'#1a56db', futuro:'#92400e', put:'#b91c1c', call:'#6d28d9' };
 const SB = { disponible:'#dcfce7', forward:'#dbeafe', futuro:'#fef3c7', put:'#fee2e2', call:'#ede9fe' };
 
 function togglePrima() {
   const estrat = document.getElementById('df-estrat').value;
-  document.getElementById('df-prima-wrap').style.display = (estrat === 'put' || estrat === 'call') ? '' : 'none';
+  document.getElementById('df-prima-wrap').style.display = (estrat==='put'||estrat==='call') ? '' : 'none';
 }
 
 function addDecision() {
@@ -583,35 +687,37 @@ function addDecision() {
   const precio = parseFloat(document.getElementById('df-precio').value)||0;
   if (!tons || !precio) { alert('Ingresá toneladas y precio.'); return; }
   const estrat = document.getElementById('df-estrat').value;
-  const prima = (estrat === 'put' || estrat === 'call')
+  const prima  = (estrat==='put'||estrat==='call')
     ? parseFloat(document.getElementById('df-prima').value)||0 : null;
-  decisions.unshift({ id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
+  decisions[decKey()].unshift({
+    id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
     fecha: document.getElementById('df-fecha').value,
     grano: document.getElementById('df-grano').value,
     toneladas: tons, precio_usd: precio,
-    estrategia: estrat,
-    prima_usd: prima,
-    notas: document.getElementById('df-notas').value });
-  localStorage.setItem('iag_decisiones', JSON.stringify(decisions));
-  document.getElementById('df-tons').value = 0;
+    estrategia: estrat, prima_usd: prima,
+    notas: document.getElementById('df-notas').value,
+  });
+  localStorage.setItem(storageKey(), JSON.stringify(decisions[decKey()]));
+  document.getElementById('df-tons').value  = 0;
   document.getElementById('df-precio').value = 0;
-  document.getElementById('df-prima').value = 0;
-  document.getElementById('df-notas').value = '';
+  document.getElementById('df-prima').value  = 0;
+  document.getElementById('df-notas').value  = '';
   recalc();
   renderDecisions();
 }
 
 function removeDecision(id) {
-  decisions = decisions.filter(d=>d.id!==id);
-  localStorage.setItem('iag_decisiones', JSON.stringify(decisions));
+  decisions[decKey()] = decisions[decKey()].filter(d => d.id !== id);
+  localStorage.setItem(storageKey(), JSON.stringify(decisions[decKey()]));
   recalc();
   renderDecisions();
 }
 
 function renderDecisions() {
   const el = document.getElementById('dec-list');
-  if (!decisions.length) { el.innerHTML='<div class="empty">Todavía no registraste ninguna decisión.</div>'; return; }
-  const items = decisions.map(d => {
+  const list = curDecisions();
+  if (!list.length) { el.innerHTML='<div class="empty">Todavía no registraste ninguna decisión.</div>'; return; }
+  const items = list.map(d => {
     const color=SC[d.estrategia]||'#555', bg=SB[d.estrategia]||'#f5f5f5';
     const fecha = d.fecha ? new Date(d.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'}) : '—';
     const notas = d.notas ? ` · ${d.notas}` : '';
@@ -630,9 +736,9 @@ function renderDecisions() {
       <button class="dec-del" onclick="removeDecision('${d.id}')">✕</button>
     </div>`;
   }).join('');
-  const totalT = decisions.reduce((s,d)=>s+d.toneladas,0);
-  const wavg   = totalT ? decisions.reduce((s,d)=>s+d.precio_usd*d.toneladas,0)/totalT : 0;
-  const totalU = decisions.reduce((s,d)=>s+d.toneladas*d.precio_usd,0);
+  const totalT = list.reduce((s,d)=>s+d.toneladas,0);
+  const wavg   = totalT ? list.reduce((s,d)=>s+d.precio_usd*d.toneladas,0)/totalT : 0;
+  const totalU = list.reduce((s,d)=>s+d.toneladas*d.precio_usd,0);
   el.innerHTML = items + `<div class="sum-box">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:6px">Resumen</div>
     <div class="sum-grid">
@@ -643,6 +749,7 @@ function renderDecisions() {
   </div>`;
 }
 
+// ── Price fetch ───────────────────────────────────────────────────────────────
 function setPriceStatus(msg, color) {
   document.getElementById('price-status').textContent = msg;
   document.getElementById('price-status').style.color = color || '#94a3b8';
@@ -650,12 +757,9 @@ function setPriceStatus(msg, color) {
 
 async function fetchCBOT(force = false) {
   const cultivo = document.getElementById('cultivo').value;
-  const keyMap = { soja: 'soja', maiz: 'maiz', trigo: 'trigo' };
-  const key = keyMap[cultivo];
-  if (!key) {
-    setPriceStatus('Sin datos de referencia para este cultivo. Ingresá el precio manualmente.');
-    return;
-  }
+  const keyMap  = { soja:'soja', maiz:'maiz', trigo:'trigo' };
+  const key     = keyMap[cultivo];
+  if (!key) { setPriceStatus('Sin datos de referencia para este cultivo. Ingresá el precio manualmente.'); return; }
 
   setPriceStatus('Buscando precio de referencia…');
   try {
@@ -666,49 +770,52 @@ async function fetchCBOT(force = false) {
     const grain = data.granos?.find(g => g.key === key);
     if (!grain) throw new Error('cultivo no encontrado');
 
-    // Prefer FAS teórico over raw CBOT
     const price = grain.fas_usd_ton ?? grain.price_usd_ton;
     const isFas = grain.fas_usd_ton != null;
     const updatedAt = data.updated_at
-      ? new Date(data.updated_at).toLocaleString('es-AR', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' })
+      ? new Date(data.updated_at).toLocaleString('es-AR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'})
       : '';
 
     const b11 = document.getElementById('B11');
     const b13 = document.getElementById('B13');
-    if (force || parseFloat(b11.value) === 0) b11.value = price;
-    if (force || parseFloat(b13.value) === 0) b13.value = price;
+    if (force || parseFloat(b11.value)===0) b11.value = price;
+    if (force || parseFloat(b13.value)===0) b13.value = price;
 
     const badgeText = isFas ? `FAS (ret. ${grain.retencion_pct}%)` : 'CBOT ref.';
     ['b11-badge','b13-badge'].forEach(id => {
       document.getElementById(id).textContent = badgeText;
       document.getElementById(id).style.display = 'inline';
     });
-
     const srcText = isFas ? 'FAS teórico Rosario' : 'CBOT ref. internacional';
     ['b11-src','b13-src'].forEach(id => {
       document.getElementById(id).textContent = `${srcText} · ${updatedAt}`;
       document.getElementById(id).style.display = 'block';
     });
 
-    const source = isFas
-      ? `FAS teórico (FOB − ret. ${grain.retencion_pct}%)`
-      : 'CBOT internacional';
+    const source = isFas ? `FAS teórico (FOB − ret. ${grain.retencion_pct}%)` : 'CBOT internacional';
     setPriceStatus(`Referencia sugerida: US$ ${price}/tn · ${source} · ${updatedAt}. Reemplazá con el disponible real de Rosario.`, '#15803d');
     recalc();
   } catch (e) {
     ['b11-badge','b13-badge','b11-src','b13-src'].forEach(id =>
-      document.getElementById(id).style.display = 'none');
-    const isTimeout = e.name === 'TimeoutError' || e.name === 'AbortError';
+      document.getElementById(id).style.display='none');
+    const isTimeout = e.name==='TimeoutError' || e.name==='AbortError';
     setPriceStatus(
       isTimeout
         ? 'Sin respuesta del servidor (¿está corriendo npm run dev?). Ingresá el precio manualmente.'
         : 'No se pudo obtener el precio de referencia. Ingresá el precio de Rosario manualmente.',
-      '#dc2626'
-    );
+      '#dc2626');
   }
 }
 
+// ── Init ──────────────────────────────────────────────────────────────────────
 document.getElementById('df-fecha').value = new Date().toISOString().slice(0,10);
+// Apply saved mode on load
+document.getElementById('btn-granos').classList.toggle('active', currentMode==='granos');
+document.getElementById('btn-esp').classList.toggle('active', currentMode==='especialidades');
+document.getElementById('opciones-section').style.display = currentMode==='granos' ? '' : 'none';
+document.getElementById('opt-put').style.display  = currentMode==='granos' ? '' : 'none';
+document.getElementById('opt-call').style.display = currentMode==='granos' ? '' : 'none';
+loadInputs();
 recalc();
 renderDecisions();
 fetchCBOT();
