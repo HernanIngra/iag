@@ -3,410 +3,395 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Mi Posición Comercial · I.Ag</title>
+<title>Posición Comercial · I.Ag</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #f0f4f8; color: #1e293b; font-family: system-ui, -apple-system, sans-serif; padding: 32px 20px; min-height: 100vh; }
-
   .wrap { max-width: 760px; margin: 0 auto; }
-
-  h1 { font-size: 26px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
-  .page-sub { font-size: 15px; color: #64748b; margin-bottom: 32px; }
+  h1 { font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
+  .sub { font-size: 14px; color: #64748b; margin-bottom: 26px; }
 
   /* Tabs */
-  .tabs { display: flex; gap: 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 28px; }
-  .tab { background: none; border: none; padding: 10px 22px; font-size: 15px; font-weight: 700; color: #94a3b8; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-family: inherit; }
+  .tabs { display: flex; gap: 2px; border-bottom: 2px solid #e2e8f0; margin-bottom: 26px; }
+  .tab { background: none; border: none; padding: 10px 22px; font-size: 14px; font-weight: 700; color: #94a3b8; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-family: inherit; }
   .tab.active { color: #1d4ed8; border-bottom-color: #1d4ed8; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
 
-  /* Block cards */
-  .block { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px 24px 28px; margin-bottom: 20px; }
-  .block-header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
-  .block-num { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; flex-shrink: 0; }
-  .block-title { font-size: 18px; font-weight: 800; color: #0f172a; }
-
+  /* Block card */
+  .block { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px 22px 26px; margin-bottom: 18px; }
+  .block-header { display: flex; align-items: center; gap: 11px; margin-bottom: 20px; }
+  .block-num { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; flex-shrink: 0; }
+  .block-title { font-size: 17px; font-weight: 800; color: #0f172a; }
   .c1 .block-num { background: #dcfce7; color: #15803d; }
   .c2 .block-num { background: #dbeafe; color: #1d4ed8; }
   .c3 .block-num { background: #fef9c3; color: #b45309; }
   .c4 .block-num { background: #f3e8ff; color: #7c3aed; }
 
-  /* 2-col grid inside blocks */
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+  /* 2-col grid */
+  .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 540px) { .g2 { grid-template-columns: 1fr; } }
 
   /* Field */
-  .field { display: flex; flex-direction: column; gap: 6px; }
-  .field-label { font-size: 13px; font-weight: 600; color: #475569; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .fl { font-size: 13px; font-weight: 600; color: #475569; }
+  .fu { font-size: 11px; color: #94a3b8; }
   input[type=number], select, input[type=text], input[type=date] {
-    width: 100%; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 9px;
-    padding: 10px 12px; font-size: 16px; color: #0f172a; font-family: inherit; outline: none;
-    transition: border-color .15s;
+    width: 100%; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px;
+    padding: 9px 11px; font-size: 16px; color: #0f172a; font-family: inherit; outline: none;
   }
   input[type=number]:focus, select:focus, input[type=text]:focus, input[type=date]:focus { border-color: #93c5fd; background: #fff; }
-  select option { background: #fff; }
-
-  /* Divider inside block */
-  .divider { border: none; border-top: 1px dashed #e2e8f0; margin: 18px 0; }
 
   /* Calculated row */
-  .calc-row { border-radius: 10px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-  .calc-row.green  { background: #f0fdf4; border: 1px solid #bbf7d0; }
-  .calc-row.amber  { background: #fffbeb; border: 1px solid #fde68a; }
-  .calc-row.red    { background: #fff1f2; border: 1px solid #fecdd3; }
-  .calc-row.blue   { background: #eff6ff; border: 1px solid #bfdbfe; }
-  .calc-row.purple { background: #faf5ff; border: 1px solid #e9d5ff; }
-  .calc-row.neutral{ background: #f8fafc; border: 1px solid #e2e8f0; }
-  .calc-right { text-align: right; }
-  .calc-label { font-size: 13px; font-weight: 700; color: #334155; }
-  .calc-formula { font-size: 12px; color: #94a3b8; margin-top: 3px; font-style: italic; }
-  .calc-val { font-size: 20px; font-weight: 800; }
-  .calc-val.green  { color: #15803d; }
-  .calc-val.amber  { color: #b45309; }
-  .calc-val.red    { color: #dc2626; }
-  .calc-val.blue   { color: #1d4ed8; }
-  .calc-val.purple { color: #7c3aed; }
-  .calc-val.neutral{ color: #334155; }
+  .cr { border-radius: 9px; padding: 11px 13px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .cr.green  { background: #f0fdf4; border: 1px solid #bbf7d0; }
+  .cr.amber  { background: #fffbeb; border: 1px solid #fde68a; }
+  .cr.red    { background: #fff1f2; border: 1px solid #fecdd3; }
+  .cr.blue   { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .cr.purple { background: #faf5ff; border: 1px solid #e9d5ff; }
+  .cr.sky    { background: #f0f9ff; border: 1px solid #bae6fd; }
+  .cr.neutral{ background: #f8fafc; border: 1px solid #e2e8f0; }
+  .cr-left .cl { font-size: 13px; font-weight: 700; color: #334155; }
+  .cr-left .cf { font-size: 11px; color: #94a3b8; margin-top: 3px; font-style: italic; }
+  .cr-right { text-align: right; flex-shrink: 0; }
+  .cv { font-size: 20px; font-weight: 800; display: block; }
+  .cu { font-size: 12px; color: #64748b; margin-top: 1px; }
+  .cv.green  { color: #15803d; }
+  .cv.amber  { color: #b45309; }
+  .cv.red    { color: #dc2626; }
+  .cv.blue   { color: #1d4ed8; }
+  .cv.purple { color: #7c3aed; }
+  .cv.sky    { color: #0369a1; }
+  .cv.neutral{ color: #334155; }
 
-  /* Ref toggle */
-  .toggle-wrap { display: flex; gap: 8px; }
-  .toggle-btn { flex: 1; border: 1.5px solid #cbd5e1; background: #f8fafc; color: #64748b; border-radius: 9px; padding: 10px 8px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all .15s; }
-  .toggle-btn.active { border-color: #1d4ed8; background: #eff6ff; color: #1d4ed8; }
-
-  /* Info line */
-  .info-line { font-size: 13px; color: #64748b; padding: 6px 2px; }
-  .info-line strong { color: #0f172a; }
+  /* Divider */
+  hr { border: none; border-top: 1px dashed #e2e8f0; margin: 16px 0; }
 
   /* Sub-section label */
-  .sub-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 12px; margin-top: 4px; }
+  .sl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #94a3b8; margin-bottom: 10px; }
 
-  /* Sensitivity bar */
-  .sens-bar { position: relative; height: 28px; background: #f1f5f9; border-radius: 14px; border: 1px solid #e2e8f0; }
-  .sens-fill { position: absolute; top: 7px; height: 14px; background: #bfdbfe; border-radius: 7px; }
-  .sens-needle { position: absolute; top: 4px; width: 5px; height: 20px; background: #b45309; border-radius: 3px; transform: translateX(-50%); }
-  .sens-labels { display: flex; justify-content: space-between; font-size: 12px; color: #94a3b8; margin-top: 6px; }
-  .sens-base { color: #b45309; font-weight: 700; }
+  /* Toggle */
+  .tog { display: flex; gap: 7px; margin-top: 3px; }
+  .tbtn { flex: 1; border: 1.5px solid #cbd5e1; background: #f8fafc; color: #64748b; border-radius: 8px; padding: 9px 6px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .tbtn.active { border-color: #1d4ed8; background: #eff6ff; color: #1d4ed8; }
+
+  /* Info line */
+  .il { font-size: 13px; color: #64748b; }
+  .il strong { color: #0f172a; }
+
+  /* Note */
+  .note { font-size: 12px; color: #64748b; font-style: italic; background: #f8fafc; border-radius: 7px; padding: 8px 11px; border-left: 3px solid #e2e8f0; }
 
   /* Decisions */
-  .dec-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; }
-  .btn-add { margin-top: 16px; background: #15803d; border: none; border-radius: 10px; padding: 11px 26px; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; font-family: inherit; }
-  .btn-add:hover { background: #166534; }
-  .dec-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
-  .dec-del { background: none; border: none; color: #cbd5e1; font-size: 16px; cursor: pointer; flex-shrink: 0; padding: 2px 4px; }
+  .dec-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+  .dec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 11px; }
+  .btn-add { margin-top: 14px; background: #15803d; border: none; border-radius: 9px; padding: 10px 22px; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit; }
+  .dec-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 11px; padding: 13px 15px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 9px; }
+  .dec-del { background: none; border: none; color: #cbd5e1; font-size: 15px; cursor: pointer; flex-shrink: 0; padding: 2px 4px; }
   .dec-del:hover { color: #dc2626; }
-  .badge { font-size: 12px; border-radius: 999px; padding: 3px 10px; font-weight: 700; }
-  .summary-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; margin-top: 12px; }
-  .summary-grid { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 10px; }
-  .s-label { font-size: 12px; color: #64748b; margin-bottom: 2px; }
-  .s-val { font-size: 20px; font-weight: 800; }
-
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
-  .empty { text-align: center; padding: 48px 0; color: #94a3b8; font-size: 15px; }
-  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .badge { font-size: 12px; border-radius: 999px; padding: 2px 9px; font-weight: 700; }
+  .sum-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 11px; padding: 13px 16px; margin-top: 10px; }
+  .sum-grid { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 8px; }
+  .sv { font-size: 20px; font-weight: 800; }
+  .empty { text-align: center; padding: 44px 0; color: #94a3b8; font-size: 14px; }
+  .stack { display: flex; flex-direction: column; gap: 11px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Mi posición comercial</h1>
-  <p class="page-sub">Los datos se guardan automáticamente en el navegador</p>
+  <h1>Posición comercial</h1>
+  <p class="sub">Los datos se guardan automáticamente en el navegador</p>
 
   <div class="tabs">
     <button class="tab active" onclick="switchTab('analisis')">📊 Análisis</button>
     <button class="tab" onclick="switchTab('decisiones')">📋 Decisiones</button>
   </div>
 
-  <!-- ══ TAB ANÁLISIS ══════════════════════════════════════════════════════════ -->
+  <!-- ══ ANÁLISIS ═══════════════════════════════════════════════════════════ -->
   <div id="tab-analisis" class="tab-panel active">
 
-    <!-- BLOQUE 1 — Superficie / Rinde / Producción ───────────────────────── -->
+    <!-- Cultivo -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+      <span style="font-size:14px;font-weight:700;color:#475569">Cultivo</span>
+      <select id="cultivo" style="width:auto;font-size:15px" onchange="recalc(); fetchCBOT(true)">
+        <option value="soja">Soja</option>
+        <option value="maiz">Maíz</option>
+        <option value="trigo">Trigo</option>
+        <option value="girasol">Girasol</option>
+        <option value="sorgo">Sorgo</option>
+      </select>
+    </div>
+
+    <!-- BLOQUE 1 ─────────────────────────────────────────────────────────── -->
     <div class="block c1">
       <div class="block-header">
         <div class="block-num">1</div>
         <div class="block-title">Superficie · Rinde · Producción</div>
       </div>
-      <div class="grid2">
-        <div class="field">
-          <label class="field-label">Superficie sembrada (ha)</label>
-          <input type="number" id="sup" value="0" min="0" step="1" oninput="recalc()" />
+      <div class="g2">
+        <!-- Superficie -->
+        <div class="stack">
+          <div class="sl">Superficie</div>
+          <div class="field">
+            <span class="fl">Superficie sembrada <span class="fu">ha</span></span>
+            <input type="number" id="A1" value="0" min="0" step="1" oninput="recalc()" />
+          </div>
+          <div class="field">
+            <span class="fl">Superficie cosechada <span class="fu">ha</span></span>
+            <input type="number" id="A2" value="0" min="0" step="1" oninput="recalc()" />
+          </div>
+          <div class="cr neutral">
+            <div class="cr-left"><div class="cl">Superficie pendiente de cosechar</div><div class="cf">Sembrada − Cosechada</div></div>
+            <div class="cr-right"><span class="cv neutral" id="r_A3">—</span><div class="cu">ha</div></div>
+          </div>
         </div>
-        <div class="field">
-          <label class="field-label">Rinde esperado (tn/ha)</label>
-          <input type="number" id="rinde" value="0" min="0" step="0.1" oninput="recalc()" />
-        </div>
-      </div>
-      <div style="margin-top:14px;">
-        <div class="calc-row green">
-          <div><div class="calc-label">Producción total</div><div class="calc-formula">Superficie × Rinde</div></div>
-          <div class="calc-right"><span class="calc-val green" id="r_prod">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">tn</div></div>
-        </div>
-      </div>
-
-      <hr class="divider" />
-
-      <div class="grid2">
-        <div class="field">
-          <label class="field-label">Ya vendido (tn)</label>
-          <input type="number" id="A2" value="0" min="0" oninput="recalc()" />
-        </div>
-        <div class="calc-row green" style="margin-top:0; align-self:end;">
-          <div><div class="calc-label">Disponible</div><div class="calc-formula">Total − Ya vendido</div></div>
-          <div class="calc-right"><span class="calc-val green" id="r_A3">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">tn</div></div>
-        </div>
-      </div>
-
-      <hr class="divider" />
-
-      <div class="grid2">
-        <div class="field">
-          <label class="field-label">Precio de lo vendido (USD/tn)</label>
-          <input type="number" id="A5" value="0" min="0" step="0.5" oninput="recalc()" />
-        </div>
-        <div class="field">
-          <label class="field-label">Precio disponible hoy (USD/tn)</label>
-          <input type="number" id="A6" value="0" min="0" step="0.5" oninput="recalc()" />
+        <!-- Rinde -->
+        <div class="stack">
+          <div class="sl">Rinde</div>
+          <div class="cr green">
+            <div class="cr-left"><div class="cl">Rend. general (real y estimado)</div><div class="cf">Ponderado cosechado + pendiente</div></div>
+            <div class="cr-right"><span class="cv green" id="r_A4">—</span><div class="cu">tn/ha</div></div>
+          </div>
+          <div class="field">
+            <span class="fl">Rend. de lo cosechado <span class="fu">tn/ha</span></span>
+            <input type="number" id="A5" value="0" min="0" step="any" oninput="recalc()" />
+          </div>
+          <div class="field">
+            <span class="fl">Rend. estimado de lo pendiente <span class="fu">tn/ha</span></span>
+            <input type="number" id="A6" value="0" min="0" step="any" oninput="recalc()" />
+          </div>
         </div>
       </div>
-      <div style="margin-top:14px;" class="grid2">
-        <div class="calc-row amber">
-          <div><div class="calc-label">Precio promedio ponderado</div><div class="calc-formula">Ponderado por volumen vendido y disponible</div></div>
-          <div class="calc-right"><span class="calc-val amber" id="r_A4">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD/tn</div></div>
-        </div>
-        <div class="calc-row blue">
-          <div><div class="calc-label">Valor total del stock</div><div class="calc-formula">Precio promedio × Producción total</div></div>
-          <div class="calc-right"><span class="calc-val blue" id="r_A7">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD</div></div>
+      <!-- Producción total — full width -->
+      <div style="margin-top:14px">
+        <div class="cr green" style="border-width:2px">
+          <div class="cr-left"><div class="cl" style="font-size:15px">Producción total</div><div class="cf">Rend. general × Superficie sembrada</div></div>
+          <div class="cr-right"><span class="cv green" id="r_A7" style="font-size:24px">—</span><div class="cu">tn</div></div>
         </div>
       </div>
-    </div><!-- /bloque 1 -->
+    </div>
 
-
-    <!-- BLOQUE 2 — Definiciones por volumen ─────────────────────────────── -->
+    <!-- BLOQUE 2 ─────────────────────────────────────────────────────────── -->
     <div class="block c2">
       <div class="block-header">
         <div class="block-num">2</div>
         <div class="block-title">Definiciones de precio por volumen</div>
       </div>
 
-      <div class="sub-label">Vendido con precio fijo</div>
-      <div class="grid2">
+      <div class="stack">
         <div class="field">
-          <label class="field-label">Volumen vendido c/precio (USD)</label>
+          <span class="fl">Producción entregada a fijar <span class="fu">tn</span></span>
           <input type="number" id="B1" value="0" min="0" oninput="recalc()" />
         </div>
-        <div class="field">
-          <label class="field-label">Precio forward (USD/tn)</label>
-          <input type="number" id="B7" value="0" min="0" step="0.5" oninput="recalc()" />
+
+        <hr />
+
+        <div class="g2">
+          <div class="field">
+            <span class="fl">Producción entregada fijada <span class="fu">tn</span></span>
+            <input type="number" id="B2" value="0" min="0" oninput="recalc()" />
+          </div>
+          <div class="field">
+            <span class="fl">Precio fijado <span class="fu">USD/tn</span></span>
+            <input type="number" id="B5" value="0" min="0" step="0.5" oninput="recalc()" />
+          </div>
+        </div>
+
+        <div class="cr neutral">
+          <div class="cr-left"><div class="cl">Pendiente de entregar</div><div class="cf">Producción − A fijar − Fijada</div></div>
+          <div class="cr-right"><span class="cv neutral" id="r_B3">—</span><div class="cu">tn</div></div>
+        </div>
+
+        <hr />
+
+        <div class="g2">
+          <div class="field">
+            <span class="fl">Venta futuro (sin entregar) <span class="fu">tn</span></span>
+            <input type="number" id="B4" value="0" min="0" oninput="recalc()" />
+          </div>
+          <div class="field">
+            <span class="fl">Precio fijado <span class="fu">USD/tn</span></span>
+            <input type="number" id="B12" value="0" min="0" step="0.5" oninput="recalc()" />
+          </div>
+        </div>
+
+        <div class="cr red">
+          <div class="cr-left"><div class="cl">Pendiente de fijar</div><div class="cf">Producción − Fijada − Venta futuro</div></div>
+          <div class="cr-right"><span class="cv red" id="r_B6">—</span><div class="cu">tn</div></div>
+        </div>
+
+        <hr />
+
+        <div class="g2">
+          <div class="field">
+            <span class="fl">Opción de venta <span class="fu">tn</span></span>
+            <input type="number" id="B7" value="0" min="0" oninput="recalc()" />
+          </div>
+          <div class="field">
+            <span class="fl">Precio de la opción <span class="fu">USD/tn</span></span>
+            <input type="number" id="B8" value="0" min="0" step="0.5" oninput="recalc()" />
+          </div>
+          <div class="field">
+            <span class="fl">Prima pagada <span class="fu">USD/tn</span></span>
+            <input type="number" id="B9" value="0" min="0" step="any" oninput="recalc()" />
+          </div>
+          <div class="cr blue">
+            <div class="cr-left"><div class="cl">Precio neto de opción</div><div class="cf">Precio opción − Prima</div></div>
+            <div class="cr-right"><span class="cv blue" id="r_B10">—</span><div class="cu">USD/tn</div></div>
+          </div>
+        </div>
+
+        <hr />
+
+        <div class="g2">
+          <div class="field">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+              <span class="fl" style="margin-bottom:0">Precio disponible hoy (Rosario) <span class="fu">USD/tn</span></span>
+              <span id="b11-badge" style="display:none;font-size:10px;font-weight:700;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:2px 6px">CBOT ref.</span>
+            </div>
+            <input type="number" id="B11" value="0" min="0" step="any" oninput="recalc()" />
+            <span id="b11-src" style="display:none;font-size:11px;color:#94a3b8;margin-top:2px"></span>
+          </div>
+          <div class="field">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+              <span class="fl" style="margin-bottom:0">Futuro (ej. mayo) <span class="fu">USD/tn</span></span>
+              <span id="b13-badge" style="display:none;font-size:10px;font-weight:700;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:2px 6px">CBOT ref.</span>
+            </div>
+            <input type="number" id="B13" value="0" min="0" step="any" oninput="recalc()" />
+            <span id="b13-src" style="display:none;font-size:11px;color:#94a3b8;margin-top:2px"></span>
+          </div>
+        </div>
+        <div id="cbot-note" style="display:none;font-size:11px;color:#94a3b8;font-style:italic;background:#f8fafc;border-radius:6px;padding:6px 10px">
+          ⚡ Precios CBOT (referencia internacional). Reemplazá con el precio disponible de Rosario para mayor precisión.
+          <button onclick="fetchCBOT()" style="background:none;border:none;color:#1d4ed8;font-size:11px;cursor:pointer;font-family:inherit;margin-left:6px">↻ Actualizar</button>
         </div>
       </div>
+    </div>
 
-      <hr class="divider" />
-      <div class="sub-label">A fijar</div>
-      <div class="grid2">
-        <div class="field">
-          <label class="field-label">Volumen a fijar (USD)</label>
-          <input type="number" id="B2" value="0" min="0" oninput="recalc()" />
-        </div>
-        <div class="field">
-          <label class="field-label">Precio del instrumento (USD/tn)</label>
-          <input type="number" id="B5" value="0" min="0" step="0.5" oninput="recalc()" />
-        </div>
-      </div>
-
-      <hr class="divider" />
-      <div class="sub-label">Opciones PUT</div>
-      <div class="grid2">
-        <div class="field">
-          <label class="field-label">Volumen cubierto con PUT (USD)</label>
-          <input type="number" id="B4" value="0" min="0" oninput="recalc()" />
-        </div>
-        <div class="field">
-          <label class="field-label">Precio a término (USD/tn)</label>
-          <input type="number" id="B12" value="0" min="0" step="0.5" oninput="recalc()" />
-        </div>
-        <div class="field">
-          <label class="field-label">Precio disponible Rosario (USD/tn)</label>
-          <input type="number" id="B8" value="0" min="0" step="0.5" oninput="recalc()" />
-        </div>
-        <div class="field">
-          <label class="field-label">Prima pagada (USD/tn)</label>
-          <input type="number" id="B9" value="0" min="0" step="0.5" oninput="recalc()" />
-        </div>
-      </div>
-      <div style="margin-top:14px;" class="grid2">
-        <div class="calc-row green">
-          <div><div class="calc-label">Resultado de la opción</div><div class="calc-formula">Precio Rosario − Prima pagada</div></div>
-          <div class="calc-right"><span class="calc-val green" id="r_B10">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD/tn</div></div>
-        </div>
-      </div>
-
-      <hr class="divider" />
-      <div class="sub-label">Precios de referencia</div>
-      <div class="grid2">
-        <div class="field">
-          <label class="field-label">Disponible Rosario — ref. (USD/tn)</label>
-          <input type="number" id="B11" value="0" min="0" step="0.5" oninput="recalc()" />
-        </div>
-        <div class="field">
-          <label class="field-label">Futuro Rosario — ref. (USD/tn)</label>
-          <input type="number" id="B13" value="0" min="0" step="0.5" oninput="recalc()" />
-        </div>
-      </div>
-
-      <hr class="divider" />
-      <div class="sub-label">Totales de posición</div>
-      <div class="grid2">
-        <div class="calc-row neutral">
-          <div><div class="calc-label">Sin vender</div><div class="calc-formula">Valor total − Vendido c/precio − A fijar</div></div>
-          <div class="calc-right"><span class="calc-val neutral" id="r_B3">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD</div></div>
-        </div>
-        <div class="calc-row red">
-          <div><div class="calc-label">Sin cubrir</div><div class="calc-formula">Valor total − A fijar − Opciones PUT</div></div>
-          <div class="calc-right"><span class="calc-val red" id="r_B6">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD</div></div>
-        </div>
-      </div>
-
-    </div><!-- /bloque 2 -->
-
-
-    <!-- BLOQUE 3 — Margen ───────────────────────────────────────────────── -->
+    <!-- BLOQUE 3 ─────────────────────────────────────────────────────────── -->
     <div class="block c3">
       <div class="block-header">
         <div class="block-num">3</div>
         <div class="block-title">Margen</div>
       </div>
 
-      <div class="field" style="margin-bottom:14px;">
-        <label class="field-label">Referencia para el precio resultante</label>
-        <div class="toggle-wrap" style="margin-top:4px;">
-          <button class="toggle-btn active" id="btn-disp" onclick="setRef('disponible')">Disponible (B11)</button>
-          <button class="toggle-btn" id="btn-fut" onclick="setRef('futuro')">Futuro (B13)</button>
-        </div>
-      </div>
-      <div class="info-line" style="margin-bottom:14px;">Referencia activa: <strong id="ref-val">—</strong> USD/tn</div>
-
-      <div class="field" style="margin-bottom:14px;">
-        <label class="field-label">Costo total de producción (USD)</label>
-        <input type="number" id="C1" value="0" min="0" oninput="recalc()" />
-      </div>
-
-      <div class="grid2">
-        <div class="calc-row neutral">
-          <div><div class="calc-label">Costo por tonelada</div><div class="calc-formula">Costo total ÷ Precio promedio</div></div>
-          <div class="calc-right"><span class="calc-val neutral" id="r_C2">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD/tn</div></div>
-        </div>
-        <div class="calc-row amber">
-          <div><div class="calc-label">Precio resultante</div><div class="calc-formula">Ponderado según coberturas y referencia activa</div></div>
-          <div class="calc-right"><span class="calc-val amber" id="r_C4">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD/tn</div></div>
-        </div>
-      </div>
-      <div style="margin-top:14px;">
-        <div class="calc-row" id="row_C5" style="background:#f0fdf4;border:1px solid #bbf7d0;">
-          <div><div class="calc-label">Resultado neto</div><div class="calc-formula">Precio resultante × Precio promedio − Costo total</div></div>
-          <div class="calc-right"><span class="calc-val green" id="r_C5">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD</div></div>
-        </div>
-      </div>
-
-      <hr class="divider" />
-
-      <div class="grid2">
+      <div class="stack">
         <div class="field">
-          <label class="field-label">Variación de precio esperada (%)</label>
-          <input type="number" id="C6" value="0" step="0.5" oninput="recalc()" />
+          <span class="fl">Costo de producción / ha <span class="fu">USD/ha</span></span>
+          <input type="number" id="C1" value="0" min="0" oninput="recalc()" />
         </div>
-        <div class="calc-row green" style="align-self:end;">
-          <div><div class="calc-label">Precio objetivo ajustado</div><div class="calc-formula">Costo total × (1 + variación%) ÷ Precio promedio</div></div>
-          <div class="calc-right"><span class="calc-val green" id="r_C7">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD/tn</div></div>
+
+        <div class="cr amber">
+          <div class="cr-left"><div class="cl">Precio de indiferencia (con rinde estimado)</div><div class="cf">Costo/ha ÷ Rend. general</div></div>
+          <div class="cr-right"><span class="cv amber" id="r_C2">—</span><div class="cu">USD/tn</div></div>
+        </div>
+
+        <div class="g2">
+          <div class="field">
+            <span class="fl">Rentabilidad objetivo <span class="fu">%</span></span>
+            <input type="number" id="C6" value="0" step="0.5" oninput="recalc()" />
+          </div>
+          <div class="cr amber">
+            <div class="cr-left"><div class="cl">Precio para rent. objetivo</div><div class="cf">Costo/ha × (1 + rent%) ÷ Rend. general</div></div>
+            <div class="cr-right"><span class="cv amber" id="r_C7">—</span><div class="cu">USD/tn</div></div>
+          </div>
+        </div>
+
+        <div class="note">Las opciones se toman sólo si el precio es mejor al actual. Lo no fijado se toma al precio disponible o futuro.</div>
+
+        <div class="field">
+          <span class="fl">Mercado a considerar</span>
+          <div class="tog">
+            <button class="tbtn active" id="btn-disp" onclick="setRef('disponible')">Disponible (Rosario)</button>
+            <button class="tbtn" id="btn-fut" onclick="setRef('futuro')">Futuro (ej. mayo)</button>
+          </div>
+        </div>
+
+        <div class="cr sky">
+          <div class="cr-left"><div class="cl">Precio de referencia activo</div><div class="cf">Según mercado seleccionado arriba</div></div>
+          <div class="cr-right"><span class="cv sky" id="r_ref">—</span><div class="cu">USD/tn</div></div>
+        </div>
+
+        <div class="cr amber">
+          <div class="cr-left"><div class="cl">Precio promedio alcanzado</div><div class="cf">Ponderado según coberturas y referencia</div></div>
+          <div class="cr-right"><span class="cv amber" id="r_C4">—</span><div class="cu">USD/tn</div></div>
+        </div>
+
+        <div class="cr" id="row_C5" style="background:#f0fdf4;border:1px solid #bbf7d0">
+          <div class="cr-left"><div class="cl" style="font-size:15px;font-weight:800">Margen bruto</div><div class="cf">Precio alcanzado × Rend. general − Costo/ha</div></div>
+          <div class="cr-right"><span class="cv green" id="r_C5">—</span><div class="cu">USD/ha</div></div>
         </div>
       </div>
+    </div>
 
-    </div><!-- /bloque 3 -->
-
-
-    <!-- BLOQUE 4 — Sensibilidad ─────────────────────────────────────────── -->
+    <!-- BLOQUE 4 ─────────────────────────────────────────────────────────── -->
     <div class="block c4">
       <div class="block-header">
         <div class="block-num">4</div>
         <div class="block-title">Sensibilidad al precio de referencia</div>
       </div>
 
-      <div class="field" style="margin-bottom:14px; max-width:240px;">
-        <label class="field-label">Variación a simular (%)</label>
-        <input type="number" id="D1" value="5" min="0" step="1" oninput="recalc()" />
-      </div>
-      <div class="info-line" id="sens-info" style="margin-bottom:16px;">—</div>
+      <div class="stack">
+        <div class="field" style="max-width:220px">
+          <span class="fl">Si el mercado sube o baja <span class="fu">%</span></span>
+          <input type="number" id="D1" value="5" min="0" step="1" oninput="recalc()" />
+        </div>
 
-      <div class="grid2">
-        <div class="calc-row red">
-          <div><div class="calc-label" id="lbl_D2">Si la referencia baja 5%</div><div class="calc-formula">Mismo cálculo con ref × (1 − variación%)</div></div>
-          <div class="calc-right"><span class="calc-val red" id="r_D2">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD</div></div>
-        </div>
-        <div class="calc-row green">
-          <div><div class="calc-label" id="lbl_D3">Si la referencia sube 5%</div><div class="calc-formula">Mismo cálculo con ref × (1 + variación%)</div></div>
-          <div class="calc-right"><span class="calc-val green" id="r_D3">—</span><div style="font-size:13px;color:#64748b;margin-top:2px">USD</div></div>
-        </div>
-      </div>
-
-      <div id="sens-bar-wrap" style="display:none; margin-top:20px;">
-        <div class="sub-label">Rango de resultado</div>
-        <div class="sens-bar"><div class="sens-fill" id="sens-fill"></div><div class="sens-needle" id="sens-needle"></div></div>
-        <div class="sens-labels">
-          <span id="sens-lo">—</span>
-          <span class="sens-base" id="sens-base">Base: —</span>
-          <span id="sens-hi">—</span>
+        <div class="g2">
+          <div class="cr red">
+            <div class="cr-left"><div class="cl" id="lbl_D2">El margen bruto si baja 5%</div><div class="cf">Ref × (1 − %)</div></div>
+            <div class="cr-right"><span class="cv red" id="r_D2">—</span><div class="cu">USD/ha</div></div>
+          </div>
+          <div class="cr green">
+            <div class="cr-left"><div class="cl" id="lbl_D3">El margen bruto si sube 5%</div><div class="cf">Ref × (1 + %)</div></div>
+            <div class="cr-right"><span class="cv green" id="r_D3">—</span><div class="cu">USD/ha</div></div>
+          </div>
         </div>
       </div>
-    </div><!-- /bloque 4 -->
+    </div>
 
   </div><!-- /tab-analisis -->
 
-
-  <!-- ══ TAB DECISIONES ════════════════════════════════════════════════════════ -->
+  <!-- ══ DECISIONES ════════════════════════════════════════════════════════ -->
   <div id="tab-decisiones" class="tab-panel">
-
-    <div class="block" style="border-radius:16px;">
-      <div class="block-title" style="margin-bottom:18px; font-size:17px;">Registrar una decisión</div>
-      <div class="dec-form-grid">
-        <div class="field"><label class="field-label">Fecha</label><input type="date" id="df-fecha" /></div>
-        <div class="field"><label class="field-label">Grano</label>
+    <div class="dec-card">
+      <div style="font-size:16px;font-weight:800;margin-bottom:14px">Registrar decisión</div>
+      <div class="dec-grid">
+        <div class="field"><label class="fl">Fecha</label><input type="date" id="df-fecha" /></div>
+        <div class="field"><label class="fl">Grano</label>
           <select id="df-grano">
             <option value="soja">Soja</option><option value="maiz">Maíz</option>
             <option value="trigo">Trigo</option><option value="girasol">Girasol</option><option value="sorgo">Sorgo</option>
           </select>
         </div>
-        <div class="field"><label class="field-label">Toneladas</label><input type="number" id="df-tons" value="0" min="0" step="10" /></div>
-        <div class="field"><label class="field-label">Precio (USD/tn)</label><input type="number" id="df-precio" value="0" min="0" step="0.5" /></div>
-        <div class="field"><label class="field-label">Estrategia</label>
+        <div class="field"><label class="fl">Toneladas</label><input type="number" id="df-tons" value="0" min="0" step="10" /></div>
+        <div class="field"><label class="fl">Precio (USD/tn)</label><input type="number" id="df-precio" value="0" min="0" step="0.5" /></div>
+        <div class="field"><label class="fl">Estrategia</label>
           <select id="df-estrat">
             <option value="disponible">Disponible</option><option value="forward">Forward</option>
             <option value="futuro">Futuro</option><option value="put">Put</option><option value="call">Call</option>
           </select>
         </div>
-        <div class="field"><label class="field-label">Notas</label><input type="text" id="df-notas" placeholder="Opcional" /></div>
+        <div class="field"><label class="fl">Notas</label><input type="text" id="df-notas" placeholder="Opcional" /></div>
       </div>
       <button class="btn-add" onclick="addDecision()">+ Registrar decisión</button>
     </div>
-
     <div id="dec-list"></div>
-
   </div>
 
-</div><!-- /wrap -->
+</div>
 
 <script>
-// ── State ─────────────────────────────────────────────────────────────────────
 let refMode = 'disponible';
 let decisions = JSON.parse(localStorage.getItem('iag_decisiones') || '[]');
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const n = (id) => parseFloat(document.getElementById(id).value) || 0;
+const n = id => parseFloat(document.getElementById(id).value) || 0;
 const fmt = (v, d=2) => isFinite(v) && !isNaN(v)
   ? v.toLocaleString('es-AR', {minimumFractionDigits:d, maximumFractionDigits:d}) : '—';
-
 function setVal(id, text) { document.getElementById(id).textContent = text; }
 
-// ── Formulas ──────────────────────────────────────────────────────────────────
 function recalc() {
-  const sup=n('sup'), rinde=n('rinde');
-  const A1 = sup * rinde;                           // producción total
-  const A2=n('A2'), A5=n('A5'), A6=n('A6');
+  const A1=n('A1'), A2=n('A2'), A5=n('A5'), A6=n('A6');
   const B1=n('B1'), B2=n('B2'), B4=n('B4'), B5=n('B5');
   const B7=n('B7'), B8=n('B8'), B9=n('B9'), B11=n('B11'), B12=n('B12'), B13=n('B13');
   const C1=n('C1'), C6=n('C6'), D1=n('D1');
@@ -414,12 +399,11 @@ function recalc() {
   const A3 = A1 - A2;
   const A4 = A1 !== 0 ? (A2*A5 + A3*A6) / A1 : 0;
   const A7 = A4 * A1;
-  const B3 = A7 - B1 - B2;
-  const B6 = A7 - B2 - B4;
+  const B3  = A7 - B1 - B2;
+  const B6  = A7 - B2 - B4;
   const B10 = B8 - B9;
   const ref = refMode === 'disponible' ? B11 : B13;
-
-  const C2 = A4 !== 0 ? C1 / A4 : 0;
+  const C2  = A4 !== 0 ? C1 / A4 : 0;
 
   function calcPrice(r) {
     if (A7 === 0) return 0;
@@ -432,60 +416,35 @@ function recalc() {
   const C5 = C4 * A4 - C1;
   const C7 = A4 !== 0 ? C1 * (1 + C6/100) / A4 : 0;
   const D1f = D1 / 100;
-  const D2 = calcPrice(ref*(1-D1f)) * A4 - C1;
-  const D3 = calcPrice(ref*(1+D1f)) * A4 - C1;
+  const D2  = calcPrice(ref*(1-D1f)) * A4 - C1;
+  const D3  = calcPrice(ref*(1+D1f)) * A4 - C1;
 
-  // Block 1
-  setVal('r_prod', fmt(A1,1) + ' tn');
   setVal('r_A3', fmt(A3,1));
   setVal('r_A4', fmt(A4,2));
-  setVal('r_A7', fmt(A7,0));
-
-  // Block 2
-  setVal('r_B3', fmt(B3,0));
-  setVal('r_B6', fmt(B6,0));
+  setVal('r_A7', fmt(A7,1));
+  setVal('r_B3', fmt(B3,1));
+  setVal('r_B6', fmt(B6,1));
   setVal('r_B10', fmt(B10,2));
-
-  // Block 3
-  setVal('ref-val', fmt(ref,2));
+  setVal('r_ref', fmt(ref,2));
   setVal('r_C2', fmt(C2,2));
   setVal('r_C4', fmt(C4,2));
-  setVal('r_C5', fmt(C5,0));
   setVal('r_C7', fmt(C7,2));
 
-  // C5 color
+  const c5El = document.getElementById('r_C5');
   const rowC5 = document.getElementById('row_C5');
-  const valC5 = document.getElementById('r_C5');
-  if (C5 < 0) {
-    rowC5.style.background = '#fff1f2'; rowC5.style.borderColor = '#fecdd3';
-    valC5.className = 'calc-val red';
-  } else {
-    rowC5.style.background = '#f0fdf4'; rowC5.style.borderColor = '#bbf7d0';
-    valC5.className = 'calc-val green';
-  }
+  c5El.textContent = fmt(C5,2);
+  if (C5 < 0) { c5El.className='cv red'; rowC5.style.cssText='background:#fff1f2;border:1px solid #fecdd3'; }
+  else        { c5El.className='cv green'; rowC5.style.cssText='background:#f0fdf4;border:1px solid #bbf7d0'; }
 
-  // Block 4
-  setVal('lbl_D2', `Si la referencia baja ${D1}%`);
-  setVal('lbl_D3', `Si la referencia sube ${D1}%`);
-  setVal('r_D2', fmt(D2,0));
-  setVal('r_D3', fmt(D3,0));
-  document.getElementById('sens-info').innerHTML =
-    `Ref −${D1}%: <strong>${fmt(ref*(1-D1f),2)} USD/tn</strong> &nbsp;·&nbsp; Ref +${D1}%: <strong>${fmt(ref*(1+D1f),2)} USD/tn</strong>`;
+  document.getElementById('lbl_D2').textContent = `El margen bruto si baja ${D1}%`;
+  document.getElementById('lbl_D3').textContent = `El margen bruto si sube ${D1}%`;
 
-  // Sensitivity bar
-  const bw = document.getElementById('sens-bar-wrap');
-  if (isFinite(D2) && isFinite(D3) && D2 !== D3) {
-    bw.style.display = 'block';
-    const lo=Math.min(D2,D3,C5), hi=Math.max(D2,D3,C5), rng=hi-lo||1;
-    const pD2=((D2-lo)/rng)*100, pD3=((D3-lo)/rng)*100, pC5=((C5-lo)/rng)*100;
-    const bL=Math.min(pD2,pD3), bW=Math.abs(pD3-pD2);
-    document.getElementById('sens-fill').style.left = bL + '%';
-    document.getElementById('sens-fill').style.width = bW + '%';
-    document.getElementById('sens-needle').style.left = pC5 + '%';
-    setVal('sens-lo', fmt(Math.min(D2,D3),0));
-    setVal('sens-base', 'Base: ' + fmt(C5,0));
-    setVal('sens-hi', fmt(Math.max(D2,D3),0));
-  } else { bw.style.display = 'none'; }
+  const d2El = document.getElementById('r_D2');
+  const d3El = document.getElementById('r_D3');
+  d2El.textContent = fmt(D2,2);
+  d3El.textContent = fmt(D3,2);
+  d2El.className = D2 < 0 ? 'cv red' : 'cv green';
+  d3El.className = D3 < 0 ? 'cv red' : 'cv green';
 }
 
 function setRef(mode) {
@@ -495,7 +454,6 @@ function setRef(mode) {
   recalc();
 }
 
-// ── Tabs ──────────────────────────────────────────────────────────────────────
 function switchTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -504,22 +462,19 @@ function switchTab(name) {
   if (name==='decisiones') renderDecisions();
 }
 
-// ── Decisions ─────────────────────────────────────────────────────────────────
-const STRAT_COLORS = { disponible:'#15803d', forward:'#1d4ed8', futuro:'#b45309', put:'#dc2626', call:'#7c3aed' };
-const STRAT_BG     = { disponible:'#dcfce7', forward:'#dbeafe', futuro:'#fef9c3', put:'#ffe4e6', call:'#f3e8ff' };
+const SC = { disponible:'#166534', forward:'#1a56db', futuro:'#92400e', put:'#b91c1c', call:'#6d28d9' };
+const SB = { disponible:'#dcfce7', forward:'#dbeafe', futuro:'#fef3c7', put:'#fee2e2', call:'#ede9fe' };
 
 function addDecision() {
-  const tons = parseFloat(document.getElementById('df-tons').value)||0;
+  const tons  = parseFloat(document.getElementById('df-tons').value)||0;
   const precio = parseFloat(document.getElementById('df-precio').value)||0;
   if (!tons || !precio) { alert('Ingresá toneladas y precio.'); return; }
-  decisions.unshift({
-    id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
+  decisions.unshift({ id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
     fecha: document.getElementById('df-fecha').value,
     grano: document.getElementById('df-grano').value,
     toneladas: tons, precio_usd: precio,
     estrategia: document.getElementById('df-estrat').value,
-    notas: document.getElementById('df-notas').value,
-  });
+    notas: document.getElementById('df-notas').value });
   localStorage.setItem('iag_decisiones', JSON.stringify(decisions));
   document.getElementById('df-tons').value = 0;
   document.getElementById('df-precio').value = 0;
@@ -536,45 +491,80 @@ function removeDecision(id) {
 function renderDecisions() {
   const el = document.getElementById('dec-list');
   if (!decisions.length) { el.innerHTML='<div class="empty">Todavía no registraste ninguna decisión.</div>'; return; }
-
   const items = decisions.map(d => {
-    const color = STRAT_COLORS[d.estrategia]||'#64748b';
-    const bg    = STRAT_BG[d.estrategia]||'#f1f5f9';
+    const color=SC[d.estrategia]||'#555', bg=SB[d.estrategia]||'#f5f5f5';
     const fecha = d.fecha ? new Date(d.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'}) : '—';
-    const total = (d.toneladas*d.precio_usd).toLocaleString('es-AR',{maximumFractionDigits:0});
-    const notas = d.notas ? `<span style="color:#64748b"> · ${d.notas}</span>` : '';
+    const notas = d.notas ? ` · ${d.notas}` : '';
     return `<div class="dec-item" style="border-left:4px solid ${color}">
       <div style="flex:1;min-width:0">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-          <span style="font-size:15px;font-weight:800;color:#0f172a">${d.grano.charAt(0).toUpperCase()+d.grano.slice(1)} · ${d.toneladas.toLocaleString('es-AR')} tn</span>
-          <span style="font-size:15px;font-weight:700;color:#b45309">US$ ${d.precio_usd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}/tn</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px">
+          <span style="font-size:15px;font-weight:800">${d.grano.charAt(0).toUpperCase()+d.grano.slice(1)} · ${d.toneladas.toLocaleString('es-AR')} tn</span>
+          <span style="font-size:15px;font-weight:700;color:#92400e">US$ ${d.precio_usd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}/tn</span>
           <span class="badge" style="background:${bg};color:${color}">${d.estrategia}</span>
         </div>
-        <div style="font-size:13px;color:#64748b">${fecha}${notas} &nbsp;·&nbsp; Total: US$ ${total}</div>
+        <div style="font-size:13px;color:#64748b">${fecha}${notas} · Total: US$ ${(d.toneladas*d.precio_usd).toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
       </div>
       <button class="dec-del" onclick="removeDecision('${d.id}')">✕</button>
     </div>`;
   }).join('');
-
   const totalT = decisions.reduce((s,d)=>s+d.toneladas,0);
-  const wavg = totalT ? decisions.reduce((s,d)=>s+d.precio_usd*d.toneladas,0)/totalT : 0;
-  const totalUSD = decisions.reduce((s,d)=>s+d.toneladas*d.precio_usd,0);
-
-  el.innerHTML = items + `
-  <div class="summary-box">
-    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:4px">Resumen del registro</div>
-    <div class="summary-grid">
-      <div><div class="s-label">Total toneladas</div><div class="s-val" style="color:#0f172a">${totalT.toLocaleString('es-AR')} tn</div></div>
-      <div><div class="s-label">Precio prom. ponderado</div><div class="s-val" style="color:#b45309">US$ ${wavg.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}/tn</div></div>
-      <div><div class="s-label">Valor total</div><div class="s-val" style="color:#15803d">US$ ${totalUSD.toLocaleString('es-AR',{maximumFractionDigits:0})}</div></div>
+  const wavg   = totalT ? decisions.reduce((s,d)=>s+d.precio_usd*d.toneladas,0)/totalT : 0;
+  const totalU = decisions.reduce((s,d)=>s+d.toneladas*d.precio_usd,0);
+  el.innerHTML = items + `<div class="sum-box">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:6px">Resumen</div>
+    <div class="sum-grid">
+      <div><div style="font-size:12px;color:#64748b">Total toneladas</div><div class="sv">${totalT.toLocaleString('es-AR')} tn</div></div>
+      <div><div style="font-size:12px;color:#64748b">Precio prom. ponderado</div><div class="sv" style="color:#92400e">US$ ${wavg.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}/tn</div></div>
+      <div><div style="font-size:12px;color:#64748b">Valor total</div><div class="sv" style="color:#15803d">US$ ${totalU.toLocaleString('es-AR',{maximumFractionDigits:0})}</div></div>
     </div>
   </div>`;
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+async function fetchCBOT(force = false) {
+  const cultivo = document.getElementById('cultivo').value;
+  const keyMap = { soja: 'soja', maiz: 'maiz', trigo: 'trigo' };
+  const key = keyMap[cultivo];
+  if (!key) return; // girasol, sorgo: sin datos CBOT
+
+  try {
+    const res = await fetch('http://localhost:3000/api/precios-granos');
+    if (!res.ok) return;
+    const data = await res.json();
+    const grain = data.granos?.find(g => g.key === key);
+    if (!grain) return;
+
+    const price = grain.price_usd_ton;
+    const updatedAt = data.updated_at
+      ? new Date(data.updated_at).toLocaleString('es-AR', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' })
+      : '';
+
+    const b11 = document.getElementById('B11');
+    const b13 = document.getElementById('B13');
+    if (force || parseFloat(b11.value) === 0) b11.value = price;
+    if (force || parseFloat(b13.value) === 0) b13.value = price;
+
+    document.getElementById('b11-badge').style.display = 'inline';
+    document.getElementById('b13-badge').style.display = 'inline';
+
+    const srcText = `CBOT ${grain.name} · ${updatedAt}`;
+    const b11Src = document.getElementById('b11-src');
+    const b13Src = document.getElementById('b13-src');
+    b11Src.textContent = srcText;
+    b11Src.style.display = 'block';
+    b13Src.textContent = srcText;
+    b13Src.style.display = 'block';
+
+    document.getElementById('cbot-note').style.display = 'block';
+    recalc();
+  } catch (e) {
+    // sin conexión al servidor — el usuario ingresa manualmente
+  }
+}
+
 document.getElementById('df-fecha').value = new Date().toISOString().slice(0,10);
 recalc();
 renderDecisions();
+fetchCBOT();
 </script>
 </body>
 </html>
