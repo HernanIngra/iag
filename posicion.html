@@ -367,11 +367,12 @@
         <div class="field"><label class="fl">Toneladas</label><input type="number" id="df-tons" value="0" min="0" step="10" /></div>
         <div class="field"><label class="fl">Precio (USD/tn)</label><input type="number" id="df-precio" value="0" min="0" step="0.5" /></div>
         <div class="field"><label class="fl">Estrategia</label>
-          <select id="df-estrat">
+          <select id="df-estrat" onchange="togglePrima()">
             <option value="disponible">Disponible</option><option value="forward">Forward</option>
             <option value="futuro">Futuro</option><option value="put">Put</option><option value="call">Call</option>
           </select>
         </div>
+        <div class="field" id="df-prima-wrap" style="display:none"><label class="fl">Costo de la prima <span class="fu">USD/tn</span></label><input type="number" id="df-prima" value="0" min="0" step="any" /></div>
         <div class="field"><label class="fl">Notas</label><input type="text" id="df-notas" placeholder="Opcional" /></div>
       </div>
       <button class="btn-add" onclick="addDecision()">+ Registrar decisión</button>
@@ -465,19 +466,29 @@ function switchTab(name) {
 const SC = { disponible:'#166534', forward:'#1a56db', futuro:'#92400e', put:'#b91c1c', call:'#6d28d9' };
 const SB = { disponible:'#dcfce7', forward:'#dbeafe', futuro:'#fef3c7', put:'#fee2e2', call:'#ede9fe' };
 
+function togglePrima() {
+  const estrat = document.getElementById('df-estrat').value;
+  document.getElementById('df-prima-wrap').style.display = (estrat === 'put' || estrat === 'call') ? '' : 'none';
+}
+
 function addDecision() {
   const tons  = parseFloat(document.getElementById('df-tons').value)||0;
   const precio = parseFloat(document.getElementById('df-precio').value)||0;
   if (!tons || !precio) { alert('Ingresá toneladas y precio.'); return; }
+  const estrat = document.getElementById('df-estrat').value;
+  const prima = (estrat === 'put' || estrat === 'call')
+    ? parseFloat(document.getElementById('df-prima').value)||0 : null;
   decisions.unshift({ id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
     fecha: document.getElementById('df-fecha').value,
     grano: document.getElementById('df-grano').value,
     toneladas: tons, precio_usd: precio,
-    estrategia: document.getElementById('df-estrat').value,
+    estrategia: estrat,
+    prima_usd: prima,
     notas: document.getElementById('df-notas').value });
   localStorage.setItem('iag_decisiones', JSON.stringify(decisions));
   document.getElementById('df-tons').value = 0;
   document.getElementById('df-precio').value = 0;
+  document.getElementById('df-prima').value = 0;
   document.getElementById('df-notas').value = '';
   renderDecisions();
 }
@@ -495,12 +506,15 @@ function renderDecisions() {
     const color=SC[d.estrategia]||'#555', bg=SB[d.estrategia]||'#f5f5f5';
     const fecha = d.fecha ? new Date(d.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'short',year:'numeric'}) : '—';
     const notas = d.notas ? ` · ${d.notas}` : '';
+    const primaTag = d.prima_usd != null
+      ? `<span style="font-size:12px;color:#6d28d9;background:#ede9fe;border-radius:4px;padding:2px 6px;font-weight:700">Prima: US$ ${d.prima_usd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}/tn</span>` : '';
     return `<div class="dec-item" style="border-left:4px solid ${color}">
       <div style="flex:1;min-width:0">
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px">
           <span style="font-size:15px;font-weight:800">${d.grano.charAt(0).toUpperCase()+d.grano.slice(1)} · ${d.toneladas.toLocaleString('es-AR')} tn</span>
           <span style="font-size:15px;font-weight:700;color:#92400e">US$ ${d.precio_usd.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}/tn</span>
           <span class="badge" style="background:${bg};color:${color}">${d.estrategia}</span>
+          ${primaTag}
         </div>
         <div style="font-size:13px;color:#64748b">${fecha}${notas} · Total: US$ ${(d.toneladas*d.precio_usd).toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
       </div>
