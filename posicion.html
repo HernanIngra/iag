@@ -503,12 +503,12 @@ function drawCoverageChart(A7, B2, B4, B7) {
     { value: B2,       color: '#16a34a', label: 'Fijado',      sub: 'disponible + forward' },
     { value: B4,       color: '#1d4ed8', label: 'Futuro',       sub: 'ROFEX' },
     { value: B7,       color: '#7c3aed', label: 'Con opción',   sub: 'put / call' },
-    { value: sinFijar, color: '#ef4444', label: 'Sin cobertura',sub: 'pendiente de fijar' },
+    { value: sinFijar, color: '#ef4444', label: 'A fijar',      sub: 'sin precio fijado' },
   ].filter(s => s.value > 0);
 
   const total = segments.reduce((s, v) => s + v.value, 0);
   if (total === 0 || A7 === 0) {
-    el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:28px 0;font-size:13px">Cargá la producción y las decisiones para ver la cobertura</div>';
+    el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:28px 0;font-size:13px">Cargá la producción en el bloque 1 para ver la cobertura</div>';
     return;
   }
 
