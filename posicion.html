@@ -269,9 +269,9 @@
             <span id="b13-src" style="display:none;font-size:11px;color:#94a3b8;margin-top:2px"></span>
           </div>
         </div>
-        <div id="cbot-note" style="display:none;font-size:11px;color:#94a3b8;font-style:italic;background:#f8fafc;border-radius:6px;padding:6px 10px">
-          Precio de referencia auto-calculado (FAS teórico cuando hay datos del MAGYP; CBOT como respaldo). Reemplazá con el precio real de Rosario.
-          <button onclick="fetchCBOT()" style="background:none;border:none;color:#1d4ed8;font-size:11px;cursor:pointer;font-family:inherit;margin-left:6px">↻ Actualizar</button>
+        <div style="display:flex;align-items:center;gap:8px;background:#f8fafc;border-radius:6px;padding:7px 10px;flex-wrap:wrap">
+          <span id="price-status" style="font-size:11px;color:#94a3b8;flex:1">Buscando precio de referencia…</span>
+          <button onclick="fetchCBOT(true)" id="btn-refresh" style="background:none;border:1.5px solid #cbd5e1;border-radius:6px;color:#475569;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;padding:3px 9px">↻ Actualizar</button>
         </div>
       </div>
     </div>
@@ -635,22 +635,32 @@ function renderDecisions() {
   </div>`;
 }
 
+function setPriceStatus(msg, color) {
+  document.getElementById('price-status').textContent = msg;
+  document.getElementById('price-status').style.color = color || '#94a3b8';
+}
+
 async function fetchCBOT(force = false) {
   const cultivo = document.getElementById('cultivo').value;
   const keyMap = { soja: 'soja', maiz: 'maiz', trigo: 'trigo' };
   const key = keyMap[cultivo];
-  if (!key) return;
+  if (!key) {
+    setPriceStatus('Sin datos de referencia para este cultivo. Ingresá el precio manualmente.');
+    return;
+  }
 
+  setPriceStatus('Buscando precio de referencia…');
   try {
-    const res = await fetch('http://localhost:3000/api/precios-granos');
-    if (!res.ok) return;
+    const res = await fetch('http://localhost:3000/api/precios-granos',
+      { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const grain = data.granos?.find(g => g.key === key);
-    if (!grain) return;
+    if (!grain) throw new Error('cultivo no encontrado');
 
-    // Prefer FAS teórico (Rosario reference) over raw CBOT
+    // Prefer FAS teórico over raw CBOT
     const price = grain.fas_usd_ton ?? grain.price_usd_ton;
-    const sourceLabel = grain.fas_usd_ton != null ? 'FAS teórico Rosario' : 'CBOT ref.';
+    const isFas = grain.fas_usd_ton != null;
     const updatedAt = data.updated_at
       ? new Date(data.updated_at).toLocaleString('es-AR', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short' })
       : '';
@@ -660,26 +670,33 @@ async function fetchCBOT(force = false) {
     if (force || parseFloat(b11.value) === 0) b11.value = price;
     if (force || parseFloat(b13.value) === 0) b13.value = price;
 
-    const badgeText = grain.fas_usd_ton != null
-      ? `FAS (ret. ${grain.retencion_pct}%)`
-      : 'CBOT ref.';
-    document.getElementById('b11-badge').textContent = badgeText;
-    document.getElementById('b13-badge').textContent = badgeText;
-    document.getElementById('b11-badge').style.display = 'inline';
-    document.getElementById('b13-badge').style.display = 'inline';
+    const badgeText = isFas ? `FAS (ret. ${grain.retencion_pct}%)` : 'CBOT ref.';
+    ['b11-badge','b13-badge'].forEach(id => {
+      document.getElementById(id).textContent = badgeText;
+      document.getElementById(id).style.display = 'inline';
+    });
 
-    const srcText = `${sourceLabel} · ${updatedAt}`;
-    const b11Src = document.getElementById('b11-src');
-    const b13Src = document.getElementById('b13-src');
-    b11Src.textContent = srcText;
-    b11Src.style.display = 'block';
-    b13Src.textContent = srcText;
-    b13Src.style.display = 'block';
+    const srcText = isFas ? 'FAS teórico Rosario' : 'CBOT ref. internacional';
+    ['b11-src','b13-src'].forEach(id => {
+      document.getElementById(id).textContent = `${srcText} · ${updatedAt}`;
+      document.getElementById(id).style.display = 'block';
+    });
 
-    document.getElementById('cbot-note').style.display = 'block';
+    const source = isFas
+      ? `FAS teórico (FOB − ret. ${grain.retencion_pct}%)`
+      : 'CBOT internacional';
+    setPriceStatus(`Referencia sugerida: US$ ${price}/tn · ${source} · ${updatedAt}. Reemplazá con el disponible real de Rosario.`, '#15803d');
     recalc();
   } catch (e) {
-    // sin conexión al servidor — el usuario ingresa manualmente
+    ['b11-badge','b13-badge','b11-src','b13-src'].forEach(id =>
+      document.getElementById(id).style.display = 'none');
+    const isTimeout = e.name === 'TimeoutError' || e.name === 'AbortError';
+    setPriceStatus(
+      isTimeout
+        ? 'Sin respuesta del servidor (¿está corriendo npm run dev?). Ingresá el precio manualmente.'
+        : 'No se pudo obtener el precio de referencia. Ingresá el precio de Rosario manualmente.',
+      '#dc2626'
+    );
   }
 }
 
