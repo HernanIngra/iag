@@ -362,6 +362,14 @@
 
   <!-- ══ DECISIONES ════════════════════════════════════════════════════════ -->
   <div id="tab-decisiones" class="tab-panel">
+    <!-- Gráfico cobertura -->
+    <div class="block" style="padding-bottom:20px">
+      <div class="block-header" style="margin-bottom:12px">
+        <div class="block-title" style="font-size:15px;color:#475569">Cobertura de la producción</div>
+      </div>
+      <div id="coverage-chart"></div>
+    </div>
+
     <div class="dec-card">
       <div style="font-size:16px;font-weight:800;margin-bottom:14px">Registrar decisión</div>
       <div class="dec-grid">
@@ -484,6 +492,59 @@ function recalc() {
   d3El.textContent = fmt(D3,2);
   d2El.className = D2 < 0 ? 'cv red' : 'cv green';
   d3El.className = D3 < 0 ? 'cv red' : 'cv green';
+
+  drawCoverageChart(A7, B2, B4, B7);
+}
+
+function drawCoverageChart(A7, B2, B4, B7) {
+  const el = document.getElementById('coverage-chart');
+  const sinFijar = Math.max(0, A7 - B2 - B4 - B7);
+  const segments = [
+    { value: B2,       color: '#16a34a', label: 'Fijado',      sub: 'disponible + forward' },
+    { value: B4,       color: '#1d4ed8', label: 'Futuro',       sub: 'ROFEX' },
+    { value: B7,       color: '#7c3aed', label: 'Con opción',   sub: 'put / call' },
+    { value: sinFijar, color: '#ef4444', label: 'Sin cobertura',sub: 'pendiente de fijar' },
+  ].filter(s => s.value > 0);
+
+  const total = segments.reduce((s, v) => s + v.value, 0);
+  if (total === 0 || A7 === 0) {
+    el.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:28px 0;font-size:13px">Cargá la producción y las decisiones para ver la cobertura</div>';
+    return;
+  }
+
+  const cx = 100, cy = 100, r = 85, ri = 52;
+  let paths = '', startAngle = -Math.PI / 2;
+  for (const seg of segments) {
+    const angle = (seg.value / total) * 2 * Math.PI;
+    if (angle < 0.001) continue;
+    const endAngle = startAngle + angle;
+    const la = angle > Math.PI ? 1 : 0;
+    const p = (a, rad) => [cx + rad * Math.cos(a), cy + rad * Math.sin(a)];
+    const [x1,y1] = p(startAngle, r), [x2,y2] = p(endAngle, r);
+    const [xi1,yi1] = p(endAngle, ri), [xi2,yi2] = p(startAngle, ri);
+    paths += `<path d="M${x1},${y1} A${r},${r},0,${la},1,${x2},${y2} L${xi1},${yi1} A${ri},${ri},0,${la},0,${xi2},${yi2}Z" fill="${seg.color}" opacity="0.88" stroke="#fff" stroke-width="2"/>`;
+    startAngle = endAngle;
+  }
+
+  const svg = `<svg viewBox="0 0 200 200" width="180" height="180" style="flex-shrink:0">
+    ${paths}
+    <text x="${cx}" y="${cy-9}" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui,sans-serif">producción</text>
+    <text x="${cx}" y="${cy+8}" text-anchor="middle" fill="#0f172a" font-size="15" font-weight="800" font-family="system-ui,sans-serif">${total.toLocaleString('es-AR',{maximumFractionDigits:0})}</text>
+    <text x="${cx}" y="${cy+23}" text-anchor="middle" fill="#64748b" font-size="10" font-family="system-ui,sans-serif">toneladas</text>
+  </svg>`;
+
+  const legend = segments.map(s => {
+    const pct = Math.round((s.value / total) * 100);
+    return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+      <div style="width:13px;height:13px;border-radius:4px;background:${s.color};flex-shrink:0"></div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a">${s.label} <span style="color:#64748b;font-weight:500;font-size:12px">${pct}%</span></div>
+        <div style="font-size:11px;color:#94a3b8">${s.value.toLocaleString('es-AR',{maximumFractionDigits:0})} tn · ${s.sub}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap">${svg}<div style="flex:1;min-width:140px">${legend}</div></div>`;
 }
 
 function setRef(mode) {
