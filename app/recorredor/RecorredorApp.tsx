@@ -1526,6 +1526,16 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             await deleteEmpresa(supabase, empresaId);
             setMyEmpresas((prev) => prev.filter((e) => e.id !== empresaId));
             if (activeEmpresaId === empresaId) setActiveEmpresaId(undefined);
+            // Eliminar todos los archivos que pertenecen a esta empresa
+            const shpToRemove = shpFileMeta.filter((m) => m.empresaId === empresaId).map((m) => m.name);
+            for (const name of shpToRemove) await removeShpFile(name);
+            const csvToRemove = csvFileMeta.filter((m) => m.empresaId === empresaId).map((m) => m.name);
+            for (const name of csvToRemove) removeCsvFile(name);
+            setRindeFiles((prev) => prev.filter((f) => !rindeFileMeta.find((m) => m.name === f && m.empresaId === empresaId)));
+            setRindeFileMeta((prev) => prev.filter((m) => m.empresaId !== empresaId));
+            // Drive rain files are named "drive-lluvia:{empresaId}"; local rain files have no empresa tracking
+            setRainFiles((prev) => prev.filter((f) => f !== `drive-lluvia:${empresaId}`));
+            setEmpresaDriveLinks((prev) => { const next = { ...prev }; delete next[empresaId]; return next; });
           }}
           onInvite={async (empresaId, email) => {
             await inviteToEmpresa(supabase, empresaId, email);
@@ -3109,17 +3119,9 @@ function FileDashboard({
                 const isRenaming = renamingEmpresaId === emp.id;
                 const isDeleting = deletingEmpresaId === emp.id;
 
-                // Muestra archivos de esta empresa + archivos huérfanos (sin empresa o con empresa que ya no existe)
-                const knownEmpresaIds = new Set(availableEmpresas.map((e) => e.id));
-                function fileVisibleFor(meta: FileMeta[], name: string, empId: string): boolean {
-                  const m = meta.find((x) => x.name === name);
-                  if (!m || !m.empresaId) return true; // sin empresa asignada → visible en todas
-                  if (!knownEmpresaIds.has(m.empresaId)) return true; // empresa ya no existe → visible en todas
-                  return m.empresaId === empId; // empresa asignada → solo en la suya
-                }
-                const empShpFiles = shpFiles.filter((n) => fileVisibleFor(shpFileMeta, n, emp.id));
-                const empCsvFiles = csvFiles.filter((n) => fileVisibleFor(csvFileMeta, n, emp.id));
-                const empRindeFiles = rindeFiles.filter((n) => fileVisibleFor(rindeFileMeta, n, emp.id));
+                const empShpFiles = shpFiles.filter((n) => { const m = shpFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
+                const empCsvFiles = csvFiles.filter((n) => { const m = csvFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
+                const empRindeFiles = rindeFiles.filter((n) => { const m = rindeFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
 
                 if (isRenaming) {
                   return (
