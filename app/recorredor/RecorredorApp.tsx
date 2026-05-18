@@ -1625,6 +1625,14 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             await updateEmpresaLogo(supabase, empresaId, logo);
             setMyEmpresas((prev) => prev.map((e) => e.id === empresaId ? { ...e, logo } : e));
           }}
+          onClearAllFiles={() => {
+            setCollections([]); setColorMap({}); setLotCount(0); setShpFiles([]); setShpFileMeta([]); setShpStatus(null);
+            setAllRows([]); setLotData({}); setCsvFiles([]); setCsvFileMeta([]); setCsvStatus(null);
+            setRindeFiles([]); setRindeFileMeta([]); setRindeData({}); setRindeStatus(null);
+            setRainFiles([]); setRainData({});
+            if (shpLayerRef.current && mapRef.current) { mapRef.current.removeLayer(shpLayerRef.current); shpLayerRef.current = null; }
+            allLotLayersRef.current = [];
+          }}
           wsRestoring={wsRestoring}
         />
       )}
@@ -2703,6 +2711,7 @@ function FileDashboard({
   onLinkRindeDrive, onUnlinkRindeDrive, onRefreshRindeDrive,
   onLinkLluviaDrive, onUnlinkLluviaDrive, onRefreshLluviaDrive,
   onGoToMap,
+  onClearAllFiles,
   wsRestoring,
 }: {
   user: import("@supabase/supabase-js").User | null;
@@ -2750,6 +2759,7 @@ function FileDashboard({
   onUnlinkLluviaDrive: (empresaId: string) => void;
   onRefreshLluviaDrive: (empresaId: string) => void;
   onGoToMap: () => void;
+  onClearAllFiles: () => void;
   wsRestoring: boolean;
 }) {
   const [inviteEmail, setInviteEmail] = useState("");
@@ -3118,6 +3128,42 @@ function FileDashboard({
                 </button>
               </div>
             )}
+
+            {/* Archivos sin empresa (huérfanos) — visibles para poder borrarlos */}
+            {(() => {
+              const knownIds = new Set(availableEmpresas.map((e) => e.id));
+              const orphanShp = shpFiles.filter((n) => { const m = shpFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
+              const orphanCsv = csvFiles.filter((n) => { const m = csvFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
+              const orphanRinde = rindeFiles.filter((n) => { const m = rindeFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
+              const orphanRain = rainFiles.filter((n) => !n.startsWith("drive-lluvia:"));
+              const hasOrphans = orphanShp.length + orphanCsv.length + orphanRinde.length + orphanRain.length > 0;
+              const allFiles = shpFiles.length + csvFiles.length + rindeFiles.length + rainFiles.length;
+              return (
+                <>
+                  {hasOrphans && (
+                    <div className="mb-3 p-3 rounded-xl" style={{ background: "#1a1a0d", border: "1px solid #4a4a1a" }}>
+                      <p className="text-xs font-semibold mb-2" style={{ color: "#c0a040" }}>⚠ Archivos sin empresa asignada</p>
+                      {[...orphanShp, ...orphanCsv, ...orphanRinde, ...orphanRain].map((name, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded mb-1"
+                          style={{ background: "#2a2a0a", border: "1px solid #4a4a1a" }}>
+                          <span className="truncate flex-1" style={{ color: "#c0a040" }}>✓ {name}</span>
+                          <button onClick={() => {
+                            if (orphanShp.includes(name)) onRemoveShp(name);
+                            else if (orphanCsv.includes(name)) onRemoveCsv(name);
+                            else if (orphanRinde.includes(name)) onRemoveRinde(name);
+                            else onRemoveRain(name);
+                          }} className="shrink-0 w-5 h-5 flex items-center justify-center rounded hover:opacity-70 text-sm"
+                            style={{ color: "#e25a5a" }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {allFiles > 0 && (
+                    <ClearAllFilesButton onClear={onClearAllFiles} />
+                  )}
+                </>
+              );
+            })()}
 
             <div className="flex flex-col gap-2 mb-4">
               {availableEmpresas.map((emp) => {
@@ -3893,6 +3939,32 @@ function DeleteEmpresaConfirm({ empName, mutating, onConfirm, onCancel }: {
         </button>
         <button onClick={onCancel}
           className="px-3 py-1.5 rounded text-xs"
+          style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+function ClearAllFilesButton({ onClear }: { onClear: () => void }) {
+  const [confirm, setConfirm] = useState(false);
+  if (!confirm) {
+    return (
+      <button onClick={() => setConfirm(true)}
+        className="w-full text-xs py-1.5 rounded-lg mb-3 hover:opacity-80"
+        style={{ background: "#1a0a0a", border: "1px dashed #5a2a2a", color: "#8a4a4a" }}>
+        Borrar todos los archivos del workspace
+      </button>
+    );
+  }
+  return (
+    <div className="mb-3 p-3 rounded-lg" style={{ background: "#1e0808", border: "1px solid #8a1a1a" }}>
+      <p className="text-xs mb-2" style={{ color: "#e24a4a" }}>¿Borrar todos los archivos? Los datos del mapa se perderán.</p>
+      <div className="flex gap-2">
+        <button onClick={() => { onClear(); setConfirm(false); }}
+          className="px-3 py-1 rounded text-xs font-semibold"
+          style={{ background: "#8a1a1a", color: "#fff" }}>Borrar todo</button>
+        <button onClick={() => setConfirm(false)}
+          className="px-3 py-1 rounded text-xs"
           style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
       </div>
     </div>
