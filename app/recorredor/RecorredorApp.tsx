@@ -682,8 +682,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setShpStatus({ msg: "Procesando shapefile...", ok: false });
     let newCols: GeoCollection[] = [];
     try {
+      console.log("[shp] iniciando carga", Array.from(files).map(f => f.name));
       newCols = await loadShapefiles(files);
+      console.log("[shp] parseado ok, colecciones:", newCols.length, newCols.map(c => c.features?.length));
     } catch (err) {
+      console.error("[shp] error en loadShapefiles:", err);
       setShpStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
       return;
     }
