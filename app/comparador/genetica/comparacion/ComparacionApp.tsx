@@ -7,6 +7,12 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { fetchEnsayosConEntradas } from "@/lib/comparador-db";
 import type { EnsayoConEntradas } from "@/lib/comparador-types";
 import type { InaseCatalogEntry } from "@/lib/comparador-types";
+import {
+  pairedTTest,
+  buildYieldMatrix,
+  computeOutlierKeys,
+  sigLabel,
+} from "@/lib/comparador-stats";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -31,11 +37,18 @@ interface DiffResult {
   name: string;
   diff: number;
   n: number;
+  winPct?: number;
+  pVal?: number;
 }
 
-function computeHybridStats(name: string, ensayos: EnsayoConEntradas[]): HybridStats {
+function computeHybridStats(
+  name: string,
+  ensayos: EnsayoConEntradas[],
+  excludeKeys?: Set<string>
+): HybridStats {
   const byLoc: Record<string, number[]> = {};
   for (const e of ensayos) {
+    if (excludeKeys?.has(`${e.localidad}|${name}`)) continue;
     const entry = e.entradas.find((x) => x.hibrido === name);
     if (entry) {
       (byLoc[e.localidad] ??= []).push(entry.rendimiento);
@@ -54,10 +67,14 @@ function computeHybridStats(name: string, ensayos: EnsayoConEntradas[]): HybridS
   return { name, mean, n: locs.length, byLocalidad: meanPerLoc };
 }
 
-function computeIA(ensayos: EnsayoConEntradas[]): Record<string, number> {
+function computeIA(
+  ensayos: EnsayoConEntradas[],
+  excludeKeys?: Set<string>
+): Record<string, number> {
   const byLoc: Record<string, number[]> = {};
   for (const e of ensayos) {
     for (const entry of e.entradas) {
+      if (excludeKeys?.has(`${e.localidad}|${entry.hibrido}`)) continue;
       (byLoc[e.localidad] ??= []).push(entry.rendimiento);
     }
   }
@@ -75,11 +92,14 @@ function headToHead(a: HybridStats, b: HybridStats): DiffResult {
   );
   if (common.length === 0) return { name: b.name, diff: 0, n: 0 };
   const diffs = common.map((loc) => a.byLocalidad[loc] - b.byLocalidad[loc]);
-  return {
-    name: b.name,
-    diff: diffs.reduce((x, y) => x + y, 0) / diffs.length,
-    n: common.length,
-  };
+  const diff = diffs.reduce((x, y) => x + y, 0) / diffs.length;
+  const winPct = diffs.filter((d) => d > 0).length / diffs.length;
+  let pVal: number | undefined;
+  if (diffs.length >= 2) {
+    const tt = pairedTTest(diffs);
+    if (tt) pVal = tt.pValue;
+  }
+  return { name: b.name, diff, n: common.length, winPct, pVal };
 }
 
 function linReg(
@@ -194,12 +214,22 @@ function DivergingBarChart({ results, headName }: { results: DiffResult[]; headN
         const shortName = r.name.length > 26 ? r.name.slice(0, 25) + "…" : r.name;
         const annotX = wins ? centerX + barW + 6 : centerX - barW - 6;
         const annotAnchor = wins ? "start" : "end";
+        const sig = sigLabel(r.pVal);
+        const tooltipText = [
+          `n=${r.n}`,
+          r.pVal !== undefined ? `p=${r.pVal.toFixed(3)}` : "",
+          r.winPct !== undefined ? `${Math.round(r.winPct * 100)}% win` : "",
+        ].filter(Boolean).join(" · ");
         return (
           <g key={r.name}>
             <text x={labelW - 8} y={y + rowH / 2 + 4} textAnchor="end" fontSize={11} fill="#aac4e0">{shortName}</text>
-            {barW > 0 && <rect x={barX} y={y + 8} width={barW} height={rowH - 16} rx={3} fill={color} fillOpacity={0.8} />}
+            {barW > 0 && (
+              <rect x={barX} y={y + 8} width={barW} height={rowH - 16} rx={3} fill={color} fillOpacity={0.8}>
+                <title>{tooltipText}</title>
+              </rect>
+            )}
             <text x={annotX} y={y + rowH / 2 + 2} textAnchor={annotAnchor} fontSize={11} fill={color} fontWeight="600">
-              {wins ? "+" : ""}{Math.round(r.diff).toLocaleString("es-AR")} kg/ha
+              {wins ? "+" : ""}{Math.round(r.diff).toLocaleString("es-AR")} kg/ha{sig ? ` ${sig}` : ""}
             </text>
             <text x={annotX} y={y + rowH / 2 + 15} textAnchor={annotAnchor} fontSize={9} fill="#4a6a8a">n={r.n}</text>
           </g>
@@ -294,16 +324,27 @@ function VerticalDivergingBarChart({ results, headName }: { results: DiffResult[
         // rotated name at bottom of chart area
         const rotY = centerY + barMaxH + 6;
 
+        const sig = sigLabel(r.pVal);
+        const tooltipText = [
+          `n=${r.n}`,
+          r.pVal !== undefined ? `p=${r.pVal.toFixed(3)}` : "",
+          r.winPct !== undefined ? `${Math.round(r.winPct * 100)}% win` : "",
+        ].filter(Boolean).join(" · ");
         return (
           <g key={r.name}>
             {barH > 0 && (
               <rect x={bx} y={barY} width={barW} height={barH} rx={3}
-                fill={color} fillOpacity={0.82} />
+                fill={color} fillOpacity={0.82}>
+                <title>{tooltipText}</title>
+              </rect>
             )}
             <text x={cx} y={valY} textAnchor="middle" fontSize={9} fill={color} fontWeight="600">
               {wins ? "+" : ""}{Math.round(r.diff).toLocaleString("es-AR")}
             </text>
-            <text x={cx} y={nY} textAnchor="middle" fontSize={8} fill="#4a6a8a">n={r.n}</text>
+            {sig && (
+              <text x={cx} y={nY} textAnchor="middle" fontSize={9} fill={color} fontWeight="700">{sig}</text>
+            )}
+            <text x={cx} y={sig ? nY + 11 : nY} textAnchor="middle" fontSize={8} fill="#4a6a8a">n={r.n}</text>
             <text
               transform={`rotate(-45,${cx},${rotY})`}
               x={cx} y={rotY}
@@ -390,11 +431,12 @@ function HybridSelect({
 
 function IASlider({
   iaMin, iaMax, iaLow, iaHigh, iaVals, localidadesConIA, totalLocalidades,
-  onChangeLow, onChangeHigh,
+  onChangeLow, onChangeHigh, eiCuts,
 }: {
   iaMin: number; iaMax: number; iaLow: number; iaHigh: number;
   iaVals: number[]; localidadesConIA: number; totalLocalidades: number;
   onChangeLow: (v: number) => void; onChangeHigh: (v: number) => void;
+  eiCuts?: number[];
 }) {
   if (iaMin >= iaMax) return null;
   const trackRef = useRef<HTMLDivElement>(null);
@@ -466,6 +508,18 @@ function IASlider({
               <rect key={i} x={i * barW + 0.3} y={histH - barH} width={barW - 0.6} height={barH} fill={inRange ? "#3dbb6e" : "#1a4a80"} rx={0.8} />
             );
           })}
+          {/* Environment cut lines */}
+          {(eiCuts ?? [])
+            .filter((c) => c > iaMin && c < iaMax)
+            .map((c) => {
+              const pct = ((c - iaMin) / (iaMax - iaMin)) * 100;
+              return (
+                <g key={c}>
+                  <line x1={pct} y1={0} x2={pct} y2={histH} stroke="#e2b04a" strokeWidth={0.8} strokeDasharray="2 2" />
+                  <text x={pct + 0.5} y={8} fontSize={5} fill="#e2b04a">{Math.round(c / 1000)}k</text>
+                </g>
+              );
+            })}
         </svg>
       </div>
 
@@ -583,6 +637,118 @@ function RedesFilter({ redes, selected, onChange }: {
   );
 }
 
+// ── Environment cuts editor ───────────────────────────────────────────────────
+
+function EiCutsEditor({
+  cuts, onChange, iaMin, iaMax,
+}: {
+  cuts: number[]; onChange: (cuts: number[]) => void; iaMin: number; iaMax: number;
+}) {
+  const sorted = [...cuts].sort((a, b) => a - b);
+
+  function addCut() {
+    if (cuts.length >= 3) return;
+    let suggestion: number;
+    if (cuts.length === 0) suggestion = Math.round(((iaMin + iaMax) / 2) / 500) * 500;
+    else {
+      const last = Math.max(...cuts);
+      suggestion = Math.round(((last + iaMax) / 2) / 500) * 500;
+    }
+    onChange([...cuts, suggestion]);
+  }
+
+  function removeCut(val: number) {
+    onChange(cuts.filter((c) => c !== val));
+  }
+
+  function updateCut(oldVal: number, newRaw: string) {
+    const newVal = parseInt(newRaw, 10);
+    if (isNaN(newVal)) return;
+    onChange(cuts.map((c) => (c === oldVal ? newVal : c)));
+  }
+
+  return (
+    <div style={{ background: "#16213e", borderRadius: 10, padding: "10px 16px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ color: "#e2b04a", fontSize: 12, fontWeight: 600 }}>Rangos de ambiente</span>
+        {cuts.length < 3 && (
+          <button
+            onClick={addCut}
+            disabled={iaMin >= iaMax}
+            style={{ background: "none", border: "1px solid #e2b04a", borderRadius: 6, color: "#e2b04a", fontSize: 11, padding: "2px 8px", cursor: "pointer" }}
+          >
+            + Corte
+          </button>
+        )}
+      </div>
+      {sorted.length === 0 ? (
+        <p style={{ color: "#4a6a8a", fontSize: 11, margin: 0 }}>Sin rangos · agregá cortes para estratificar los ambientes</p>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+          {sorted.map((c) => (
+            <div key={c} style={{ display: "flex", alignItems: "center", gap: 4, background: "#0f2040", borderRadius: 6, padding: "3px 6px 3px 8px", border: "1px solid #2a4060" }}>
+              <input
+                type="number"
+                value={c}
+                onChange={(e) => updateCut(c, e.target.value)}
+                style={{ width: 64, background: "none", border: "none", color: "#e2b04a", fontSize: 12, outline: "none", fontWeight: 600 }}
+              />
+              <span style={{ color: "#4a6a8a", fontSize: 10 }}>kg/ha</span>
+              <button
+                onClick={() => removeCut(c)}
+                style={{ background: "none", border: "none", color: "#4a6a8a", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "0 2px" }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Outlier control ───────────────────────────────────────────────────────────
+
+function OutlierControl({
+  enabled, threshold, outlierCount, onChange, onChangeThreshold,
+}: {
+  enabled: boolean; threshold: number; outlierCount: number;
+  onChange: (v: boolean) => void; onChangeThreshold: (v: number) => void;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#16213e", borderRadius: 10, padding: "8px 14px" }}>
+      <button
+        onClick={() => onChange(!enabled)}
+        style={{
+          background: enabled ? "#1a4a30" : "#0f2040",
+          border: `1px solid ${enabled ? "#3dbb6e" : "#2a4060"}`,
+          borderRadius: 6, padding: "3px 10px", cursor: "pointer",
+          color: enabled ? "#3dbb6e" : "#4a6a8a", fontSize: 12, fontWeight: 600,
+        }}
+      >
+        {enabled ? "● Outliers" : "○ Outliers"}
+      </button>
+      {enabled && (
+        <>
+          <select
+            value={threshold}
+            onChange={(e) => onChangeThreshold(parseFloat(e.target.value))}
+            style={{ background: "#0f2040", border: "1px solid #1a4a80", borderRadius: 6, padding: "2px 6px", color: "#aac4e0", fontSize: 11, outline: "none" }}
+          >
+            <option value={2.0}>2.0 σ</option>
+            <option value={2.5}>2.5 σ</option>
+            <option value={3.0}>3.0 σ</option>
+          </select>
+          <span style={{ fontSize: 11, color: outlierCount > 0 ? "#e2b04a" : "#4a6a8a" }}>
+            {outlierCount > 0 ? `${outlierCount} obs. excluidas` : "Sin outliers"}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Map view ──────────────────────────────────────────────────────────────────
 
 function LocalidadMap({ ensayos, selectedLocalidades, onToggle }: {
@@ -678,6 +844,11 @@ export default function ComparacionApp() {
   const [iaLow, setIaLow] = useState(0);
   const [iaHigh, setIaHigh] = useState(999999);
 
+  // Statistical analysis
+  const [outlierEnabled, setOutlierEnabled] = useState(true);
+  const [outlierThreshold, setOutlierThreshold] = useState(2.5);
+  const [eiCuts, setEiCuts] = useState<number[]>([]);
+
   const [ensayos, setEnsayos] = useState<EnsayoConEntradas[]>([]);
   const [catalog, setCatalog] = useState<InaseCatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -709,8 +880,18 @@ export default function ComparacionApp() {
     return [];
   }, [ensayos, filterMode, selectedLocalidades, selectedRedes]);
 
-  // IA per localidad (from all filtered ensayos, before IA filter)
-  const ia = useMemo(() => computeIA(ensayosFiltrados), [ensayosFiltrados]);
+  // Yield matrix and outlier detection (on pre-IA-filtered data, matching R code order)
+  const yieldMatrix = useMemo(() => buildYieldMatrix(ensayosFiltrados), [ensayosFiltrados]);
+  const outlierKeys = useMemo(
+    () => (outlierEnabled ? computeOutlierKeys(yieldMatrix, outlierThreshold) : new Set<string>()),
+    [yieldMatrix, outlierEnabled, outlierThreshold]
+  );
+
+  // IA per localidad — computed excluding outlier observations
+  const ia = useMemo(
+    () => computeIA(ensayosFiltrados, outlierEnabled ? outlierKeys : undefined),
+    [ensayosFiltrados, outlierKeys, outlierEnabled]
+  );
 
   const iaVals = Object.values(ia);
   const iaAbsMin = iaVals.length ? Math.floor(Math.min(...iaVals) / 100) * 100 : 0;
@@ -779,14 +960,14 @@ export default function ComparacionApp() {
     return hibridosDisponibles.filter((h) => hybridCompanyMap[h] === selectedCompany);
   }, [hibridosDisponibles, selectedCompany, hybridCompanyMap]);
 
-  // Stats (use final filtered ensayos — after IA range + red filter)
+  // Stats (use final filtered ensayos — after IA range + red filter, minus outliers)
   const statsA = useMemo(
-    () => (hibridoA ? computeHybridStats(hibridoA, ensayosFiltradosFinal) : null),
-    [hibridoA, ensayosFiltradosFinal]
+    () => (hibridoA ? computeHybridStats(hibridoA, ensayosFiltradosFinal, outlierKeys) : null),
+    [hibridoA, ensayosFiltradosFinal, outlierKeys]
   );
   const statsB = useMemo(
-    () => (hibridoB ? computeHybridStats(hibridoB, ensayosFiltradosFinal) : null),
-    [hibridoB, ensayosFiltradosFinal]
+    () => (hibridoB ? computeHybridStats(hibridoB, ensayosFiltradosFinal, outlierKeys) : null),
+    [hibridoB, ensayosFiltradosFinal, outlierKeys]
   );
   const h2hResult = useMemo(
     () => (statsA && statsB ? headToHead(statsA, statsB) : null),
@@ -794,17 +975,17 @@ export default function ComparacionApp() {
   );
 
   const statsHead = useMemo(
-    () => (hibridoHead ? computeHybridStats(hibridoHead, ensayosFiltradosFinal) : null),
-    [hibridoHead, ensayosFiltradosFinal]
+    () => (hibridoHead ? computeHybridStats(hibridoHead, ensayosFiltradosFinal, outlierKeys) : null),
+    [hibridoHead, ensayosFiltradosFinal, outlierKeys]
   );
   const vsAllResults = useMemo((): DiffResult[] => {
     if (!statsHead) return [];
     return hibridosDisponibles
       .filter((h) => h !== hibridoHead)
-      .map((h) => headToHead(statsHead, computeHybridStats(h, ensayosFiltradosFinal)))
+      .map((h) => headToHead(statsHead, computeHybridStats(h, ensayosFiltradosFinal, outlierKeys)))
       .filter((r) => r.n > 0)
       .sort((a, b) => b.diff - a.diff);
-  }, [statsHead, hibridosDisponibles, hibridoHead, ensayosFiltradosFinal]);
+  }, [statsHead, hibridosDisponibles, hibridoHead, ensayosFiltradosFinal, outlierKeys]);
 
   const canProceed = filterMode === "mapa" ? selectedLocalidades.length > 0 : selectedRedes.length > 0;
   const toggleLocalidad = useCallback((loc: string) => {
@@ -816,7 +997,7 @@ export default function ComparacionApp() {
   }
   function goStep1() {
     setStep(1); setCultivo(null); setFilterMode(null); setSelectedLocalidades([]); setSelectedRedes([]);
-    resetCompare(); setEnsayos([]);
+    resetCompare(); setEnsayos([]); setEiCuts([]);
   }
   function goStep2() {
     setStep(2); setFilterMode(null); setSelectedLocalidades([]); setSelectedRedes([]); resetCompare();
@@ -947,9 +1128,9 @@ export default function ComparacionApp() {
           <span style={{ color: "#e2b04a", fontSize: 13 }}>{cultivo === "maiz" ? "🌽 Maíz" : "🌱 Soja"} · {filterLabel}</span>
         </div>
 
-        {/* IA Slider (always visible in step 3) */}
+        {/* IA Slider + statistical controls (always visible in step 3) */}
         {iaAbsMin < iaAbsMax && (
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
             <IASlider
               iaMin={iaAbsMin} iaMax={iaAbsMax}
               iaLow={iaLow} iaHigh={iaHigh}
@@ -957,6 +1138,17 @@ export default function ComparacionApp() {
               localidadesConIA={localidadesConIA}
               totalLocalidades={Object.keys(ia).length}
               onChangeLow={setIaLow} onChangeHigh={setIaHigh}
+              eiCuts={eiCuts}
+            />
+            <EiCutsEditor
+              cuts={eiCuts} onChange={setEiCuts}
+              iaMin={iaAbsMin} iaMax={iaAbsMax}
+            />
+            <OutlierControl
+              enabled={outlierEnabled} threshold={outlierThreshold}
+              outlierCount={outlierKeys.size}
+              onChange={setOutlierEnabled}
+              onChangeThreshold={setOutlierThreshold}
             />
           </div>
         )}
@@ -997,26 +1189,63 @@ export default function ComparacionApp() {
             </div>
 
             {/* Difference card */}
-            {h2hResult && h2hResult.n > 0 && statsA && statsB && (
-              <div style={{ background: "#16213e", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <p style={{ color: "#6a8ab0", fontSize: 11, marginBottom: 4 }}>{h2hResult.diff >= 0 ? "A gana" : "B gana"}</p>
-                  <p style={{ color: "#3dbb6e", fontSize: 28, fontWeight: 800, lineHeight: 1 }}>
-                    +{Math.abs(Math.round(h2hResult.diff)).toLocaleString("es-AR")} <span style={{ fontSize: 14, fontWeight: 400 }}>kg/ha</span>
-                  </p>
-                  <p style={{ color: "#4a6a8a", fontSize: 12, marginTop: 4 }}>en {h2hResult.n} localidad{h2hResult.n > 1 ? "es" : ""} en común</p>
-                </div>
-                <div style={{ display: "flex", gap: 20 }}>
-                  {[{ s: statsA, color: COLOR_A }, { s: statsB, color: COLOR_B }].map(({ s, color }) => (
-                    <div key={s.name} style={{ textAlign: "center" }}>
-                      <p style={{ fontSize: 10, color, fontWeight: 600, marginBottom: 2 }}>{s.name.length > 16 ? s.name.slice(0, 15) + "…" : s.name}</p>
-                      <p style={{ fontSize: 20, fontWeight: 700, color: "#e0e0e0" }}>{Math.round(s.mean).toLocaleString("es-AR")}</p>
-                      <p style={{ fontSize: 10, color: "#4a6a8a" }}>kg/ha · n={s.n}</p>
+            {h2hResult && h2hResult.n > 0 && statsA && statsB && (() => {
+              const sig = sigLabel(h2hResult.pVal);
+              const winner = h2hResult.diff >= 0 ? "A" : "B";
+              const winnerColor = h2hResult.diff >= 0 ? COLOR_A : COLOR_B;
+              return (
+                <div style={{ background: "#16213e", borderRadius: 12, padding: "16px 20px", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <p style={{ color: "#6a8ab0", fontSize: 11, marginBottom: 4 }}>{winner} gana</p>
+                      <p style={{ color: winnerColor, fontSize: 28, fontWeight: 800, lineHeight: 1 }}>
+                        +{Math.abs(Math.round(h2hResult.diff)).toLocaleString("es-AR")} <span style={{ fontSize: 14, fontWeight: 400 }}>kg/ha</span>
+                        {sig && <span style={{ fontSize: 16, marginLeft: 4 }}>{sig}</span>}
+                      </p>
+                      <p style={{ color: "#4a6a8a", fontSize: 12, marginTop: 4 }}>
+                        en {h2hResult.n} localidad{h2hResult.n > 1 ? "es" : ""} en común
+                      </p>
                     </div>
-                  ))}
+                    <div style={{ display: "flex", gap: 20 }}>
+                      {[{ s: statsA, color: COLOR_A }, { s: statsB, color: COLOR_B }].map(({ s, color }) => (
+                        <div key={s.name} style={{ textAlign: "center" }}>
+                          <p style={{ fontSize: 10, color, fontWeight: 600, marginBottom: 2 }}>{s.name.length > 16 ? s.name.slice(0, 15) + "…" : s.name}</p>
+                          <p style={{ fontSize: 20, fontWeight: 700, color: "#e0e0e0" }}>{Math.round(s.mean).toLocaleString("es-AR")}</p>
+                          <p style={{ fontSize: 10, color: "#4a6a8a" }}>kg/ha · n={s.n}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Statistical summary row */}
+                  <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 10, borderTop: "1px solid #0f3060", flexWrap: "wrap" }}>
+                    {h2hResult.pVal !== undefined && (
+                      <div>
+                        <span style={{ fontSize: 10, color: "#4a6a8a" }}>p-valor </span>
+                        <span style={{
+                          fontSize: 12, fontWeight: 700,
+                          color: h2hResult.pVal < 0.05 ? "#3dbb6e" : h2hResult.pVal < 0.10 ? "#e2b04a" : "#6a8ab0",
+                        }}>
+                          {h2hResult.pVal < 0.001 ? "<0.001" : h2hResult.pVal.toFixed(3)}
+                          {" "}
+                          {h2hResult.pVal < 0.05 ? "sig." : h2hResult.pVal < 0.10 ? "tend." : "n.s."}
+                        </span>
+                      </div>
+                    )}
+                    {h2hResult.winPct !== undefined && (
+                      <div>
+                        <span style={{ fontSize: 10, color: "#4a6a8a" }}>A gana en </span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: h2hResult.winPct >= 0.5 ? COLOR_A : COLOR_B }}>
+                          {Math.round(h2hResult.winPct * 100)}% de las localidades
+                        </span>
+                      </div>
+                    )}
+                    {h2hResult.n < 2 && (
+                      <span style={{ fontSize: 10, color: "#4a6a8a" }}>mínimo 2 localidades para test estadístico</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {h2hResult && h2hResult.n === 0 && hibridoA && hibridoB && (
               <p style={{ color: "#4a6a8a", background: "#0f2040", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
@@ -1076,6 +1305,11 @@ export default function ComparacionApp() {
                 <div className="block md:hidden">
                   <DivergingBarChart results={vsAllResults} headName={hibridoHead} />
                 </div>
+                {vsAllResults.some((r) => r.pVal !== undefined) && (
+                  <p style={{ fontSize: 10, color: "#4a6a8a", marginTop: 10 }}>
+                    ** p&lt;0.05 · * p&lt;0.10 · hover sobre las barras para ver p-valor y win%
+                  </p>
+                )}
               </div>
             )}
 
