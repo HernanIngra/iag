@@ -677,14 +677,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
   // ── Load shapefile (accumulates — never replaces) ───────────────────────────
 
-  async function handleShpFiles(files: FileList) {
+  async function handleShpFiles(files: FileList, empresaId?: string) {
+    const empId = empresaId ?? activeEmpresaId ?? "";
     setShpStatus({ msg: "Procesando shapefile...", ok: false });
     try {
       const newCols = await loadShapefiles(files);
       const fileNames = Array.from(files).map((f) => f.name);
       newCols.forEach((col, i) => {
         (col as unknown as Record<string, unknown>)._file = fileNames[Math.min(i, fileNames.length - 1)];
-        col.features.forEach((f) => { (f.properties as Record<string, unknown>)._empresaId = activeEmpresaId ?? ""; });
+        col.features.forEach((f) => {
+          if (!f.properties) (f as unknown as { properties: Record<string, unknown> }).properties = {};
+          (f.properties as Record<string, unknown>)._empresaId = empId;
+        });
       });
       const mergedCols = [...collections, ...newCols];
       const cMap = buildColorMap(mergedCols);
@@ -709,7 +713,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       setShpStatus({ msg: `✓ ${total} lotes`, ok: true });
       const newFileNames = Array.from(files).map((f) => f.name);
       setShpFiles((prev) => [...prev, ...newFileNames]);
-      setShpFileMeta((prev) => [...prev, ...newFileNames.map((name) => ({ name, empresaId: activeEmpresaId }))]);
+      setShpFileMeta((prev) => [...prev, ...newFileNames.map((name) => ({ name, empresaId: empId || undefined }))]);
     } catch (err) {
       setShpStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
     }
@@ -717,7 +721,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
   // ── Management upload: step 1 — detect source format ────────────────────────
 
-  async function handleDataFileStart(file: File) {
+  async function handleDataFileStart(file: File, empresaId?: string) {
+    pendingCsvEmpresaIdRef.current = empresaId ?? activeEmpresaId;
     setCsvStatus({ msg: "Leyendo archivo...", ok: false });
     try {
       const cols = await detectLinkColumns(file);
@@ -955,10 +960,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   // ── Rindes upload ────────────────────────────────────────────────────────────
 
   // pendingRindeFile puede venir de un archivo local O de un Drive link
-  // Si viene de Drive, pendingDriveEmpresaIdRef y pendingDriveRindeInfoRef tienen el contexto
   const pendingDriveRindeInfoRef = useRef<DriveManejo | null>(null);
+  const pendingRindeEmpresaIdRef = useRef<string | undefined>(undefined);
 
-  async function handleRindeFileStart(file: File, driveInfo?: DriveManejo) {
+  async function handleRindeFileStart(file: File, driveInfo?: DriveManejo, empresaId?: string) {
+    pendingRindeEmpresaIdRef.current = empresaId ?? activeEmpresaId;
     setRindeStatus({ msg: "Leyendo columnas...", ok: false });
     try {
       const cols = await detectLinkColumns(file);
@@ -987,7 +993,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       setRindeStatus({ msg: `✓ Rindes · ${uniqueLots} lotes`, ok: true });
       const rindeName = pendingRindeFile!.name;
       setRindeFiles((prev) => [...prev, rindeName]);
-      setRindeFileMeta((prev) => [...prev, { name: rindeName, empresaId: activeEmpresaId }]);
+      setRindeFileMeta((prev) => [...prev, { name: rindeName, empresaId: pendingRindeEmpresaIdRef.current }]);
       // Si venía de un Drive link, persistir en empresaDriveLinks
       const driveInfo = pendingDriveRindeInfoRef.current;
       const driveEmpresaId = pendingDriveEmpresaIdRef.current;
@@ -1518,12 +1524,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           csvFileMeta={csvFileMeta}
           rindeFiles={rindeFiles}
           rindeFileMeta={rindeFileMeta}
-          onUploadShp={handleShpFiles}
-          onUploadCsv={(fl) => {
-            pendingCsvEmpresaIdRef.current = activeEmpresaId;
-            if (fl[0]) handleDataFileStart(fl[0]);
-          }}
-          onUploadRinde={(fl) => { if (fl[0]) handleRindeFileStart(fl[0]); }}
+          onUploadShp={(fl, empId) => handleShpFiles(fl, empId)}
+          onUploadCsv={(fl, empId) => { if (fl[0]) handleDataFileStart(fl[0], empId); }}
+          onUploadRinde={(fl, empId) => { if (fl[0]) handleRindeFileStart(fl[0], undefined, empId); }}
           onRemoveShp={removeShpFile}
           onRemoveCsv={removeCsvFile}
           onRemoveRinde={(name) => {
@@ -1536,7 +1539,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             });
           }}
           rainFiles={rainFiles}
-          onUploadRain={(fl) => { if (fl[0]) handleRainFileStart(fl[0]); }}
+          onUploadRain={(fl, empId) => { if (fl[0]) handleRainFileStart(fl[0], undefined, empId); }}
           onRemoveRain={(name) => setRainFiles((prev) => prev.filter((f) => f !== name))}
           shpStatus={shpStatus}
           csvStatus={csvStatus}
@@ -2684,14 +2687,14 @@ function FileDashboard({
   shpFiles: string[]; shpFileMeta: FileMeta[];
   csvFiles: string[]; csvFileMeta: FileMeta[];
   rindeFiles: string[]; rindeFileMeta: FileMeta[];
-  onUploadShp: (fl: FileList) => void;
-  onUploadCsv: (fl: FileList) => void;
-  onUploadRinde: (fl: FileList) => void;
+  onUploadShp: (fl: FileList, empresaId: string) => void;
+  onUploadCsv: (fl: FileList, empresaId: string) => void;
+  onUploadRinde: (fl: FileList, empresaId: string) => void;
   onRemoveShp: (name: string) => void;
   onRemoveCsv: (name: string) => void;
   onRemoveRinde: (name: string) => void;
   rainFiles: string[];
-  onUploadRain: (fl: FileList) => void;
+  onUploadRain: (fl: FileList, empresaId: string) => void;
   onRemoveRain: (name: string) => void;
   shpStatus: { msg: string; ok: boolean } | null;
   csvStatus: { msg: string; ok: boolean } | null;
@@ -3195,11 +3198,13 @@ function FileDashboard({
                         <DashFileSection nested title="🗺 Mapa de lotes"
                           hint="cada lote debe ser un polígono — .zip con .shp + .dbf + .shx, o .kmz"
                           accept=".zip,.shp,.dbf,.shx,.prj,.kmz" multiple
-                          files={empShpFiles} status={shpStatus} onFiles={onUploadShp} onRemove={onRemoveShp} />
+                          files={empShpFiles} status={shpStatus}
+                          onFiles={(fl) => onUploadShp(fl, emp.id)} onRemove={onRemoveShp} />
                         <DashFileSection nested title="📄 Manejo de lotes"
                           hint="acepta xlsx y csv — los nombres de los lotes deben coincidir con los del mapa"
                           accept=".csv,.xlsx,.xls" multiple={false}
-                          files={empCsvFiles} status={csvStatus} onFiles={onUploadCsv} onRemove={onRemoveCsv}
+                          files={empCsvFiles} status={csvStatus}
+                          onFiles={(fl) => onUploadCsv(fl, emp.id)} onRemove={onRemoveCsv}
                           driveProps={{
                             linked: empresaDriveLinks[emp.id]?.manejoLink?.driveManejo ?? null,
                             urlInput: driveInput(emp.id, "manejo"),
@@ -3220,7 +3225,8 @@ function FileDashboard({
                         <DashFileSection nested title="🌾 Rindes históricos"
                           hint="información optativa y complementaria — nombres de lotes = los del mapa"
                           accept=".csv,.xlsx,.xls" multiple={false}
-                          files={empRindeFiles} status={rindeStatus} onFiles={onUploadRinde} onRemove={onRemoveRinde}
+                          files={empRindeFiles} status={rindeStatus}
+                          onFiles={(fl) => onUploadRinde(fl, emp.id)} onRemove={onRemoveRinde}
                           driveProps={{
                             linked: empresaDriveLinks[emp.id]?.rindeLink?.driveManejo ?? null,
                             urlInput: driveInput(emp.id, "rinde"),
@@ -3241,7 +3247,8 @@ function FileDashboard({
                         <DashFileSection nested title="🌧 Lluvias"
                           hint="xlsx o csv con columnas Fecha, Ubicación y Valor (mm)"
                           accept=".csv,.xlsx,.xls" multiple={false}
-                          files={rainFiles} status={null} onFiles={onUploadRain} onRemove={onRemoveRain}
+                          files={rainFiles} status={null}
+                          onFiles={(fl) => onUploadRain(fl, emp.id)} onRemove={onRemoveRain}
                           driveProps={{
                             linked: empresaDriveLinks[emp.id]?.lluviaLink ?? null,
                             urlInput: driveInput(emp.id, "lluvia"),
