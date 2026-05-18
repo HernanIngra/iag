@@ -680,42 +680,51 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   async function handleShpFiles(files: FileList, empresaId?: string) {
     const empId = empresaId ?? activeEmpresaId ?? "";
     setShpStatus({ msg: "Procesando shapefile...", ok: false });
+    let newCols: GeoCollection[] = [];
     try {
-      const newCols = await loadShapefiles(files);
-      const fileNames = Array.from(files).map((f) => f.name);
-      newCols.forEach((col, i) => {
-        (col as unknown as Record<string, unknown>)._file = fileNames[Math.min(i, fileNames.length - 1)];
-        col.features.forEach((f) => {
-          if (!f.properties) (f as unknown as { properties: Record<string, unknown> }).properties = {};
-          (f.properties as Record<string, unknown>)._empresaId = empId;
-        });
+      newCols = await loadShapefiles(files);
+    } catch (err) {
+      setShpStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
+      return;
+    }
+
+    // Tag features with empresa and file name
+    const fileNames = Array.from(files).map((f) => f.name);
+    newCols.forEach((col, i) => {
+      (col as unknown as Record<string, unknown>)._file = fileNames[Math.min(i, fileNames.length - 1)];
+      col.features.forEach((f) => {
+        if (!f.properties) (f as unknown as { properties: Record<string, unknown> }).properties = {};
+        (f.properties as Record<string, unknown>)._empresaId = empId;
       });
-      const mergedCols = [...collections, ...newCols];
-      const cMap = buildColorMap(mergedCols);
-      setCollections(mergedCols);
-      setColorMap(cMap);
+    });
 
+    // Register file in list immediately — before drawing, so it always appears
+    const newFileNames = Array.from(files).map((f) => f.name);
+    const mergedCols = [...collections, ...newCols];
+    const cMap = buildColorMap(mergedCols);
+    let total = 0;
+    mergedCols.forEach((c) => (total += c.features.length));
+
+    setCollections(mergedCols);
+    setColorMap(cMap);
+    setLotCount(total);
+    setShpFiles((prev) => [...prev, ...newFileNames]);
+    setShpFileMeta((prev) => [...prev, ...newFileNames.map((name) => ({ name, empresaId: empId || undefined }))]);
+    setShpStatus({ msg: `✓ ${total} lotes`, ok: true });
+
+    if (!fieldName) {
+      const name = Array.from(files)[0].name.replace(/\..+$/, "").replace(/_/g, " ");
+      setFieldName(name);
+    }
+
+    // Draw on map (non-blocking — failures don't affect the file list)
+    try {
       const layerList = await drawCollections(mergedCols, cMap, cultivoColorMap, lotData);
-
-      let total = 0;
-      mergedCols.forEach((c) => (total += c.features.length));
-      setLotCount(total);
-
-      if (!fieldName) {
-        const name = Array.from(files)[0].name.replace(/\..+$/, "").replace(/_/g, " ");
-        setFieldName(name);
-      }
-
       const L = (await import("leaflet")).default;
       const bounds = L.featureGroup(layerList as LeafletGeoJSON[]).getBounds();
       if (bounds.isValid() && mapRef.current) mapRef.current.fitBounds(bounds, { padding: [30, 30] });
-
-      setShpStatus({ msg: `✓ ${total} lotes`, ok: true });
-      const newFileNames = Array.from(files).map((f) => f.name);
-      setShpFiles((prev) => [...prev, ...newFileNames]);
-      setShpFileMeta((prev) => [...prev, ...newFileNames.map((name) => ({ name, empresaId: empId || undefined }))]);
-    } catch (err) {
-      setShpStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
+    } catch {
+      // Map drawing failed (e.g. map not yet ready) — redraw will happen on view switch
     }
   }
 
