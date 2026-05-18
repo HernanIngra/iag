@@ -71,6 +71,14 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function driveRefreshKey(wsId: string) { return `iag_drive_refresh_${wsId}`; }
+function shouldRefreshDriveToday(wsId: string): boolean {
+  try { return localStorage.getItem(driveRefreshKey(wsId)) !== todayStr(); } catch { return true; }
+}
+function markDriveRefreshed(wsId: string) {
+  try { localStorage.setItem(driveRefreshKey(wsId), todayStr()); } catch { /* ignore */ }
+}
+
 const SPRAYING_TIPOS = new Set(["HERBICIDA", "FUNGICIDA", "INSECTICIDA", "ACARICIDA"]);
 import AuthButton from "@/components/AuthButton";
 
@@ -462,15 +470,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         : (ws.driveManejo && ws.manejoColMapping && activeEmpresaId)
           ? { [activeEmpresaId]: { manejoLink: { driveManejo: ws.driveManejo, colMapping: ws.manejoColMapping }, rindeLink: null, lluviaLink: null } }
           : {};
-      for (const [empId, links] of Object.entries(linksToRefresh)) {
-        if (links.manejoLink?.driveManejo && links.manejoLink.colMapping) {
-          refreshDriveWith(empId, links.manejoLink.driveManejo, links.manejoLink.colMapping);
-        }
-        if (links.rindeLink?.driveManejo) {
-          refreshDriveRindeWith(empId, links.rindeLink);
-        }
-        if (links.lluviaLink) {
-          refreshDriveLluviaWith(empId, links.lluviaLink);
+      if (shouldRefreshDriveToday(activeWorkspaceId)) {
+        markDriveRefreshed(activeWorkspaceId);
+        for (const [empId, links] of Object.entries(linksToRefresh)) {
+          if (links.manejoLink?.driveManejo && links.manejoLink.colMapping) {
+            refreshDriveWith(empId, links.manejoLink.driveManejo, links.manejoLink.colMapping);
+          }
+          if (links.rindeLink?.driveManejo) {
+            refreshDriveRindeWith(empId, links.rindeLink);
+          }
+          if (links.lluviaLink) {
+            refreshDriveLluviaWith(empId, links.lluviaLink);
+          }
         }
       }
     }).catch(() => {
@@ -504,15 +515,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       : (ws.driveManejo && ws.manejoColMapping && activeEmpresaId)
         ? { [activeEmpresaId]: { manejoLink: { driveManejo: ws.driveManejo, colMapping: ws.manejoColMapping }, rindeLink: null, lluviaLink: null } }
         : {};
-    for (const [empId, links] of Object.entries(linksToRefresh)) {
-      if (links.manejoLink?.driveManejo && links.manejoLink.colMapping) {
-        refreshDriveWith(empId, links.manejoLink.driveManejo, links.manejoLink.colMapping);
-      }
-      if (links.rindeLink?.driveManejo) {
-        refreshDriveRindeWith(empId, links.rindeLink);
-      }
-      if (links.lluviaLink) {
-        refreshDriveLluviaWith(empId, links.lluviaLink);
+    if (shouldRefreshDriveToday("local")) {
+      markDriveRefreshed("local");
+      for (const [empId, links] of Object.entries(linksToRefresh)) {
+        if (links.manejoLink?.driveManejo && links.manejoLink.colMapping) {
+          refreshDriveWith(empId, links.manejoLink.driveManejo, links.manejoLink.colMapping);
+        }
+        if (links.rindeLink?.driveManejo) {
+          refreshDriveRindeWith(empId, links.rindeLink);
+        }
+        if (links.lluviaLink) {
+          refreshDriveLluviaWith(empId, links.lluviaLink);
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
