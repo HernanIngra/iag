@@ -121,6 +121,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [lotCount, setLotCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [shpStatus, setShpStatus] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [shpErrorDetail, setShpErrorDetail] = useState<string | null>(null);
   const [csvStatus, setCsvStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [rindeStatus, setRindeStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [gpsTracking, setGpsTracking] = useState(false);
@@ -682,12 +683,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setShpStatus({ msg: "Procesando shapefile...", ok: false });
     let newCols: GeoCollection[] = [];
     try {
-      console.log("[shp] iniciando carga", Array.from(files).map(f => f.name));
       newCols = await loadShapefiles(files);
-      console.log("[shp] parseado ok, colecciones:", newCols.length, newCols.map(c => c.features?.length));
     } catch (err) {
-      console.error("[shp] error en loadShapefiles:", err);
-      setShpStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      setShpStatus({ msg: `✗ ${msg}`, ok: false });
+      setShpErrorDetail(msg);
       return;
     }
 
@@ -1825,6 +1825,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           onConfirm={handleRainLinkConfirmed}
           onCancel={() => { setPendingRainData({}); setPendingRainFileName(""); }}
         />
+      )}
+
+      {shpErrorDetail && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)" }}>
+          <div className="rounded-2xl p-6 max-w-lg w-full mx-4" style={{ background: "#1a1a2e", border: "2px solid #e24a4a" }}>
+            <p className="text-base font-bold mb-3" style={{ color: "#e24a4a" }}>Error al cargar shapefile</p>
+            <p className="text-sm mb-4 font-mono break-all" style={{ color: "#e0e0e0", background: "#0d1b35", padding: "8px 12px", borderRadius: "8px" }}>{shpErrorDetail}</p>
+            <button onClick={() => setShpErrorDetail(null)}
+              className="w-full py-2 rounded-xl text-sm font-semibold"
+              style={{ background: "#2a4a6a", color: "#aac4e0" }}>Cerrar</button>
+          </div>
+        </div>
       )}
 
       {/* ── SOURCE SELECTOR MODAL ── */}
