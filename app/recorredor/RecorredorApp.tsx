@@ -555,7 +555,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }, 1500);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, lotData, rindeData, lotVisits, empresaDriveLinks, rainData, pluviometroMap, workspaceName, workspaceLogo, user]);
+  }, [collections, lotData, rindeData, lotVisits, empresaDriveLinks, rainData, pluviometroMap, workspaceName, workspaceLogo, user, shpFiles, csvFiles, rindeFiles, shpFileMeta, csvFileMeta, rindeFileMeta]);
 
   // ── Dim/highlight lots based on tipo/product filter ─────────────────────────
 
@@ -715,17 +715,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       });
     });
 
-    // Register file in list immediately — before drawing, so it always appears
-    // Deduplicate: replace any existing entry with the same filename
+    // Register file in list — deduplicate by filename, use functional setState to avoid stale closure
     const newFileNames = Array.from(files).map((f) => f.name);
     const newFileSet = new Set(newFileNames);
-    const filteredOldCols = collections.filter((col) => !newFileSet.has((col as unknown as Record<string, unknown>)._file as string));
-    const mergedCols = [...filteredOldCols, ...newCols];
+    let mergedCols: GeoCollection[] = [];
+    setCollections((prev) => {
+      const filtered = prev.filter((col) => !newFileSet.has((col as unknown as Record<string, unknown>)._file as string));
+      mergedCols = [...filtered, ...newCols];
+      return mergedCols;
+    });
     const cMap = buildColorMap(mergedCols);
     let total = 0;
     mergedCols.forEach((c) => (total += c.features.length));
-
-    setCollections(mergedCols);
     setColorMap(cMap);
     setLotCount(total);
     setShpFiles((prev) => [...prev.filter((f) => !newFileSet.has(f)), ...newFileNames]);
