@@ -702,8 +702,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     });
 
     // Register file in list immediately — before drawing, so it always appears
+    // Deduplicate: replace any existing entry with the same filename
     const newFileNames = Array.from(files).map((f) => f.name);
-    const mergedCols = [...collections, ...newCols];
+    const newFileSet = new Set(newFileNames);
+    const filteredOldCols = collections.filter((col) => !newFileSet.has((col as unknown as Record<string, unknown>)._file as string));
+    const mergedCols = [...filteredOldCols, ...newCols];
     const cMap = buildColorMap(mergedCols);
     let total = 0;
     mergedCols.forEach((c) => (total += c.features.length));
@@ -711,8 +714,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setCollections(mergedCols);
     setColorMap(cMap);
     setLotCount(total);
-    setShpFiles((prev) => [...prev, ...newFileNames]);
-    setShpFileMeta((prev) => [...prev, ...newFileNames.map((name) => ({ name, empresaId: empId || undefined }))]);
+    setShpFiles((prev) => [...prev.filter((f) => !newFileSet.has(f)), ...newFileNames]);
+    setShpFileMeta((prev) => [...prev.filter((m) => !newFileSet.has(m.name)), ...newFileNames.map((name) => ({ name, empresaId: empId || "" }))]);
     setShpStatus({ msg: `✓ ${total} lotes`, ok: true });
 
     if (!fieldName) {
@@ -889,8 +892,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       recolorPolygons(cMap, finalLotData);
 
       setCsvStatus({ msg: `✓ ${finalRows.length} registros · ${Object.keys(finalLotData).length} lotes`, ok: true });
-      setCsvFiles((prev) => [...prev, csvName]);
-      setCsvFileMeta((prev) => [...prev, { name: csvName, empresaId: pendingCsvEmpresaIdRef.current ?? activeEmpresaId }]);
+      setCsvFiles((prev) => [...prev.filter((f) => f !== csvName), csvName]);
+      setCsvFileMeta((prev) => [...prev.filter((m) => m.name !== csvName), { name: csvName, empresaId: pendingCsvEmpresaIdRef.current ?? activeEmpresaId ?? "" }]);
       pendingCsvEmpresaIdRef.current = undefined;
       setPendingFile(null);
       rebuildFilters(finalRows);
@@ -1004,8 +1007,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       const uniqueLots = Object.keys(rd).length;
       setRindeStatus({ msg: `✓ Rindes · ${uniqueLots} lotes`, ok: true });
       const rindeName = pendingRindeFile!.name;
-      setRindeFiles((prev) => [...prev, rindeName]);
-      setRindeFileMeta((prev) => [...prev, { name: rindeName, empresaId: pendingRindeEmpresaIdRef.current }]);
+      setRindeFiles((prev) => [...prev.filter((f) => f !== rindeName), rindeName]);
+      setRindeFileMeta((prev) => [...prev.filter((m) => m.name !== rindeName), { name: rindeName, empresaId: pendingRindeEmpresaIdRef.current ?? "" }]);
       // Si venía de un Drive link, persistir en empresaDriveLinks
       const driveInfo = pendingDriveRindeInfoRef.current;
       const driveEmpresaId = pendingDriveEmpresaIdRef.current;
@@ -1562,7 +1565,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           }}
           rainFiles={rainFiles}
           onUploadRain={(fl, empId) => { if (fl[0]) handleRainFileStart(fl[0], undefined, empId); }}
-          onRemoveRain={(name) => setRainFiles((prev) => prev.filter((f) => f !== name))}
+          onRemoveRain={(name) => {
+            setRainFiles((prev) => prev.filter((f) => f !== name));
+            setRainData((prev) => { const next = { ...prev }; delete next[name]; return next; });
+          }}
           shpStatus={shpStatus}
           csvStatus={csvStatus}
           rindeStatus={rindeStatus}
@@ -3119,9 +3125,9 @@ function FileDashboard({
                 const isRenaming = renamingEmpresaId === emp.id;
                 const isDeleting = deletingEmpresaId === emp.id;
 
-                const empShpFiles = shpFiles.filter((n) => { const m = shpFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
-                const empCsvFiles = csvFiles.filter((n) => { const m = csvFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
-                const empRindeFiles = rindeFiles.filter((n) => { const m = rindeFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
+                const empShpFiles = shpFiles.filter((n) => shpFileMeta.find((x) => x.name === n)?.empresaId === emp.id);
+                const empCsvFiles = csvFiles.filter((n) => csvFileMeta.find((x) => x.name === n)?.empresaId === emp.id);
+                const empRindeFiles = rindeFiles.filter((n) => rindeFileMeta.find((x) => x.name === n)?.empresaId === emp.id);
 
                 if (isRenaming) {
                   return (
@@ -3157,26 +3163,14 @@ function FileDashboard({
 
                 if (isDeleting) {
                   return (
-                    <div key={emp.id} className="flex items-center gap-2 p-2 rounded-lg"
-                      style={{ background: "#2a0a0a", border: "1px solid #6a1a1a" }}>
-                      <span className="flex-1 text-sm" style={{ color: "#e24a4a" }}>
-                        ¿Eliminar <strong>{emp.name}</strong>? Esta acción no se puede deshacer.
-                      </span>
-                      <button disabled={empresaMutating}
-                        onClick={async () => {
-                          setEmpresaMutating(true);
-                          await onDeleteEmpresa(emp.id);
-                          setDeletingEmpresaId(null);
-                          setEmpresaMutating(false);
-                        }}
-                        className="px-3 py-1 rounded text-sm font-semibold disabled:opacity-50"
-                        style={{ background: "#e24a4a", color: "#fff" }}>
-                        {empresaMutating ? "..." : "Eliminar"}
-                      </button>
-                      <button onClick={() => setDeletingEmpresaId(null)}
-                        className="px-2 py-1 rounded text-sm"
-                        style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
-                    </div>
+                    <DeleteEmpresaConfirm key={emp.id} empName={emp.name} mutating={empresaMutating}
+                      onConfirm={async () => {
+                        setEmpresaMutating(true);
+                        await onDeleteEmpresa(emp.id);
+                        setDeletingEmpresaId(null);
+                        setEmpresaMutating(false);
+                      }}
+                      onCancel={() => setDeletingEmpresaId(null)} />
                   );
                 }
 
@@ -3865,6 +3859,41 @@ function CsvPreviewModal({
             Confirmar →
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteEmpresaConfirm({ empName, mutating, onConfirm, onCancel }: {
+  empName: string; mutating: boolean;
+  onConfirm: () => void; onCancel: () => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const match = typed.trim().toLowerCase() === empName.trim().toLowerCase();
+  return (
+    <div className="p-3 rounded-xl" style={{ background: "#1e0808", border: "2px solid #8a1a1a" }}>
+      <p className="text-sm font-semibold mb-1" style={{ color: "#e24a4a" }}>
+        Eliminar empresa <strong>{empName}</strong>
+      </p>
+      <p className="text-xs mb-3" style={{ color: "#8a4a4a" }}>
+        Se eliminarán todos los archivos y datos asociados. Esta acción no se puede deshacer.
+      </p>
+      <p className="text-xs mb-1" style={{ color: "#c08080" }}>
+        Escribí <strong style={{ color: "#e24a4a" }}>{empName}</strong> para confirmar:
+      </p>
+      <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)}
+        placeholder={empName}
+        className="w-full rounded px-2 py-1.5 text-xs mb-3"
+        style={{ background: "#2a0a0a", border: `1px solid ${match ? "#e24a4a" : "#5a1a1a"}`, color: "#e0c0c0", outline: "none" }} />
+      <div className="flex gap-2">
+        <button onClick={onConfirm} disabled={!match || mutating}
+          className="px-3 py-1.5 rounded text-xs font-semibold disabled:opacity-40"
+          style={{ background: "#c01a1a", color: "#fff" }}>
+          {mutating ? "Eliminando..." : "Eliminar definitivamente"}
+        </button>
+        <button onClick={onCancel}
+          className="px-3 py-1.5 rounded text-xs"
+          style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
       </div>
     </div>
   );
