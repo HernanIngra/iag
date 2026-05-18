@@ -200,6 +200,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [activeEmpresaId, setActiveEmpresaId] = useState<string | undefined>(undefined);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [workspaceSummaries, setWorkspaceSummaries] = useState<WorkspaceSummary[]>([]);
+  const [wsLoaded, setWsLoaded] = useState(false);
 
   // File meta (parallel arrays with shpFiles/csvFiles/rindeFiles, includes empresaId)
   const [shpFileMeta, setShpFileMeta] = useState<FileMeta[]>([]);
@@ -288,10 +289,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     const uid = effectiveUserId ?? user.id;
     loadWorkspaceSummaries(supabase, uid).then((s) => {
       setWorkspaceSummaries(s);
+      setWsLoaded(true);
       const storedWsId = getActiveWorkspaceId();
       const active = s.find((ws) => ws.id === storedWsId);
       if (active) setWorkspaceName(active.name);
-    });
+    }).catch(() => setWsLoaded(true));
 
     const storedWsId = getActiveWorkspaceId();
     if (storedWsId) {
@@ -1525,9 +1527,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         <WorkspacePicker
           supabase={supabase}
           workspaceSummaries={workspaceSummaries}
+          wsLoaded={wsLoaded}
           defaultWsId={activeWorkspaceId ?? getActiveWorkspaceId() ?? undefined}
           defaultEmpIds={pickerSelectedEmpIds}
           onConfirm={handlePickerConfirm}
+          onCreateWorkspace={async () => {
+            if (!user) return;
+            const wsId = await createWorkspace(supabase, user.id, "Mi espacio");
+            persistActiveWorkspaceId(wsId);
+            setActiveWorkspaceId(wsId);
+            const summaries = await loadWorkspaceSummaries(supabase, user.id);
+            setWorkspaceSummaries(summaries);
+          }}
         />
       )}
       {view === "picker" && !authLoaded && (
@@ -3400,14 +3411,16 @@ function FileDashboard({
 // ── WorkspacePicker ────────────────────────────────────────────────────────────
 
 function WorkspacePicker({
-  supabase, workspaceSummaries, defaultWsId, defaultEmpIds, onConfirm,
+  supabase, workspaceSummaries, wsLoaded, defaultWsId, defaultEmpIds, onConfirm, onCreateWorkspace,
 }: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any;
   workspaceSummaries: WorkspaceSummary[];
+  wsLoaded: boolean;
   defaultWsId?: string;
   defaultEmpIds: string[];
   onConfirm: (wsId: string, empIds: string[], allEmps: Empresa[]) => void;
+  onCreateWorkspace: () => Promise<void>;
 }) {
   const [step, setStep] = useState<"workspace" | "empresa">("workspace");
   const [selectedWsId, setSelectedWsId] = useState<string>(defaultWsId ?? "");
@@ -3451,12 +3464,30 @@ function WorkspacePicker({
 
   const selectedWs = workspaceSummaries.find((w) => w.id === selectedWsId);
 
-  if (workspaceSummaries.length === 0) {
+  const [creating, setCreating] = useState(false);
+
+  if (!wsLoaded) {
     return (
       <div className="flex-1 flex items-center justify-center" style={{ background: "#1a1a2e" }}>
         <div className="text-center">
           <span className="text-2xl font-bold tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</span>
           <p className="text-sm mt-2" style={{ color: "#6a8ab0" }}>Cargando espacios...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (workspaceSummaries.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center" style={{ background: "#1a1a2e" }}>
+        <div className="text-center max-w-xs">
+          <span className="text-2xl font-bold tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</span>
+          <p className="text-sm mt-3 mb-6" style={{ color: "#6a8ab0" }}>No encontramos espacios de trabajo. Creá uno para empezar.</p>
+          <button disabled={creating} onClick={async () => { setCreating(true); await onCreateWorkspace(); setCreating(false); }}
+            className="px-6 py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
+            style={{ background: "#3dbb6e", color: "#fff" }}>
+            {creating ? "Creando..." : "+ Crear espacio de trabajo"}
+          </button>
         </div>
       </div>
     );
