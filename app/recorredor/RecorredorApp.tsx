@@ -3109,9 +3109,17 @@ function FileDashboard({
                 const isRenaming = renamingEmpresaId === emp.id;
                 const isDeleting = deletingEmpresaId === emp.id;
 
-                const empShpFiles = shpFiles.filter((n) => { const m = shpFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
-                const empCsvFiles = csvFiles.filter((n) => { const m = csvFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
-                const empRindeFiles = rindeFiles.filter((n) => { const m = rindeFileMeta.find((x) => x.name === n); return !m?.empresaId || m.empresaId === emp.id; });
+                // Muestra archivos de esta empresa + archivos huérfanos (sin empresa o con empresa que ya no existe)
+                const knownEmpresaIds = new Set(availableEmpresas.map((e) => e.id));
+                function fileVisibleFor(meta: FileMeta[], name: string, empId: string): boolean {
+                  const m = meta.find((x) => x.name === name);
+                  if (!m || !m.empresaId) return true; // sin empresa asignada → visible en todas
+                  if (!knownEmpresaIds.has(m.empresaId)) return true; // empresa ya no existe → visible en todas
+                  return m.empresaId === empId; // empresa asignada → solo en la suya
+                }
+                const empShpFiles = shpFiles.filter((n) => fileVisibleFor(shpFileMeta, n, emp.id));
+                const empCsvFiles = csvFiles.filter((n) => fileVisibleFor(csvFileMeta, n, emp.id));
+                const empRindeFiles = rindeFiles.filter((n) => fileVisibleFor(rindeFileMeta, n, emp.id));
 
                 if (isRenaming) {
                   return (
@@ -3504,6 +3512,7 @@ function DashFileSection({
   driveProps?: SectionDriveProps;
 }) {
   const [driveOpen, setDriveOpen] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   const inner = (
     <>
@@ -3512,14 +3521,30 @@ function DashFileSection({
         {hint && <p className="text-xs mt-0.5" style={{ color: "#4a6a8a" }}>{hint}</p>}
       </div>
 
+      {/* Delete confirmation */}
+      {confirmRemove && (
+        <div className="mb-2 px-2 py-2 rounded-lg text-xs" style={{ background: "#3a0a0a", border: "1px solid #8a2a2a" }}>
+          <p style={{ color: "#e2a0a0" }}>¿Eliminar <strong style={{ color: "#e25a5a" }}>{confirmRemove}</strong>?</p>
+          <p className="mt-0.5 mb-2" style={{ color: "#8a5a5a" }}>Se borrarán los datos cargados de este archivo.</p>
+          <div className="flex gap-2">
+            <button onClick={() => { onRemove(confirmRemove); setConfirmRemove(null); }}
+              className="px-2.5 py-1 rounded text-xs font-semibold"
+              style={{ background: "#8a2a2a", color: "#fff" }}>Eliminar</button>
+            <button onClick={() => setConfirmRemove(null)}
+              className="px-2.5 py-1 rounded text-xs"
+              style={{ background: "#1a2a3a", color: "#6a8ab0" }}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
       {/* File list */}
       {files.length > 0 ? (
         <div className="space-y-1 mb-2">
           {files.map((name, i) => (
             <div key={i} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded"
-              style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
-              <span className="truncate flex-1" style={{ color: "#3dbb6e" }}>✓ {name}</span>
-              <button onClick={() => onRemove(name)}
+              style={{ background: confirmRemove === name ? "#2a0a0a" : "#0d2a1a", border: `1px solid ${confirmRemove === name ? "#8a2a2a" : "#1e5a2e"}` }}>
+              <span className="truncate flex-1" style={{ color: confirmRemove === name ? "#e25a5a" : "#3dbb6e" }}>✓ {name}</span>
+              <button onClick={() => setConfirmRemove(confirmRemove === name ? null : name)}
                 className="shrink-0 w-5 h-5 flex items-center justify-center rounded hover:opacity-70 text-sm"
                 style={{ color: "#e25a5a" }}>×</button>
             </div>
