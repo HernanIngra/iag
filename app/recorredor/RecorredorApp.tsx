@@ -450,8 +450,15 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   useEffect(() => {
     if (!user || !mapReady || !activeWorkspaceId) return;
     setWsRestoring(true);
-    loadWorkspace(supabase, activeWorkspaceId).then(async (ws) => {
-      if (!ws || !ws.collections.length) ws = loadWorkspaceLocal(activeWorkspaceId);
+    loadWorkspace(supabase, activeWorkspaceId).then(async (remoteWs) => {
+      const localWs = loadWorkspaceLocal(activeWorkspaceId);
+      // Prefer whichever was saved more recently — protects against stale Supabase data
+      let ws: typeof remoteWs;
+      if (remoteWs && localWs && (localWs.savedAt ?? 0) > (remoteWs.savedAt ?? 0)) {
+        ws = localWs;
+      } else {
+        ws = remoteWs ?? localWs;
+      }
       if (!ws || !ws.collections.length) {
         hasHydratedRef.current = true;
         setWsRestoring(false);
@@ -549,7 +556,12 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       saveWorkspaceLocal(state, activeWorkspaceId ?? "local");
       if (user && activeWorkspaceId) {
         setIsSaving(true);
-        await saveWorkspace(supabase, activeWorkspaceId, state);
+        try {
+          await saveWorkspace(supabase, activeWorkspaceId, state);
+        } catch (err) {
+          console.error("[auto-save] Supabase error:", err);
+          alert(`Error al guardar en la nube: ${(err as Error).message}\n\nLos datos están guardados localmente en este navegador.`);
+        }
         setIsSaving(false);
       }
     }, 1500);

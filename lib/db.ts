@@ -61,6 +61,7 @@ export interface Workspace {
   empresaDriveLinks: Record<string, EmpresaLinks>; // reemplaza driveManejo por empresa
   rainData: RainData;
   pluviometroMap: Record<string, string>;
+  savedAt?: number; // unix ms — para comparar frescura entre Supabase y localStorage
 }
 
 export interface WorkspaceSummary {
@@ -136,6 +137,7 @@ function deserializeWorkspaceRow(data: Record<string, unknown>): Workspace {
     empresaDriveLinks: (data.empresa_drive_links ?? {}) as Record<string, EmpresaLinks>,
     rainData: (data.rain_data ?? {}) as RainData,
     pluviometroMap: (data.pluviometro_map ?? {}) as Record<string, string>,
+    savedAt: data.updated_at ? new Date(data.updated_at as string).getTime() : undefined,
   };
 }
 
@@ -250,7 +252,7 @@ export async function saveWorkspace(
       updated_at: new Date().toISOString(),
     })
     .eq("id", workspaceId);
-  if (error) console.warn("[db] saveWorkspace:", error.message);
+  if (error) throw new Error(error.message);
 }
 
 // ─── Supabase load ────────────────────────────────────────────────────────────
@@ -301,6 +303,7 @@ export function saveWorkspaceLocal(state: Workspace, workspaceId: string): void 
         empresa_drive_links: state.empresaDriveLinks ?? {},
         rain_data: state.rainData,
         pluviometro_map: state.pluviometroMap,
+        saved_at: Date.now(),
       })
     );
   } catch {
@@ -336,6 +339,7 @@ export function loadWorkspaceLocal(workspaceId: string): Workspace | null {
       empresaDriveLinks: (data.empresa_drive_links ?? {}) as Record<string, EmpresaLinks>,
       rainData: (data.rain_data ?? {}) as RainData,
       pluviometroMap: (data.pluviometro_map ?? {}) as Record<string, string>,
+      savedAt: (data.saved_at as number | undefined) ?? undefined,
     };
   } catch {
     return null;
