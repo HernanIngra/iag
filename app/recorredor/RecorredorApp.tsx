@@ -139,6 +139,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [user, setUser] = useState<User | null>(null);
   const [authLoaded, setAuthLoaded] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveCloudError, setSaveCloudError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [wsRestoring, setWsRestoring] = useState(true); // true while workspace is loading from DB
   const supabase = useState(() => createSupabaseBrowserClient())[0];
@@ -558,9 +559,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         setIsSaving(true);
         try {
           await saveWorkspace(supabase, activeWorkspaceId, state);
+          setSaveCloudError(null);
         } catch (err) {
           console.error("[auto-save] Supabase error:", err);
-          alert(`Error al guardar en la nube: ${(err as Error).message}\n\nLos datos están guardados localmente en este navegador.`);
+          setSaveCloudError((err as Error).message);
         }
         setIsSaving(false);
       }
@@ -1475,6 +1477,13 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             </a>
           )}
           {isSaving && <span className="text-xs" style={{ color: "#6a8ab0" }}>Guardando...</span>}
+          {saveCloudError && (
+            <span className="text-xs px-2 py-0.5 rounded cursor-pointer" title={saveCloudError}
+              onClick={() => setSaveCloudError(null)}
+              style={{ background: "#3a0a0a", color: "#e24a4a", border: "1px solid #6a1a1a" }}>
+              ⚠ Error al guardar — {saveCloudError.slice(0, 40)}{saveCloudError.length > 40 ? "…" : ""}
+            </span>
+          )}
           {noteCount > 0 && (
             <>
               <span className="text-xs font-semibold px-3 py-1 rounded-full" style={{ background: "#1a4a2a", color: "#3dbb6e" }}>
