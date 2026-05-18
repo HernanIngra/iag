@@ -364,9 +364,9 @@ function VerticalDivergingBarChart({ results, headName }: { results: DiffResult[
 // ── Hybrid Selector ───────────────────────────────────────────────────────────
 
 function HybridSelect({
-  label, value, onChange, options, color,
+  label, value, onChange, options, color, placeholder,
 }: {
-  label: string; value: string; onChange: (v: string) => void; options: string[]; color: string;
+  label: string; value: string; onChange: (v: string) => void; options: string[]; color: string; placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState(value);
@@ -393,7 +393,7 @@ function HybridSelect({
           value={search}
           onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          placeholder="Buscar híbrido…"
+          placeholder={placeholder ?? "Buscar…"}
           style={{ width: "100%", background: "#0f2040", border: `1px solid ${value ? color : "#1a4a80"}`, borderRadius: 8, padding: "8px 32px 8px 10px", color: "#e0e0e0", fontSize: 13, outline: "none", boxSizing: "border-box" }}
         />
         {value && (
@@ -987,6 +987,9 @@ export default function ComparacionApp() {
       .sort((a, b) => b.diff - a.diff);
   }, [statsHead, hibridosDisponibles, hibridoHead, ensayosFiltradosFinal, outlierKeys]);
 
+  const entityWord = cultivo === "soja" ? "variedad" : "híbrido";
+  const EntityWord = cultivo === "soja" ? "Variedad" : "Híbrido";
+
   const canProceed = filterMode === "mapa" ? selectedLocalidades.length > 0 : selectedRedes.length > 0;
   const toggleLocalidad = useCallback((loc: string) => {
     setSelectedLocalidades((prev) => prev.includes(loc) ? prev.filter((l) => l !== loc) : [...prev, loc]);
@@ -1016,9 +1019,8 @@ export default function ComparacionApp() {
             <button onClick={() => { setCultivo("maiz"); setStep(2); }} style={{ flex: 1, padding: "28px 16px", background: "#16213e", border: "2px solid #3dbb6e", borderRadius: 16, color: "#e0e0e0", fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 40 }}>🌽</span>Maíz
             </button>
-            <button onClick={() => { setCultivo("soja"); setStep(2); }} style={{ flex: 1, padding: "28px 16px", background: "#16213e", border: "2px solid #1a4a80", borderRadius: 16, color: "#6a8ab0", fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <button onClick={() => { setCultivo("soja"); setStep(2); }} style={{ flex: 1, padding: "28px 16px", background: "#16213e", border: "2px solid #3dbb6e", borderRadius: 16, color: "#e0e0e0", fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 40 }}>🌱</span>Soja
-              <span style={{ fontSize: 10, background: "#0f3460", color: "#4a6a8a", borderRadius: 8, padding: "2px 8px" }}>Sin datos aún</span>
             </button>
           </div>
         </div>
@@ -1157,7 +1159,7 @@ export default function ComparacionApp() {
         {!compareMode && (
           <div>
             <h2 style={{ color: "#e0e0e0", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>¿Cómo querés comparar?</h2>
-            <p style={{ color: "#4a6a8a", fontSize: 13, marginBottom: 20 }}>{hibridosDisponibles.length} híbridos disponibles</p>
+            <p style={{ color: "#4a6a8a", fontSize: 13, marginBottom: 20 }}>{hibridosDisponibles.length} {entityWord}s disponibles</p>
             <div style={{ display: "flex", gap: 16 }}>
               <button onClick={() => setCompareMode("h2h")} style={{ flex: 1, padding: "22px 16px", background: "#16213e", border: "2px solid #1a4a80", borderRadius: 14, color: "#aac4e0", fontSize: 15, fontWeight: 600, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 30 }}>⚔️</span>Cabeza a cabeza
@@ -1183,8 +1185,8 @@ export default function ComparacionApp() {
               <RedesFilter redes={redesDisponibles} selected={selectedRedesComp} onChange={setSelectedRedesComp} />
               <CompanyFilter companies={empresasDisponibles} selected={selectedCompany} onChange={setSelectedCompany} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }} className="h2h-selectors">
-                <HybridSelect label="Híbrido A" value={hibridoA} onChange={setHibridoA} options={hibridosFiltradosPorEmpresa.filter((h) => h !== hibridoB)} color={COLOR_A} />
-                <HybridSelect label="Híbrido B" value={hibridoB} onChange={setHibridoB} options={hibridosFiltradosPorEmpresa.filter((h) => h !== hibridoA)} color={COLOR_B} />
+                <HybridSelect label={`${EntityWord} A`} value={hibridoA} onChange={setHibridoA} options={hibridosFiltradosPorEmpresa.filter((h) => h !== hibridoB)} color={COLOR_A} placeholder={`Buscar ${entityWord}…`} />
+                <HybridSelect label={`${EntityWord} B`} value={hibridoB} onChange={setHibridoB} options={hibridosFiltradosPorEmpresa.filter((h) => h !== hibridoA)} color={COLOR_B} placeholder={`Buscar ${entityWord}…`} />
               </div>
             </div>
 
@@ -1249,7 +1251,7 @@ export default function ComparacionApp() {
 
             {h2hResult && h2hResult.n === 0 && hibridoA && hibridoB && (
               <p style={{ color: "#4a6a8a", background: "#0f2040", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
-                No hay localidades en común entre los dos híbridos en la selección actual.
+                No hay localidades en común entre los dos {entityWord}s en la selección actual.
               </p>
             )}
 
@@ -1262,7 +1264,7 @@ export default function ComparacionApp() {
 
             {(!hibridoA || !hibridoB) && (
               <div style={{ background: "#16213e", borderRadius: 12, padding: 32, textAlign: "center", color: "#4a6a8a", fontSize: 14 }}>
-                Seleccioná los dos híbridos para ver la comparación.
+                Seleccioná los dos {entityWord}s para ver la comparación.
               </div>
             )}
           </div>
@@ -1280,7 +1282,7 @@ export default function ComparacionApp() {
               <RedesFilter redes={redesDisponibles} selected={selectedRedesComp} onChange={setSelectedRedesComp} />
               <CompanyFilter companies={empresasDisponibles} selected={selectedCompany} onChange={setSelectedCompany} />
               <div style={{ maxWidth: 400 }}>
-                <HybridSelect label="Híbrido cabeza" value={hibridoHead} onChange={setHibridoHead} options={hibridosFiltradosPorEmpresa} color={COLOR_A} />
+                <HybridSelect label={`${EntityWord} cabeza`} value={hibridoHead} onChange={setHibridoHead} options={hibridosFiltradosPorEmpresa} color={COLOR_A} placeholder={`Buscar ${entityWord}…`} />
               </div>
             </div>
 
@@ -1315,7 +1317,7 @@ export default function ComparacionApp() {
 
             {!hibridoHead && (
               <div style={{ background: "#16213e", borderRadius: 12, padding: 32, textAlign: "center", color: "#4a6a8a", fontSize: 14 }}>
-                Seleccioná el híbrido cabeza para ver sus comparaciones.
+                Seleccioná el {entityWord} cabeza para ver sus comparaciones.
               </div>
             )}
           </div>
