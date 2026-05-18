@@ -119,6 +119,88 @@ function linReg(
   return { slope, intercept, r2 };
 }
 
+// ── Environment profile ───────────────────────────────────────────────────────
+
+function computeEnvProfile(
+  stats: HybridStats,
+  ia: Record<string, number>
+): { n: number; aboveCount: number; avgDiff: number; label: string } | null {
+  const pts: { ia: number; diff: number }[] = [];
+  for (const [loc, y] of Object.entries(stats.byLocalidad)) {
+    if (ia[loc] !== undefined) pts.push({ ia: ia[loc], diff: y - ia[loc] });
+  }
+  if (pts.length < 3) return null;
+  const n = pts.length;
+  const aboveCount = pts.filter((p) => p.diff > 0).length;
+  const avgDiff = pts.reduce((s, p) => s + p.diff, 0) / n;
+  const reg = linReg(pts.map((p) => [p.ia, p.diff] as [number, number]));
+  const abovePct = aboveCount / n;
+  const slope = reg && reg.r2 > 0.25 ? (reg.slope < 0 ? "r" : "f") : "n";
+  let label: string;
+  if (aboveCount === n) label = `Siempre arriba del ambiente`;
+  else if (aboveCount === 0) label = `Siempre debajo del ambiente`;
+  else if (slope === "r" && abovePct >= 0.5) label = `Mejor en ambientes restrictivos (${aboveCount}/${n})`;
+  else if (slope === "f" && abovePct >= 0.5) label = `Mejor en ambientes favorables (${aboveCount}/${n})`;
+  else if (abovePct >= 0.65) label = `Arriba del promedio en ${aboveCount}/${n} ambientes`;
+  else if (abovePct <= 0.35) label = `Debajo del promedio en ${aboveCount}/${n} ambientes`;
+  else label = `Variable (arriba en ${aboveCount}/${n})`;
+  return { n, aboveCount, avgDiff, label };
+}
+
+// ── PDF export ────────────────────────────────────────────────────────────────
+
+async function downloadComparisonPDF(params: {
+  hybrids: string[];
+  ensayos: EnsayoConEntradas[];
+  outlierKeys: Set<string>;
+  cultivo: string;
+  filterLabel: string;
+  iaLow: number;
+  iaHigh: number;
+  entityWord: string;
+}) {
+  const { hybrids, ensayos, outlierKeys, cultivo, filterLabel, iaLow, iaHigh, entityWord } = params;
+  const { jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+
+  const allStats = hybrids.map((h) => computeHybridStats(h, ensayos, outlierKeys));
+  const allLocs = [...new Set(ensayos.map((e) => e.localidad))].sort();
+  const campana = [...new Set(ensayos.map((e) => e.campana))].join(", ");
+
+  const doc = new jsPDF({ orientation: allLocs.length > 7 ? "landscape" : "portrait" });
+  const EW = entityWord.charAt(0).toUpperCase() + entityWord.slice(1);
+
+  doc.setFontSize(13);
+  doc.text(`${cultivo === "maiz" ? "Maíz" : "Soja"} · Campaña ${campana}`, 14, 15);
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(
+    `Filtro: ${filterLabel} · IA: ${Math.round(iaLow).toLocaleString("es-AR")}–${Math.round(iaHigh).toLocaleString("es-AR")} kg/ha`,
+    14, 22
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (autoTable as any)(doc, {
+    head: [[EW, ...allLocs, "Media (n)"]],
+    body: allStats.map((s) => [
+      s.name,
+      ...allLocs.map((loc) =>
+        s.byLocalidad[loc] !== undefined
+          ? Math.round(s.byLocalidad[loc]).toLocaleString("es-AR")
+          : "—"
+      ),
+      `${Math.round(s.mean).toLocaleString("es-AR")} (${s.n})`,
+    ]),
+    startY: 28,
+    styles: { fontSize: 8, cellPadding: 2.5 },
+    headStyles: { fillColor: [26, 74, 128], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [245, 248, 252] },
+    columnStyles: { 0: { fontStyle: "bold", minCellWidth: 40 } },
+  });
+
+  doc.save(`comparacion-${entityWord}s-${campana}.pdf`);
+}
+
 // ── SVG Regression Chart ──────────────────────────────────────────────────────
 
 function RegressionChart({ sA, sB, ia }: { sA: HybridStats; sB: HybridStats; ia: Record<string, number> }) {
@@ -749,6 +831,22 @@ function OutlierControl({
   );
 }
 
+// ── Environment profile badge ─────────────────────────────────────────────────
+
+function EnvProfileBadge({ stats, ia, color }: { stats: HybridStats; ia: Record<string, number>; color?: string }) {
+  const p = computeEnvProfile(stats, ia);
+  if (!p) return null;
+  const diff = `${p.avgDiff >= 0 ? "+" : ""}${Math.round(p.avgDiff).toLocaleString("es-AR")} kg/ha`;
+  return (
+    <span style={{ fontSize: 11, color: "#6a8ab0" }}>
+      <span style={{ color: color ?? "#aac4e0" }}>{p.label}</span>
+      {" · "}
+      <span style={{ color: p.avgDiff >= 0 ? "#3dbb6e" : "#e24a7a", fontWeight: 600 }}>{diff}</span>
+      <span style={{ color: "#3a5a7a" }}> vs IA</span>
+    </span>
+  );
+}
+
 // ── Map view ──────────────────────────────────────────────────────────────────
 
 function LocalidadMap({ ensayos, selectedLocalidades, onToggle }: {
@@ -1245,6 +1343,11 @@ export default function ComparacionApp() {
                       <span style={{ fontSize: 10, color: "#4a6a8a" }}>mínimo 2 localidades para test estadístico</span>
                     )}
                   </div>
+                  {/* Environment profiles */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 10, paddingTop: 10, borderTop: "1px solid #0f3060" }}>
+                    <EnvProfileBadge stats={statsA} ia={ia} color={COLOR_A} />
+                    <EnvProfileBadge stats={statsB} ia={ia} color={COLOR_B} />
+                  </div>
                 </div>
               );
             })()}
@@ -1259,6 +1362,25 @@ export default function ComparacionApp() {
               <div style={{ background: "#16213e", borderRadius: 12, padding: 16 }}>
                 <h3 style={{ color: "#e2b04a", fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Respuesta al ambiente</h3>
                 <RegressionChart sA={statsA} sB={statsB} ia={ia} />
+              </div>
+            )}
+
+            {hibridoA && hibridoB && h2hResult && h2hResult.n > 0 && (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <button
+                  onClick={() => downloadComparisonPDF({
+                    hybrids: [hibridoA, hibridoB],
+                    ensayos: ensayosFiltradosFinal,
+                    outlierKeys,
+                    cultivo: cultivo ?? "maiz",
+                    filterLabel,
+                    iaLow, iaHigh,
+                    entityWord,
+                  })}
+                  style={{ background: "#16213e", border: "1px solid #2a4060", borderRadius: 8, color: "#6a8ab0", fontSize: 12, padding: "6px 14px", cursor: "pointer" }}
+                >
+                  ↓ PDF
+                </button>
               </div>
             )}
 
@@ -1284,6 +1406,11 @@ export default function ComparacionApp() {
               <div style={{ maxWidth: 400 }}>
                 <HybridSelect label={`${EntityWord} cabeza`} value={hibridoHead} onChange={setHibridoHead} options={hibridosFiltradosPorEmpresa} color={COLOR_A} placeholder={`Buscar ${entityWord}…`} />
               </div>
+              {statsHead && (
+                <div style={{ paddingTop: 4 }}>
+                  <EnvProfileBadge stats={statsHead} ia={ia} color={COLOR_A} />
+                </div>
+              )}
             </div>
 
             {hibridoHead && vsAllResults.length === 0 && (
@@ -1312,6 +1439,22 @@ export default function ComparacionApp() {
                     ** p&lt;0.05 · * p&lt;0.10 · hover sobre las barras para ver p-valor y win%
                   </p>
                 )}
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                  <button
+                    onClick={() => downloadComparisonPDF({
+                      hybrids: [hibridoHead, ...vsAllResults.map((r) => r.name)],
+                      ensayos: ensayosFiltradosFinal,
+                      outlierKeys,
+                      cultivo: cultivo ?? "maiz",
+                      filterLabel,
+                      iaLow, iaHigh,
+                      entityWord,
+                    })}
+                    style={{ background: "#0f2040", border: "1px solid #2a4060", borderRadius: 8, color: "#6a8ab0", fontSize: 12, padding: "6px 14px", cursor: "pointer" }}
+                  >
+                    ↓ PDF
+                  </button>
+                </div>
               </div>
             )}
 
