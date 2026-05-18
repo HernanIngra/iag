@@ -12,6 +12,7 @@ import {
   buildColorMap,
   buildCultivoColorMap,
   loadShapefiles,
+  ZONE_COLORS,
 } from "@/lib/shapefile";
 import {
   parseManagementFile,
@@ -59,6 +60,7 @@ import {
   type Workspace,
   type LotVisit,
   type DriveManejo,
+  type EmpresaLinks,
   type FileMeta,
   type Empresa,
   type RainData,
@@ -105,6 +107,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [collections, setCollections] = useState<GeoCollection[]>([]);
   const [colorMap, setColorMap] = useState<Record<string, string>>({});
   const [cultivoColorMap, setCultivoColorMap] = useState<Record<string, string>>({});
+  const [colorMode, setColorMode] = useState<"cultivo" | "empresa">("cultivo");
+  const [empresaColorMap, setEmpresaColorMap] = useState<Record<string, string>>({});
   const [lotData, setLotData] = useState<LotData>({});
   const [allRows, setAllRows] = useState<ParsedRow[]>([]);
   const [rindeData, setRindeData] = useState<RindeData>({});
@@ -164,14 +168,13 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const gpsMarkerRef = useRef<Layer | null>(null);
   const gpsCircleRef = useRef<Layer | null>(null);
 
-  // Drive manejo
+  // Drive links por empresa (reemplaza driveManejo workspace-level)
+  const [empresaDriveLinks, setEmpresaDriveLinks] = useState<Record<string, EmpresaLinks>>({});
+  // Legacy — solo para backward compat al restaurar workspaces viejos
   const [driveManejo, setDriveManejo] = useState<DriveManejo | null>(null);
   const [manejoColMapping, setManejoColMapping] = useState<ColumnMapping | null>(null);
-  const [driveRefreshing, setDriveRefreshing] = useState(false);
-  const [driveError, setDriveError] = useState<string | null>(null);
+  const pendingDriveEmpresaIdRef = useRef<string | undefined>(undefined);
   const [pendingDriveInfo, setPendingDriveInfo] = useState<DriveManejo | null>(null);
-  const [manejoTab, setManejoTab] = useState<"local" | "drive">("local");
-  const [driveUrlInput, setDriveUrlInput] = useState("");
 
   // View: 'picker' = workspace/empresa selector; 'dashboard' = file mgmt; 'map' = map
   const [view, setView] = useState<"picker" | "dashboard" | "map">(() => {
@@ -206,11 +209,13 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [rainPeriodDays, setRainPeriodDays] = useState(30);
   const [rainInterpolate, setRainInterpolate] = useState(false);
 
-  // ── Switch to Drive tab when a Drive link is active ─────────────────────────
+  // ── Build empresa color map whenever empresas list changes ───────────────────
 
   useEffect(() => {
-    if (driveManejo) setManejoTab("drive");
-  }, [driveManejo]);
+    const map: Record<string, string> = {};
+    myEmpresas.forEach((e, i) => { map[e.id] = ZONE_COLORS[i % ZONE_COLORS.length]; });
+    setEmpresaColorMap(map);
+  }, [myEmpresas]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Mobile detection ────────────────────────────────────────────────────────
 
@@ -318,7 +323,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setMyEmpresas(allEmps);
     setPickerSelectedEmpIds(empIds);
     setActiveEmpresaId(empIds[0] ?? allEmps[0]?.id);
-    setView("dashboard");
+    // Si ya hay lotes cargados (workspace restaurado), ir directamente al mapa
+    setView(collections.length > 0 ? "map" : "dashboard");
   }
 
   // ── Add tiles + invalidate size when switching to map view ──────────────────
@@ -357,6 +363,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       });
     }
     setTimeout(() => mapRef.current?.invalidateSize(), 50);
+
+    // Si hay colecciones cargadas pero las capas no están en el mapa (e.g. upload hecho
+    // desde el dashboard antes de que el mapa terminara de inicializarse), dibujarlas ahora.
+    if (collections.length > 0 && !shpLayerRef.current && mapRef.current) {
+      drawCollections(collections, colorMap, cultivoColorMap, lotData).then((layerList) => {
+        import("leaflet").then((mod) => {
+          const bounds = mod.default.featureGroup(layerList as LeafletGeoJSON[]).getBounds();
+          if (bounds.isValid() && mapRef.current) mapRef.current.fitBounds(bounds, { padding: [30, 30] });
+        });
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
   // ── Load management backup from localStorage on mount ────────────────────────
@@ -394,8 +412,13 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setShpFileMeta(ws.shpFileMeta ?? []);
     setCsvFileMeta(ws.csvFileMeta ?? []);
     setRindeFileMeta(ws.rindeFileMeta ?? []);
-    if (ws.driveManejo) setDriveManejo(ws.driveManejo);
-    if (ws.manejoColMapping) setManejoColMapping(ws.manejoColMapping);
+    // Restore per-empresa Drive links; migrate legacy workspace-level driveManejo if needed
+    const restoredLinks = ws.empresaDriveLinks && Object.keys(ws.empresaDriveLinks).length
+      ? ws.empresaDriveLinks
+      : (ws.driveManejo && ws.manejoColMapping && activeEmpresaId)
+        ? { [activeEmpresaId]: { manejoLink: { driveManejo: ws.driveManejo, colMapping: ws.manejoColMapping }, rindeLink: null, lluviaLink: null } }
+        : {};
+    setEmpresaDriveLinks(restoredLinks);
     setRainData(ws.rainData ?? {});
     setPluviometroMap(ws.pluviometroMap ?? {});
     setShpStatus({ msg: `✓ ${ws.lotCount} lotes`, ok: true });
@@ -431,10 +454,23 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       const layerList = await drawCollections(ws.collections, ws.colorMap, ws.cultivoColorMap, ws.lotData);
       import("leaflet").then((mod) => {
         const bounds = mod.default.featureGroup(layerList as LeafletGeoJSON[]).getBounds();
-        if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
+        if (bounds.isValid() && mapRef.current) mapRef.current.fitBounds(bounds, { padding: [30, 30] });
       });
-      if (ws.driveManejo && ws.manejoColMapping) {
-        refreshDriveWith(ws.driveManejo, ws.manejoColMapping);
+      const linksToRefresh = ws.empresaDriveLinks && Object.keys(ws.empresaDriveLinks).length
+        ? ws.empresaDriveLinks
+        : (ws.driveManejo && ws.manejoColMapping && activeEmpresaId)
+          ? { [activeEmpresaId]: { manejoLink: { driveManejo: ws.driveManejo, colMapping: ws.manejoColMapping }, rindeLink: null, lluviaLink: null } }
+          : {};
+      for (const [empId, links] of Object.entries(linksToRefresh)) {
+        if (links.manejoLink?.driveManejo && links.manejoLink.colMapping) {
+          refreshDriveWith(empId, links.manejoLink.driveManejo, links.manejoLink.colMapping);
+        }
+        if (links.rindeLink?.driveManejo) {
+          refreshDriveRindeWith(empId, links.rindeLink);
+        }
+        if (links.lluviaLink) {
+          refreshDriveLluviaWith(empId, links.lluviaLink);
+        }
       }
     }).catch(() => {
       hasHydratedRef.current = true;
@@ -459,11 +495,24 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     drawCollections(ws.collections, ws.colorMap, ws.cultivoColorMap, ws.lotData).then((layerList) => {
       import("leaflet").then((mod) => {
         const bounds = mod.default.featureGroup(layerList as LeafletGeoJSON[]).getBounds();
-        if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
+        if (bounds.isValid() && mapRef.current) mapRef.current.fitBounds(bounds, { padding: [30, 30] });
       });
     });
-    if (ws.driveManejo && ws.manejoColMapping) {
-      refreshDriveWith(ws.driveManejo, ws.manejoColMapping);
+    const linksToRefresh = ws.empresaDriveLinks && Object.keys(ws.empresaDriveLinks).length
+      ? ws.empresaDriveLinks
+      : (ws.driveManejo && ws.manejoColMapping && activeEmpresaId)
+        ? { [activeEmpresaId]: { manejoLink: { driveManejo: ws.driveManejo, colMapping: ws.manejoColMapping }, rindeLink: null, lluviaLink: null } }
+        : {};
+    for (const [empId, links] of Object.entries(linksToRefresh)) {
+      if (links.manejoLink?.driveManejo && links.manejoLink.colMapping) {
+        refreshDriveWith(empId, links.manejoLink.driveManejo, links.manejoLink.colMapping);
+      }
+      if (links.rindeLink?.driveManejo) {
+        refreshDriveRindeWith(empId, links.rindeLink);
+      }
+      if (links.lluviaLink) {
+        refreshDriveLluviaWith(empId, links.lluviaLink);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, authLoaded, user]);
@@ -479,7 +528,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         fieldName, lotCount, collections, colorMap, cultivoColorMap,
         lotData, allRows, rindeData, lotVisits, shpFiles, csvFiles, rindeFiles,
         shpFileMeta, csvFileMeta, rindeFileMeta,
-        driveManejo, manejoColMapping,
+        empresaDriveLinks,
         rainData, pluviometroMap,
       };
       saveWorkspaceLocal(state, activeWorkspaceId ?? "local");
@@ -491,7 +540,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }, 1500);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, lotData, rindeData, lotVisits, driveManejo, manejoColMapping, rainData, pluviometroMap, workspaceName, workspaceLogo, user]);
+  }, [collections, lotData, rindeData, lotVisits, empresaDriveLinks, rainData, pluviometroMap, workspaceName, workspaceLogo, user]);
 
   // ── Dim/highlight lots based on tipo/product filter ─────────────────────────
 
@@ -523,7 +572,17 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  function getLotBaseColor(props: Record<string, unknown>, cultivoMap: Record<string, string>, data: LotData): string {
+  function getLotBaseColor(
+    props: Record<string, unknown>,
+    cultivoMap: Record<string, string>,
+    data: LotData,
+    cMode: "cultivo" | "empresa" = colorMode,
+    empColorMap: Record<string, string> = empresaColorMap,
+  ): string {
+    if (cMode === "empresa") {
+      const empId = props._empresaId as string | undefined;
+      return (empId && empColorMap[empId]) ? empColorMap[empId] : "#8ab4d4";
+    }
     if (Object.keys(cultivoMap).length) {
       const name = getLotName(props);
       const rows = (data[name] || []).filter((r) => r._cultivo);
@@ -609,8 +668,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       layerList.push(geoLayer);
     });
     const group = L.layerGroup(layerList);
-    group.addTo(mapRef.current!);
-    shpLayerRef.current = group;
+    if (mapRef.current) {
+      group.addTo(mapRef.current);
+      shpLayerRef.current = group;
+    }
     return layerList;
   }
 
@@ -621,7 +682,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     try {
       const newCols = await loadShapefiles(files);
       const fileNames = Array.from(files).map((f) => f.name);
-      newCols.forEach((col, i) => { (col as unknown as Record<string, unknown>)._file = fileNames[Math.min(i, fileNames.length - 1)]; });
+      newCols.forEach((col, i) => {
+        (col as unknown as Record<string, unknown>)._file = fileNames[Math.min(i, fileNames.length - 1)];
+        col.features.forEach((f) => { (f.properties as Record<string, unknown>)._empresaId = activeEmpresaId ?? ""; });
+      });
       const mergedCols = [...collections, ...newCols];
       const cMap = buildColorMap(mergedCols);
       setCollections(mergedCols);
@@ -640,7 +704,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
       const L = (await import("leaflet")).default;
       const bounds = L.featureGroup(layerList as LeafletGeoJSON[]).getBounds();
-      if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
+      if (bounds.isValid() && mapRef.current) mapRef.current.fitBounds(bounds, { padding: [30, 30] });
 
       setShpStatus({ msg: `✓ ${total} lotes`, ok: true });
       const newFileNames = Array.from(files).map((f) => f.name);
@@ -676,12 +740,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
   // ── Rain file upload ──────────────────────────────────────────────────────────
 
-  async function handleRainFileStart(file: File) {
+  // driveInfo y driveEmpresaId son opcionales: cuando viene de Drive se persiste el link
+  const pendingDriveLluviaInfoRef = useRef<{ driveInfo: DriveManejo; empresaId: string } | null>(null);
+
+  async function handleRainFileStart(file: File, driveInfo?: DriveManejo, driveEmpresaId?: string) {
     try {
       const parsed = await parseLluviaFile(file);
       if (!Object.keys(parsed).length) throw new Error("No se encontraron lecturas válidas.");
       setPendingRainData(parsed);
       setPendingRainFileName(file.name);
+      pendingDriveLluviaInfoRef.current = driveInfo && driveEmpresaId
+        ? { driveInfo, empresaId: driveEmpresaId }
+        : null;
     } catch (err) {
       alert(`✗ ${(err as Error).message}`);
     }
@@ -702,6 +772,19 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }
     setRainData(newRainData);
     setRainFiles((prev) => [...prev, pendingRainFileName]);
+    // Si venía de un Drive link, persistir en empresaDriveLinks
+    const lluvia = pendingDriveLluviaInfoRef.current;
+    if (lluvia) {
+      setEmpresaDriveLinks((prev) => ({
+        ...prev,
+        [lluvia.empresaId]: {
+          manejoLink: prev[lluvia.empresaId]?.manejoLink ?? null,
+          rindeLink: prev[lluvia.empresaId]?.rindeLink ?? null,
+          lluviaLink: lluvia.driveInfo,
+        },
+      }));
+      pendingDriveLluviaInfoRef.current = null;
+    }
     setPendingRainData({});
     setPendingRainFileName("");
   }
@@ -823,7 +906,18 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         // Drive path: special handling
         const csvName = pendingFile.name;
         await handleParsedRowsConfirmed(rows, mergeMode, csvName);
-        setDriveManejo(pendingDriveInfo);
+        const empresaId = pendingDriveEmpresaIdRef.current;
+        if (empresaId) {
+          setEmpresaDriveLinks((prev) => ({
+            ...prev,
+            [empresaId]: {
+              manejoLink: { driveManejo: pendingDriveInfo, colMapping: mapping },
+              rindeLink: prev[empresaId]?.rindeLink ?? null,
+              lluviaLink: prev[empresaId]?.lluviaLink ?? null,
+            },
+          }));
+          pendingDriveEmpresaIdRef.current = undefined;
+        }
         setPendingDriveInfo(null);
         setCsvFiles([]);
         const time = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
@@ -860,11 +954,16 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
   // ── Rindes upload ────────────────────────────────────────────────────────────
 
-  async function handleRindeFileStart(file: File) {
+  // pendingRindeFile puede venir de un archivo local O de un Drive link
+  // Si viene de Drive, pendingDriveEmpresaIdRef y pendingDriveRindeInfoRef tienen el contexto
+  const pendingDriveRindeInfoRef = useRef<DriveManejo | null>(null);
+
+  async function handleRindeFileStart(file: File, driveInfo?: DriveManejo) {
     setRindeStatus({ msg: "Leyendo columnas...", ok: false });
     try {
       const cols = await detectLinkColumns(file);
       setPendingRindeFile(file);
+      pendingDriveRindeInfoRef.current = driveInfo ?? null;
       setRindePickerCols(cols);
     } catch (err) {
       setRindeStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
@@ -889,6 +988,21 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       const rindeName = pendingRindeFile!.name;
       setRindeFiles((prev) => [...prev, rindeName]);
       setRindeFileMeta((prev) => [...prev, { name: rindeName, empresaId: activeEmpresaId }]);
+      // Si venía de un Drive link, persistir en empresaDriveLinks
+      const driveInfo = pendingDriveRindeInfoRef.current;
+      const driveEmpresaId = pendingDriveEmpresaIdRef.current;
+      if (driveInfo && driveEmpresaId) {
+        setEmpresaDriveLinks((prev) => ({
+          ...prev,
+          [driveEmpresaId]: {
+            manejoLink: prev[driveEmpresaId]?.manejoLink ?? null,
+            rindeLink: { driveManejo: driveInfo, linkColumn: col },
+            lluviaLink: prev[driveEmpresaId]?.lluviaLink ?? null,
+          },
+        }));
+        pendingDriveRindeInfoRef.current = null;
+        pendingDriveEmpresaIdRef.current = undefined;
+      }
       setPendingRindeFile(null);
     } catch (err) {
       setRindeStatus({ msg: `✗ ${(err as Error).message}`, ok: false });
@@ -903,6 +1017,15 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       layer.setStyle({ fillColor: getLotBaseColor(props, cMap, data) });
     });
   }
+
+  // Repaint polygons when colorMode or empresaColorMap changes
+  useEffect(() => {
+    allLotLayersRef.current.forEach(({ layer, props }) => {
+      if (layer === selectedLayerRef.current) return;
+      layer.setStyle({ fillColor: getLotBaseColor(props, cultivoColorMap, lotData, colorMode, empresaColorMap) });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorMode, empresaColorMap]);
 
   // ── Lot selection ───────────────────────────────────────────────────────────
 
@@ -1013,11 +1136,12 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setGpsTracking(true);
   }
 
-  // ── Drive manejo ─────────────────────────────────────────────────────────────
+  // ── Drive manejo — por empresa ───────────────────────────────────────────────
 
-  async function refreshDriveWith(info: DriveManejo, mapping: ColumnMapping) {
-    setDriveRefreshing(true);
-    setDriveError(null);
+  // Refresca manejo Drive de UNA empresa.  Merge: conserva filas de archivos locales,
+  // reemplaza solo las filas etiquetadas con el tag del Drive de esta empresa.
+  async function refreshDriveWith(empresaId: string, info: DriveManejo, mapping: ColumnMapping) {
+    const driveTag = `drive-manejo:${empresaId}`;
     setCsvStatus({ msg: "Actualizando desde Drive...", ok: false });
     try {
       const res = await fetch(`/api/drive-fetch?fileId=${info.fileId}&type=${info.type}`);
@@ -1026,34 +1150,40 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         throw new Error(body.error ?? `HTTP ${res.status}`);
       }
       const blob = await res.blob();
-      const file = new File([blob], "drive-manejo.xlsx", { type: blob.type });
-      const { rows, lotData: newLd } = await parseManagementFile(file, mapping);
-      setAllRows(rows);
-      setLotData(newLd);
-      const cultivoNames = [...new Set(rows.map((r) => r._cultivo).filter(Boolean))];
-      const cMap = buildCultivoColorMap(cultivoNames);
-      setCultivoColorMap(cMap);
-      recolorPolygons(cMap, newLd);
-      rebuildFilters(rows);
+      const file = new File([blob], driveTag, { type: blob.type });
+      const { rows: newDriveRows } = await parseManagementFile(file, mapping, driveTag);
+      // Conservar filas de otras fuentes; reemplazar solo las de este Drive
+      setAllRows((prev) => {
+        const kept = prev.filter((r) => r._file !== driveTag);
+        const final = [...kept, ...newDriveRows];
+        const finalLotData: LotData = {};
+        final.forEach((row) => {
+          if (!finalLotData[row._linkKey]) finalLotData[row._linkKey] = [];
+          finalLotData[row._linkKey].push(row);
+        });
+        setLotData(finalLotData);
+        const cultivoNames = [...new Set(final.map((r) => r._cultivo).filter(Boolean))];
+        const cMap = buildCultivoColorMap(cultivoNames);
+        setCultivoColorMap(cMap);
+        recolorPolygons(cMap, finalLotData);
+        rebuildFilters(final);
+        return final;
+      });
       const time = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-      setCsvStatus({ msg: `✓ Drive · ${rows.length} registros · actualizado ${time}`, ok: true });
+      setCsvStatus({ msg: `✓ Drive · ${newDriveRows.length} registros · actualizado ${time}`, ok: true });
     } catch (err) {
       const msg = (err as Error).message;
-      setDriveError(msg);
       setCsvStatus({ msg: `✗ Drive: ${msg}`, ok: false });
-    } finally {
-      setDriveRefreshing(false);
     }
   }
 
-  async function handleDriveLink() {
-    const parsed = parseDriveUrl(driveUrlInput.trim());
-    if (!parsed) {
-      setDriveError("Link inválido. Usá el link compartido de Google Sheets o Drive.");
-      return;
-    }
-    const info: DriveManejo = { ...parsed, url: driveUrlInput.trim() };
-    setDriveError(null);
+  // Vincula un Google Drive como manejo de UNA empresa.
+  // Descarga, muestra el column picker; al confirmar, llama handleColMappingConfirmed.
+  async function handleDriveLink(empresaId: string, url: string): Promise<string | null> {
+    const parsed = parseDriveUrl(url.trim());
+    if (!parsed) return "Link inválido. Usá el link compartido de Google Sheets o Drive.";
+    const info: DriveManejo = { ...parsed, url: url.trim() };
+    pendingDriveEmpresaIdRef.current = empresaId;
     setPendingDriveInfo(info);
     setCsvStatus({ msg: "Descargando desde Drive...", ok: false });
     try {
@@ -1063,41 +1193,119 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         throw new Error(body.error ?? `HTTP ${res.status}`);
       }
       const blob = await res.blob();
-      const file = new File([blob], "drive-manejo.xlsx", { type: blob.type });
+      const file = new File([blob], `drive-manejo:${empresaId}`, { type: blob.type });
       setCsvStatus(null);
       await handleDataFileStart(file);
+      return null;
     } catch (err) {
       const msg = (err as Error).message;
-      setDriveError(msg);
       setCsvStatus({ msg: `✗ Drive: ${msg}`, ok: false });
       setPendingDriveInfo(null);
+      pendingDriveEmpresaIdRef.current = undefined;
+      return msg;
     }
   }
 
-  // ── Drive rindes / lluvia (one-shot load) ────────────────────────────────────
-
-  async function handleDriveRinde(url: string) {
-    const parsed = parseDriveUrl(url);
-    if (!parsed) throw new Error("Link inválido. Usá el link compartido de Google Drive.");
-    const res = await fetch(`/api/drive-fetch?fileId=${parsed.fileId}&type=${parsed.type}`);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? `HTTP ${res.status}`);
-    }
-    const blob = await res.blob();
-    await handleRindeFileStart(new File([blob], "drive-rinde.xlsx", { type: blob.type }));
+  function handleUnlinkDrive(empresaId: string) {
+    const driveTag = `drive-manejo:${empresaId}`;
+    setEmpresaDriveLinks((prev) => {
+      const next = { ...prev };
+      if (next[empresaId]) next[empresaId] = { ...next[empresaId], manejoLink: null };
+      else delete next[empresaId];
+      return next;
+    });
+    // Eliminar filas del Drive de esta empresa
+    setAllRows((prev) => {
+      const final = prev.filter((r) => r._file !== driveTag);
+      const finalLotData: LotData = {};
+      final.forEach((row) => {
+        if (!finalLotData[row._linkKey]) finalLotData[row._linkKey] = [];
+        finalLotData[row._linkKey].push(row);
+      });
+      setLotData(finalLotData);
+      rebuildFilters(final);
+      return final;
+    });
+    setCsvStatus(null);
   }
 
-  async function handleDriveLluvia(url: string) {
-    const parsed = parseDriveUrl(url);
-    if (!parsed) throw new Error("Link inválido. Usá el link compartido de Google Drive.");
-    const res = await fetch(`/api/drive-fetch?fileId=${parsed.fileId}&type=${parsed.type}`);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? `HTTP ${res.status}`);
+  // ── Drive rindes por empresa (persistente) ───────────────────────────────────
+
+  async function handleDriveRinde(empresaId: string, url: string): Promise<string | null> {
+    const parsed = parseDriveUrl(url.trim());
+    if (!parsed) return "Link inválido. Usá el link compartido de Google Drive.";
+    try {
+      const res = await fetch(`/api/drive-fetch?fileId=${parsed.fileId}&type=${parsed.type}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const driveInfo: DriveManejo = { ...parsed, url: url.trim() };
+      // Mostrar picker de columna; al confirmar se llamará handleRindeLinkColumnSelected
+      // que merge con tag drive-rinde:empresaId
+      pendingDriveEmpresaIdRef.current = empresaId;
+      await handleRindeFileStart(new File([blob], `drive-rinde:${empresaId}`, { type: blob.type }), driveInfo);
+      return null;
+    } catch (err) {
+      return (err as Error).message;
     }
-    const blob = await res.blob();
-    await handleRainFileStart(new File([blob], "drive-lluvia.xlsx", { type: blob.type }));
+  }
+
+  async function refreshDriveRindeWith(empresaId: string, info: { driveManejo: DriveManejo; linkColumn: string | null }) {
+    const driveTag = `drive-rinde:${empresaId}`;
+    setRindeStatus({ msg: "Actualizando rindes desde Drive...", ok: false });
+    try {
+      const res = await fetch(`/api/drive-fetch?fileId=${info.driveManejo.fileId}&type=${info.driveManejo.type}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const rd = await parseRindeFile(new File([blob], driveTag, { type: blob.type }), info.linkColumn ?? undefined);
+      setRindeData((prev) => {
+        const merged = { ...prev };
+        Object.entries(rd).forEach(([k, v]) => { merged[k] = [...(merged[k] ?? []), ...v]; });
+        return merged;
+      });
+      const time = new Date().toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+      setRindeStatus({ msg: `✓ Rindes Drive · ${Object.keys(rd).length} lotes · ${time}`, ok: true });
+    } catch (err) {
+      setRindeStatus({ msg: `✗ Drive rindes: ${(err as Error).message}`, ok: false });
+    }
+  }
+
+  // ── Drive lluvia por empresa (persistente) ────────────────────────────────────
+
+  async function handleDriveLluvia(empresaId: string, url: string): Promise<string | null> {
+    const parsed = parseDriveUrl(url.trim());
+    if (!parsed) return "Link inválido. Usá el link compartido de Google Drive.";
+    try {
+      const res = await fetch(`/api/drive-fetch?fileId=${parsed.fileId}&type=${parsed.type}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const driveInfo: DriveManejo = { ...parsed, url: url.trim() };
+      await handleRainFileStart(new File([blob], `drive-lluvia:${empresaId}`, { type: blob.type }), driveInfo, empresaId);
+      return null;
+    } catch (err) {
+      return (err as Error).message;
+    }
+  }
+
+  async function refreshDriveLluviaWith(empresaId: string, info: DriveManejo) {
+    setRainFiles((prev) => prev.filter((f) => !f.startsWith(`drive-lluvia:${empresaId}`)));
+    try {
+      const res = await fetch(`/api/drive-fetch?fileId=${info.fileId}&type=${info.type}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      await handleRainFileStart(new File([blob], `drive-lluvia:${empresaId}`, { type: blob.type }), info, empresaId);
+    } catch { /* silencioso — lluvia no crítica */ }
   }
 
   // ── Export visits CSV ────────────────────────────────────────────────────────
@@ -1333,14 +1541,43 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           shpStatus={shpStatus}
           csvStatus={csvStatus}
           rindeStatus={rindeStatus}
-          driveManejo={driveManejo}
-          driveError={driveError}
-          driveRefreshing={driveRefreshing}
-          driveUrlInput={driveUrlInput}
-          onDriveUrlChange={setDriveUrlInput}
-          onLinkDrive={handleDriveLink}
-          onUnlinkDrive={() => { setDriveManejo(null); setManejoColMapping(null); setDriveUrlInput(""); }}
-          onRefreshDrive={() => { if (driveManejo && manejoColMapping) refreshDriveWith(driveManejo, manejoColMapping); }}
+          empresaDriveLinks={empresaDriveLinks}
+          onLinkManejoDrive={handleDriveLink}
+          onUnlinkManejoDrive={handleUnlinkDrive}
+          onRefreshManejoDrive={(empId) => {
+            const links = empresaDriveLinks[empId];
+            if (links?.manejoLink?.driveManejo && links.manejoLink.colMapping) {
+              refreshDriveWith(empId, links.manejoLink.driveManejo, links.manejoLink.colMapping);
+            }
+          }}
+          onLinkRindeDrive={handleDriveRinde}
+          onUnlinkRindeDrive={(empId) => {
+            setEmpresaDriveLinks((prev) => ({
+              ...prev,
+              [empId]: { ...prev[empId], rindeLink: null },
+            }));
+            setRindeData((prev) => {
+              const tag = `drive-rinde:${empId}`;
+              const next = { ...prev };
+              Object.keys(next).forEach((k) => { next[k] = next[k].filter((r) => (r as { _file?: string })._file !== tag); if (!next[k].length) delete next[k]; });
+              return next;
+            });
+          }}
+          onRefreshRindeDrive={(empId) => {
+            const links = empresaDriveLinks[empId];
+            if (links?.rindeLink) refreshDriveRindeWith(empId, links.rindeLink);
+          }}
+          onLinkLluviaDrive={handleDriveLluvia}
+          onUnlinkLluviaDrive={(empId) => {
+            setEmpresaDriveLinks((prev) => ({
+              ...prev,
+              [empId]: { ...prev[empId], lluviaLink: null },
+            }));
+          }}
+          onRefreshLluviaDrive={(empId) => {
+            const links = empresaDriveLinks[empId];
+            if (links?.lluviaLink) refreshDriveLluviaWith(empId, links.lluviaLink);
+          }}
           onGoToMap={() => setView("map")}
           onGoToPicker={() => setView("picker")}
           initialEmpresaIds={pickerSelectedEmpIds}
@@ -1357,8 +1594,6 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             await updateEmpresaLogo(supabase, empresaId, logo);
             setMyEmpresas((prev) => prev.map((e) => e.id === empresaId ? { ...e, logo } : e));
           }}
-          onDriveRinde={handleDriveRinde}
-          onDriveLluvia={handleDriveLluvia}
           wsRestoring={wsRestoring}
         />
       )}
@@ -1461,7 +1696,39 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                 </div>
               )}
 
-              {Object.keys(cultivoColorMap).length > 0 && (
+              {myEmpresas.length > 1 && (
+                <div className="px-3 py-2" style={{ borderBottom: "1px solid #0f3460" }}>
+                  <p className="text-xs mb-2" style={{ color: "#6a8ab0" }}>Color por</p>
+                  <div className="flex gap-1">
+                    {(["cultivo", "empresa"] as const).map((mode) => (
+                      <button key={mode} onClick={() => setColorMode(mode)}
+                        className="px-3 py-1 rounded-full text-xs font-medium transition-all"
+                        style={{
+                          background: colorMode === mode ? "#2a5298" : "#0d1b35",
+                          color: colorMode === mode ? "#e2b04a" : "#6a8ab0",
+                          border: `1px solid ${colorMode === mode ? "#3a6aaa" : "#1a3a6a"}`,
+                        }}>
+                        {mode === "cultivo" ? "🌱 Cultivo" : "🏛 Empresa"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {colorMode === "empresa" && myEmpresas.length > 0 && (
+                <SidebarSection title="🏛 Empresas" collapsible defaultOpen={true}>
+                  <ul className="space-y-1">
+                    {myEmpresas.map((emp) => (
+                      <li key={emp.id} className="flex items-center gap-2 text-xs" style={{ color: "#ccd" }}>
+                        <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: empresaColorMap[emp.id] ?? "#8ab4d4" }} />
+                        {emp.name}
+                      </li>
+                    ))}
+                  </ul>
+                </SidebarSection>
+              )}
+
+              {colorMode === "cultivo" && Object.keys(cultivoColorMap).length > 0 && (
                 <SidebarSection title="🌱 Cultivos" collapsible defaultOpen={false}>
                   <ul className="space-y-1">
                     {Object.entries(cultivoColorMap).sort((a, b) => a[0].localeCompare(b[0])).map(([name, color]) => (
@@ -2388,9 +2655,10 @@ function FileDashboard({
   onRemoveShp, onRemoveCsv, onRemoveRinde,
   rainFiles, onUploadRain, onRemoveRain,
   shpStatus, csvStatus, rindeStatus,
-  driveManejo, driveError, driveRefreshing, driveUrlInput,
-  onDriveUrlChange, onLinkDrive, onUnlinkDrive, onRefreshDrive,
-  onDriveRinde, onDriveLluvia,
+  empresaDriveLinks,
+  onLinkManejoDrive, onUnlinkManejoDrive, onRefreshManejoDrive,
+  onLinkRindeDrive, onUnlinkRindeDrive, onRefreshRindeDrive,
+  onLinkLluviaDrive, onUnlinkLluviaDrive, onRefreshLluviaDrive,
   onGoToMap,
   wsRestoring,
 }: {
@@ -2428,16 +2696,16 @@ function FileDashboard({
   shpStatus: { msg: string; ok: boolean } | null;
   csvStatus: { msg: string; ok: boolean } | null;
   rindeStatus: { msg: string; ok: boolean } | null;
-  driveManejo: DriveManejo | null;
-  driveError: string | null;
-  driveRefreshing: boolean;
-  driveUrlInput: string;
-  onDriveUrlChange: (v: string) => void;
-  onLinkDrive: () => void;
-  onUnlinkDrive: () => void;
-  onRefreshDrive: () => void;
-  onDriveRinde: (url: string) => Promise<void>;
-  onDriveLluvia: (url: string) => Promise<void>;
+  empresaDriveLinks: Record<string, EmpresaLinks>;
+  onLinkManejoDrive: (empresaId: string, url: string) => Promise<string | null>;
+  onUnlinkManejoDrive: (empresaId: string) => void;
+  onRefreshManejoDrive: (empresaId: string) => void;
+  onLinkRindeDrive: (empresaId: string, url: string) => Promise<string | null>;
+  onUnlinkRindeDrive: (empresaId: string) => void;
+  onRefreshRindeDrive: (empresaId: string) => void;
+  onLinkLluviaDrive: (empresaId: string, url: string) => Promise<string | null>;
+  onUnlinkLluviaDrive: (empresaId: string) => void;
+  onRefreshLluviaDrive: (empresaId: string) => void;
   onGoToMap: () => void;
   wsRestoring: boolean;
 }) {
@@ -2466,13 +2734,29 @@ function FileDashboard({
   const [newWsSwitcherName, setNewWsSwitcherName] = useState("");
   const [newWsSwitcherLoading, setNewWsSwitcherLoading] = useState(false);
 
-  // Drive URL state for Rindes and Lluvias (one-shot, no persistent link)
-  const [driveRindeUrl, setDriveRindeUrl] = useState("");
-  const [driveRindeError, setDriveRindeError] = useState<string | null>(null);
-  const [driveRindeLoading, setDriveRindeLoading] = useState(false);
-  const [driveLluviaUrl, setDriveLluviaUrl] = useState("");
-  const [driveLluviaError, setDriveLluviaError] = useState<string | null>(null);
-  const [driveLluviaLoading, setDriveLluviaLoading] = useState(false);
+  // Per-empresa Drive URL input state (manejo, rinde, lluvia)
+  const [driveInputs, setDriveInputs] = useState<Record<string, { manejo?: string; rinde?: string; lluvia?: string }>>({});
+  const [driveLoadings, setDriveLoadings] = useState<Record<string, { manejo?: boolean; rinde?: boolean; lluvia?: boolean }>>({});
+  const [driveErrors, setDriveErrors] = useState<Record<string, { manejo?: string | null; rinde?: string | null; lluvia?: string | null }>>({});
+
+  function driveInput(empId: string, section: "manejo" | "rinde" | "lluvia") {
+    return driveInputs[empId]?.[section] ?? "";
+  }
+  function setDriveInput(empId: string, section: "manejo" | "rinde" | "lluvia", val: string) {
+    setDriveInputs((prev) => ({ ...prev, [empId]: { ...prev[empId], [section]: val } }));
+  }
+  function driveLoading(empId: string, section: "manejo" | "rinde" | "lluvia") {
+    return driveLoadings[empId]?.[section] ?? false;
+  }
+  function setDriveLoading(empId: string, section: "manejo" | "rinde" | "lluvia", val: boolean) {
+    setDriveLoadings((prev) => ({ ...prev, [empId]: { ...prev[empId], [section]: val } }));
+  }
+  function driveError(empId: string, section: "manejo" | "rinde" | "lluvia") {
+    return driveErrors[empId]?.[section] ?? null;
+  }
+  function setDriveError(empId: string, section: "manejo" | "rinde" | "lluvia", val: string | null) {
+    setDriveErrors((prev) => ({ ...prev, [empId]: { ...prev[empId], [section]: val } }));
+  }
 
   async function resizeLogoToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -2917,50 +3201,63 @@ function FileDashboard({
                           accept=".csv,.xlsx,.xls" multiple={false}
                           files={empCsvFiles} status={csvStatus} onFiles={onUploadCsv} onRemove={onRemoveCsv}
                           driveProps={{
-                            linked: driveManejo,
-                            urlInput: driveUrlInput,
-                            onUrlChange: onDriveUrlChange,
-                            onLink: onLinkDrive,
-                            onUnlink: onUnlinkDrive,
-                            onRefresh: onRefreshDrive,
-                            refreshing: driveRefreshing,
-                            error: driveError,
+                            linked: empresaDriveLinks[emp.id]?.manejoLink?.driveManejo ?? null,
+                            urlInput: driveInput(emp.id, "manejo"),
+                            onUrlChange: (v) => setDriveInput(emp.id, "manejo", v),
+                            onLink: async () => {
+                              setDriveLoading(emp.id, "manejo", true);
+                              setDriveError(emp.id, "manejo", null);
+                              const err = await onLinkManejoDrive(emp.id, driveInput(emp.id, "manejo").trim());
+                              if (err) setDriveError(emp.id, "manejo", err);
+                              else setDriveInput(emp.id, "manejo", "");
+                              setDriveLoading(emp.id, "manejo", false);
+                            },
+                            onUnlink: () => onUnlinkManejoDrive(emp.id),
+                            onRefresh: () => onRefreshManejoDrive(emp.id),
+                            refreshing: driveLoading(emp.id, "manejo"),
+                            error: driveError(emp.id, "manejo"),
                           }} />
                         <DashFileSection nested title="🌾 Rindes históricos"
                           hint="información optativa y complementaria — nombres de lotes = los del mapa"
                           accept=".csv,.xlsx,.xls" multiple={false}
                           files={empRindeFiles} status={rindeStatus} onFiles={onUploadRinde} onRemove={onRemoveRinde}
                           driveProps={{
-                            linked: null,
-                            urlInput: driveRindeUrl,
-                            onUrlChange: setDriveRindeUrl,
+                            linked: empresaDriveLinks[emp.id]?.rindeLink?.driveManejo ?? null,
+                            urlInput: driveInput(emp.id, "rinde"),
+                            onUrlChange: (v) => setDriveInput(emp.id, "rinde", v),
                             onLink: async () => {
-                              setDriveRindeLoading(true);
-                              setDriveRindeError(null);
-                              try { await onDriveRinde(driveRindeUrl.trim()); setDriveRindeUrl(""); }
-                              catch (e) { setDriveRindeError((e as Error).message); }
-                              finally { setDriveRindeLoading(false); }
+                              setDriveLoading(emp.id, "rinde", true);
+                              setDriveError(emp.id, "rinde", null);
+                              const err = await onLinkRindeDrive(emp.id, driveInput(emp.id, "rinde").trim());
+                              if (err) setDriveError(emp.id, "rinde", err);
+                              else setDriveInput(emp.id, "rinde", "");
+                              setDriveLoading(emp.id, "rinde", false);
                             },
-                            refreshing: driveRindeLoading,
-                            error: driveRindeError,
+                            onUnlink: () => onUnlinkRindeDrive(emp.id),
+                            onRefresh: () => onRefreshRindeDrive(emp.id),
+                            refreshing: driveLoading(emp.id, "rinde"),
+                            error: driveError(emp.id, "rinde"),
                           }} />
                         <DashFileSection nested title="🌧 Lluvias"
                           hint="xlsx o csv con columnas Fecha, Ubicación y Valor (mm)"
                           accept=".csv,.xlsx,.xls" multiple={false}
                           files={rainFiles} status={null} onFiles={onUploadRain} onRemove={onRemoveRain}
                           driveProps={{
-                            linked: null,
-                            urlInput: driveLluviaUrl,
-                            onUrlChange: setDriveLluviaUrl,
+                            linked: empresaDriveLinks[emp.id]?.lluviaLink ?? null,
+                            urlInput: driveInput(emp.id, "lluvia"),
+                            onUrlChange: (v) => setDriveInput(emp.id, "lluvia", v),
                             onLink: async () => {
-                              setDriveLluviaLoading(true);
-                              setDriveLluviaError(null);
-                              try { await onDriveLluvia(driveLluviaUrl.trim()); setDriveLluviaUrl(""); }
-                              catch (e) { setDriveLluviaError((e as Error).message); }
-                              finally { setDriveLluviaLoading(false); }
+                              setDriveLoading(emp.id, "lluvia", true);
+                              setDriveError(emp.id, "lluvia", null);
+                              const err = await onLinkLluviaDrive(emp.id, driveInput(emp.id, "lluvia").trim());
+                              if (err) setDriveError(emp.id, "lluvia", err);
+                              else setDriveInput(emp.id, "lluvia", "");
+                              setDriveLoading(emp.id, "lluvia", false);
                             },
-                            refreshing: driveLluviaLoading,
-                            error: driveLluviaError,
+                            onUnlink: () => onUnlinkLluviaDrive(emp.id),
+                            onRefresh: () => onRefreshLluviaDrive(emp.id),
+                            refreshing: driveLoading(emp.id, "lluvia"),
+                            error: driveError(emp.id, "lluvia"),
                           }} />
                       </div>
                     )}

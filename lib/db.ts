@@ -17,6 +17,14 @@ export interface DriveManejo {
   url: string;
 }
 
+// ─── Per-empresa Drive links ──────────────────────────────────────────────────
+
+export interface EmpresaLinks {
+  manejoLink: { driveManejo: DriveManejo; colMapping: ColumnMapping | null } | null;
+  rindeLink: { driveManejo: DriveManejo; linkColumn: string | null } | null;
+  lluviaLink: DriveManejo | null;
+}
+
 // ─── Rain data ───────────────────────────────────────────────────────────────
 
 export interface RainReading {
@@ -48,8 +56,9 @@ export interface Workspace {
   shpFileMeta: FileMeta[];
   csvFileMeta: FileMeta[];
   rindeFileMeta: FileMeta[];
-  driveManejo?: DriveManejo | null;
-  manejoColMapping?: ColumnMapping | null;
+  driveManejo?: DriveManejo | null;         // legacy — mantener para backward compat
+  manejoColMapping?: ColumnMapping | null;   // legacy
+  empresaDriveLinks: Record<string, EmpresaLinks>; // reemplaza driveManejo por empresa
   rainData: RainData;
   pluviometroMap: Record<string, string>;
 }
@@ -124,6 +133,7 @@ function deserializeWorkspaceRow(data: Record<string, unknown>): Workspace {
     rindeFileMeta: (data.rinde_file_meta ?? []) as FileMeta[],
     driveManejo: (data.drive_manejo ?? null) as DriveManejo | null,
     manejoColMapping: (data.manejo_col_mapping ?? null) as ColumnMapping | null,
+    empresaDriveLinks: (data.empresa_drive_links ?? {}) as Record<string, EmpresaLinks>,
     rainData: (data.rain_data ?? {}) as RainData,
     pluviometroMap: (data.pluviometro_map ?? {}) as Record<string, string>,
   };
@@ -234,6 +244,7 @@ export async function saveWorkspace(
       rinde_file_meta: state.rindeFileMeta,
       drive_manejo: state.driveManejo ?? null,
       manejo_col_mapping: state.manejoColMapping ?? null,
+      empresa_drive_links: state.empresaDriveLinks ?? {},
       rain_data: state.rainData,
       pluviometro_map: state.pluviometroMap,
       updated_at: new Date().toISOString(),
@@ -287,6 +298,7 @@ export function saveWorkspaceLocal(state: Workspace, workspaceId: string): void 
         rinde_file_meta: state.rindeFileMeta,
         drive_manejo: state.driveManejo ?? null,
         manejo_col_mapping: state.manejoColMapping ?? null,
+        empresa_drive_links: state.empresaDriveLinks ?? {},
         rain_data: state.rainData,
         pluviometro_map: state.pluviometroMap,
       })
@@ -321,6 +333,7 @@ export function loadWorkspaceLocal(workspaceId: string): Workspace | null {
       rindeFileMeta: (data.rinde_file_meta ?? []) as FileMeta[],
       driveManejo: (data.drive_manejo ?? null) as DriveManejo | null,
       manejoColMapping: (data.manejo_col_mapping ?? null) as ColumnMapping | null,
+      empresaDriveLinks: (data.empresa_drive_links ?? {}) as Record<string, EmpresaLinks>,
       rainData: (data.rain_data ?? {}) as RainData,
       pluviometroMap: (data.pluviometro_map ?? {}) as Record<string, string>,
     };
