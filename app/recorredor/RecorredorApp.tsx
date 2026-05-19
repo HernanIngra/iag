@@ -329,14 +329,14 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     if (emps.length > 0) setActiveEmpresaId(emps[0].id);
   }
 
-  async function handlePickerConfirm(wsId: string, empIds: string[], allEmps: Empresa[]) {
+  async function handlePickerConfirm(wsId: string, empIds: string[], allEmps: Empresa[], mode?: "map" | "files") {
     persistActiveWorkspaceId(wsId);
     setActiveWorkspaceId(wsId);
     setMyEmpresas(allEmps);
     setPickerSelectedEmpIds(empIds);
     setActiveEmpresaId(empIds[0] ?? allEmps[0]?.id);
-    // Si ya hay lotes cargados (workspace restaurado), ir directamente al mapa
-    setView(collections.length > 0 ? "map" : "dashboard");
+    if (mode === "files") setView("dashboard");
+    else setView(collections.length > 0 ? "map" : "dashboard");
   }
 
   // ── Add tiles + invalidate size when switching to map view ──────────────────
@@ -3482,7 +3482,7 @@ function WorkspacePicker({
   wsLoaded: boolean;
   defaultWsId?: string;
   defaultEmpIds: string[];
-  onConfirm: (wsId: string, empIds: string[], allEmps: Empresa[]) => void;
+  onConfirm: (wsId: string, empIds: string[], allEmps: Empresa[], mode?: "map" | "files") => void;
   onCreateWorkspace: () => Promise<void>;
 }) {
   const [step, setStep] = useState<"workspace" | "empresa">("workspace");
@@ -3521,8 +3521,8 @@ function WorkspacePicker({
     });
   }
 
-  function confirm() {
-    onConfirm(selectedWsId, [...selectedEmpIds], empresas);
+  function confirm(mode?: "map" | "files") {
+    onConfirm(selectedWsId, [...selectedEmpIds], empresas, mode);
   }
 
   const selectedWs = workspaceSummaries.find((w) => w.id === selectedWsId);
@@ -3647,7 +3647,12 @@ function WorkspacePicker({
                 style={{ background: "#16213e", color: "#6a8ab0", border: "1px solid #0f3460" }}>
                 ← Volver
               </button>
-              <button onClick={confirm} disabled={selectedEmpIds.size === 0 || empresas.length === 0}
+              <button onClick={() => confirm("files")} disabled={selectedEmpIds.size === 0 || empresas.length === 0}
+                className="py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 px-4"
+                style={{ background: "#1a3060", color: "#aac4e0", border: "1px solid #2a5298" }}>
+                📂 Archivos
+              </button>
+              <button onClick={() => confirm("map")} disabled={selectedEmpIds.size === 0 || empresas.length === 0}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40"
                 style={{ background: "#3dbb6e", color: "#fff" }}>
                 Recorrer ({selectedEmpIds.size}) →
