@@ -1610,6 +1610,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
               return next;
             });
           }}
+          onReassignShp={(name, empId) => setShpFileMeta((prev) => prev.map((m) => m.name === name ? { ...m, empresaId: empId } : m))}
+          onReassignCsv={(name, empId) => setCsvFileMeta((prev) => prev.map((m) => m.name === name ? { ...m, empresaId: empId } : m))}
+          onReassignRinde={(name, empId) => setRindeFileMeta((prev) => prev.map((m) => m.name === name ? { ...m, empresaId: empId } : m))}
           rainFiles={rainFiles}
           onUploadRain={(fl, empId) => { if (fl[0]) handleRainFileStart(fl[0], undefined, empId); }}
           onRemoveRain={(name) => {
@@ -2751,6 +2754,7 @@ function FileDashboard({
   shpFiles, shpFileMeta, csvFiles, csvFileMeta, rindeFiles, rindeFileMeta,
   onUploadShp, onUploadCsv, onUploadRinde,
   onRemoveShp, onRemoveCsv, onRemoveRinde,
+  onReassignShp, onReassignCsv, onReassignRinde,
   rainFiles, onUploadRain, onRemoveRain,
   shpStatus, csvStatus, rindeStatus,
   empresaDriveLinks,
@@ -2789,6 +2793,9 @@ function FileDashboard({
   onRemoveShp: (name: string) => void;
   onRemoveCsv: (name: string) => void;
   onRemoveRinde: (name: string) => void;
+  onReassignShp: (name: string, empresaId: string) => void;
+  onReassignCsv: (name: string, empresaId: string) => void;
+  onReassignRinde: (name: string, empresaId: string) => void;
   rainFiles: string[];
   onUploadRain: (fl: FileList, empresaId: string) => void;
   onRemoveRain: (name: string) => void;
@@ -3190,10 +3197,32 @@ function FileDashboard({
                   {hasOrphans && (
                     <div className="mb-3 p-3 rounded-xl" style={{ background: "#1a1a0d", border: "1px solid #4a4a1a" }}>
                       <p className="text-xs font-semibold mb-2" style={{ color: "#c0a040" }}>⚠ Archivos sin empresa asignada</p>
+                      {availableEmpresas.length > 0 && (
+                        <p className="text-xs mb-2" style={{ color: "#8a8a40" }}>Podés moverlos a una empresa sin re-subirlos:</p>
+                      )}
                       {[...orphanShp, ...orphanCsv, ...orphanRinde, ...orphanRain].map((name, i) => (
                         <div key={i} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded mb-1"
                           style={{ background: "#2a2a0a", border: "1px solid #4a4a1a" }}>
                           <span className="truncate flex-1" style={{ color: "#c0a040" }}>✓ {name}</span>
+                          {availableEmpresas.length > 0 && (
+                            <select
+                              defaultValue=""
+                              onChange={(e) => {
+                                const empId = e.target.value;
+                                if (!empId) return;
+                                if (orphanShp.includes(name)) onReassignShp(name, empId);
+                                else if (orphanCsv.includes(name)) onReassignCsv(name, empId);
+                                else if (orphanRinde.includes(name)) onReassignRinde(name, empId);
+                                e.target.value = "";
+                              }}
+                              className="text-xs rounded px-1 py-0.5"
+                              style={{ background: "#1a2a0a", border: "1px solid #4a4a1a", color: "#c0a040", maxWidth: 120 }}>
+                              <option value="">Mover a…</option>
+                              {availableEmpresas.map((emp) => (
+                                <option key={emp.id} value={emp.id}>{emp.name}</option>
+                              ))}
+                            </select>
+                          )}
                           <button onClick={() => {
                             if (orphanShp.includes(name)) onRemoveShp(name);
                             else if (orphanCsv.includes(name)) onRemoveCsv(name);
