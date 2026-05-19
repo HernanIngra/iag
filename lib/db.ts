@@ -536,12 +536,9 @@ export async function inviteToEmpresa(
   empresaId: string,
   email: string
 ): Promise<"added" | "invited"> {
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) throw new Error("No autenticado");
-  const { error } = await supabase.from("empresa_invites").insert({
-    empresa_id: empresaId,
-    invited_email: email.toLowerCase().trim(),
-    invited_by: authData.user.id,
+  const { error } = await supabase.rpc("invite_to_empresa", {
+    p_empresa_id: empresaId,
+    p_invited_email: email,
   });
   if (error) throw new Error(error.message);
   return "invited";
