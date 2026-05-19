@@ -426,6 +426,25 @@ export interface Empresa {
   workspaceId: string;
 }
 
+export async function getMyOwnedEmpresas(
+  supabase: SupabaseClient
+): Promise<Array<Empresa & { workspaceName: string }>> {
+  const { data, error } = await supabase
+    .from("empresas")
+    .select("id, name, logo, owner_id, workspace_id, workspaces(name)")
+    .order("name", { ascending: true });
+  if (error || !data) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data as any[]).map((e) => ({
+    id: e.id as string,
+    name: e.name as string,
+    logo: (e.logo ?? "") as string,
+    ownerId: e.owner_id as string,
+    workspaceId: e.workspace_id as string,
+    workspaceName: (Array.isArray(e.workspaces) ? e.workspaces[0]?.name : e.workspaces?.name) ?? "",
+  }));
+}
+
 export async function getEmpresas(
   supabase: SupabaseClient,
   workspaceId: string
@@ -552,6 +571,16 @@ export async function acceptPendingEmpresaInvites(supabase: SupabaseClient): Pro
       .from("empresa_invites")
       .update({ accepted_at: new Date().toISOString() })
       .eq("id", inv.id);
+  }
+
+  // Auto-create workspace "Mi espacio" if the user has none
+  const { data: existingWs } = await supabase
+    .from("workspaces")
+    .select("id")
+    .eq("user_id", user.id)
+    .limit(1);
+  if (!existingWs?.length) {
+    await supabase.from("workspaces").insert({ user_id: user.id, name: "Mi espacio", logo: "" });
   }
 }
 
