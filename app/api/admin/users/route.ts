@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
@@ -16,27 +15,22 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  const adminClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-  const { data, error } = await adminClient.auth.admin.listUsers({ perPage: 200 });
+  const { data, error } = await supabase.rpc("admin_list_users");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const users = data.users
-    .map((u) => ({
-      id: u.id,
-      email: u.email ?? "",
-      full_name: (u.user_metadata?.full_name as string | undefined) ?? null,
-      avatar_url: (u.user_metadata?.avatar_url as string | undefined) ?? null,
-      last_sign_in: u.last_sign_in_at ?? null,
-    }))
-    .sort((a, b) => {
-      if (!a.last_sign_in) return 1;
-      if (!b.last_sign_in) return -1;
-      return b.last_sign_in.localeCompare(a.last_sign_in);
-    });
+  const users = (data as Array<{
+    id: string;
+    display_name: string | null;
+    email: string;
+    role: string;
+    created_at: string;
+  }>).map((u) => ({
+    id: u.id,
+    email: u.email ?? "",
+    full_name: u.display_name ?? null,
+    avatar_url: null,
+    last_sign_in: null,
+  }));
 
   return NextResponse.json(users);
 }

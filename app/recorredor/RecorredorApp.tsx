@@ -2812,7 +2812,7 @@ function FileDashboard({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteMsg, setInviteMsg] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
-  const [showInvite, setShowInvite] = useState(false);
+  const [invitingEmpresaId, setInvitingEmpresaId] = useState<string | null>(null);
   const [newEmpresaName, setNewEmpresaName] = useState("");
   const [showNewEmpresa, setShowNewEmpresa] = useState(false);
   const [newEmpresaLoading, setNewEmpresaLoading] = useState(false);
@@ -2964,11 +2964,11 @@ function FileDashboard({
     return !m?.empresaId || selEmp.has(m.empresaId);
   });
 
-  async function handleInvite() {
-    if (!primaryEmpresaId || !inviteEmail.trim()) return;
+  async function handleInvite(empresaId: string) {
+    if (!empresaId || !inviteEmail.trim()) return;
     setInviteLoading(true); setInviteMsg("");
     try {
-      await onInvite(primaryEmpresaId, inviteEmail.trim());
+      await onInvite(empresaId, inviteEmail.trim());
       setInviteMsg(`Invitación enviada a ${inviteEmail.trim()}`);
       setInviteEmail("");
     } catch (e) { setInviteMsg((e as Error).message); }
@@ -3142,7 +3142,7 @@ function FileDashboard({
               <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresas</p>
               <button className="text-xs px-2 py-1 rounded"
                 style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
-                onClick={() => { setShowNewEmpresa(!showNewEmpresa); setShowInvite(false); }}>
+                onClick={() => { setShowNewEmpresa(!showNewEmpresa); setInvitingEmpresaId(null); }}>
                 + Nueva
               </button>
             </div>
@@ -3217,6 +3217,7 @@ function FileDashboard({
                 const isOpen = empresaOpenId === emp.id;
                 const isRenaming = renamingEmpresaId === emp.id;
                 const isDeleting = deletingEmpresaId === emp.id;
+                const isInviting = invitingEmpresaId === emp.id;
 
                 const empShpFiles = shpFiles.filter((n) => shpFileMeta.find((x) => x.name === n)?.empresaId === emp.id);
                 const empCsvFiles = csvFiles.filter((n) => csvFileMeta.find((x) => x.name === n)?.empresaId === emp.id);
@@ -3303,6 +3304,12 @@ function FileDashboard({
                       </button>
                       {emp.isOwner && (
                         <div className="flex gap-1 shrink-0">
+                          <button onClick={() => {
+                            setInvitingEmpresaId(isInviting ? null : emp.id);
+                            setInviteEmail(""); setInviteMsg("");
+                          }}
+                            className="p-1.5 rounded text-xs" style={{ background: isInviting ? "#1a3060" : "#1a2a4a", color: "#6ab0e0" }}
+                            title="Invitar usuario">✉️</button>
                           <button onClick={() => { setEmpresaNameDraft(emp.name); setRenamingEmpresaId(emp.id); }}
                             className="p-1.5 rounded text-xs" style={{ background: "#1a2a4a", color: "#6a8ab0" }}
                             title="Renombrar">✏️</button>
@@ -3312,6 +3319,33 @@ function FileDashboard({
                         </div>
                       )}
                     </div>
+
+                    {/* Invite form */}
+                    {isInviting && (
+                      <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid #1a3460" }}>
+                        <p className="text-xs mb-2" style={{ color: "#6a8ab0" }}>
+                          Invitar a un usuario a ver esta empresa:
+                        </p>
+                        <div className="flex gap-2">
+                          <input autoFocus type="email" value={inviteEmail}
+                            onChange={(e) => { setInviteEmail(e.target.value); setInviteMsg(""); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleInvite(emp.id); if (e.key === "Escape") { setInvitingEmpresaId(null); setInviteEmail(""); setInviteMsg(""); } }}
+                            placeholder="email@ejemplo.com"
+                            className="flex-1 rounded px-3 py-1.5 text-sm"
+                            style={{ background: "#0d1b35", border: "1px solid #2a5298", color: "#e0e0e0", outline: "none" }} />
+                          <button onClick={() => handleInvite(emp.id)} disabled={inviteLoading || !inviteEmail.trim()}
+                            className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
+                            style={{ background: "#3dbb6e", color: "#fff" }}>
+                            {inviteLoading ? "..." : "Invitar"}
+                          </button>
+                        </div>
+                        {inviteMsg && (
+                          <p className="text-xs mt-1.5" style={{ color: inviteMsg.startsWith("Invitación") ? "#3dbb6e" : "#e24a4a" }}>
+                            {inviteMsg}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {/* Nested file sections */}
                     {isOpen && (
