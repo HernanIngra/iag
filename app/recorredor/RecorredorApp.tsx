@@ -1472,7 +1472,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
               className="px-2 py-1 rounded text-sm font-semibold"
               style={{ background: "#16213e", color: "#aac4e0", border: "1px solid #2a5298" }}
             >
-              ← Archivos
+              ← Editar
             </button>
           )}
           <a href="/" className="font-bold text-lg tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</a>
