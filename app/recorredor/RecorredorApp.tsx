@@ -198,6 +198,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
   // Empresas / workspace
   const [myEmpresas, setMyEmpresas] = useState<Empresa[]>([]);
+  const [empresasLoaded, setEmpresasLoaded] = useState(false);
   const [activeEmpresaId, setActiveEmpresaId] = useState<string | undefined>(undefined);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [workspaceSummaries, setWorkspaceSummaries] = useState<WorkspaceSummary[]>([]);
@@ -301,6 +302,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       setActiveWorkspaceId(storedWsId);
       getEmpresas(supabase, storedWsId).then((emps) => {
         setMyEmpresas(emps);
+        setEmpresasLoaded(true);
         if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
       });
     } else {
@@ -315,6 +317,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         setActiveWorkspaceId(wsId);
         const emps = await getEmpresas(supabase, wsId);
         setMyEmpresas(emps);
+        setEmpresasLoaded(true);
         if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
       });
     }
@@ -327,6 +330,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setActiveEmpresaId(undefined);
     const emps = await getEmpresas(supabase, wsId);
     setMyEmpresas(emps);
+    setEmpresasLoaded(true);
     if (emps.length > 0) setActiveEmpresaId(emps[0].id);
   }
 
@@ -334,6 +338,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     persistActiveWorkspaceId(wsId);
     setActiveWorkspaceId(wsId);
     setMyEmpresas(allEmps);
+    setEmpresasLoaded(true);
     setPickerSelectedEmpIds(empIds);
     setActiveEmpresaId(empIds[0] ?? allEmps[0]?.id);
     if (mode === "files") setView("dashboard");
@@ -1697,6 +1702,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             allLotLayersRef.current = [];
           }}
           wsRestoring={wsRestoring}
+          empresasLoaded={empresasLoaded}
         />
       )}
 
@@ -2777,6 +2783,7 @@ function FileDashboard({
   onGoToMap,
   onClearAllFiles,
   wsRestoring,
+  empresasLoaded,
 }: {
   user: import("@supabase/supabase-js").User | null;
   activeWorkspaceId: string | null;
@@ -2828,6 +2835,7 @@ function FileDashboard({
   onGoToMap: () => void;
   onClearAllFiles: () => void;
   wsRestoring: boolean;
+  empresasLoaded: boolean;
 }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteMsg, setInviteMsg] = useState("");
@@ -3197,11 +3205,12 @@ function FileDashboard({
             )}
 
             {/* Archivos sin empresa (huérfanos) — visibles para poder borrarlos */}
-            {(() => {
+            {empresasLoaded && (() => {
               const knownIds = new Set(availableEmpresas.map((e) => e.id));
-              const orphanShp = shpFiles.filter((n) => { const m = shpFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
-              const orphanCsv = csvFiles.filter((n) => { const m = csvFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
-              const orphanRinde = rindeFiles.filter((n) => { const m = rindeFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
+              const isDriveInternal = (n: string) => n.startsWith("drive-manejo:") || n.startsWith("drive-rinde:") || n.startsWith("drive-lluvia:");
+              const orphanShp = shpFiles.filter((n) => { if (isDriveInternal(n)) return false; const m = shpFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
+              const orphanCsv = csvFiles.filter((n) => { if (isDriveInternal(n)) return false; const m = csvFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
+              const orphanRinde = rindeFiles.filter((n) => { if (isDriveInternal(n)) return false; const m = rindeFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
               const orphanRain = rainFiles.filter((n) => !n.startsWith("drive-lluvia:"));
               const hasOrphans = orphanShp.length + orphanCsv.length + orphanRinde.length + orphanRain.length > 0;
               const allFiles = shpFiles.length + csvFiles.length + rindeFiles.length + rainFiles.length;
