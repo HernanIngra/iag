@@ -289,38 +289,33 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     acceptPendingEmpresaInvites(supabase).catch(() => {});
 
     const uid = effectiveUserId ?? user.id;
-    loadWorkspaceSummaries(supabase, uid).then((s) => {
-      setWorkspaceSummaries(s);
+    loadWorkspaceSummaries(supabase, uid).then(async (summaries) => {
+      setWorkspaceSummaries(summaries);
       setWsLoaded(true);
-      const storedWsId = getActiveWorkspaceId();
-      const active = s.find((ws) => ws.id === storedWsId);
-      if (active) setWorkspaceName(active.name);
-    }).catch(() => setWsLoaded(true));
 
-    const storedWsId = getActiveWorkspaceId();
-    if (storedWsId) {
-      setActiveWorkspaceId(storedWsId);
-      getEmpresas(supabase, storedWsId).then((emps) => {
-        setMyEmpresas(emps);
-        setEmpresasLoaded(true);
-        if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
-      });
-    } else {
-      loadWorkspaceSummaries(supabase, uid).then(async (summaries) => {
-        let wsId: string;
-        if (summaries.length > 0) {
-          wsId = summaries[0].id;
-        } else {
-          wsId = await createWorkspace(supabase, uid, "Mi espacio");
-        }
+      // Validate stored workspace ID against actual DB — stale IDs cause empresa to disappear
+      const storedWsId = getActiveWorkspaceId();
+      const matched = summaries.find((ws) => ws.id === storedWsId);
+
+      let wsId: string;
+      if (matched) {
+        wsId = matched.id;
+        setWorkspaceName(matched.name);
+      } else if (summaries.length > 0) {
+        wsId = summaries[0].id;
+        setWorkspaceName(summaries[0].name);
         persistActiveWorkspaceId(wsId);
-        setActiveWorkspaceId(wsId);
-        const emps = await getEmpresas(supabase, wsId);
-        setMyEmpresas(emps);
-        setEmpresasLoaded(true);
-        if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
-      });
-    }
+      } else {
+        wsId = await createWorkspace(supabase, uid, "Mi espacio");
+        persistActiveWorkspaceId(wsId);
+      }
+
+      setActiveWorkspaceId(wsId);
+      const emps = await getEmpresas(supabase, wsId);
+      setMyEmpresas(emps);
+      setEmpresasLoaded(true);
+      if (emps.length > 0) setActiveEmpresaId((prev) => prev ?? emps[0].id);
+    }).catch(() => setWsLoaded(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
