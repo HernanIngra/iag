@@ -21,10 +21,13 @@ export function AuthBar() {
   const close = () => { setShowModal(false); setMode("login"); reset(); };
 
   const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
+    if (error) { setError(error.message); setBusy(false); }
   };
 
   const handleLogout = async () => { await supabase.auth.signOut(); };
@@ -172,7 +175,8 @@ export function AuthBar() {
                 </div>
                 <button
                   onClick={handleGoogleLogin}
-                  className="flex items-center justify-center gap-3 w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90"
+                  disabled={busy}
+                  className="flex items-center justify-center gap-3 w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90 disabled:opacity-50"
                   style={{ background: "#fff", color: "#1a1a2e" }}
                 >
                   <GoogleIcon />
