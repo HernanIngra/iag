@@ -1531,9 +1531,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           defaultWsId={activeWorkspaceId ?? getActiveWorkspaceId() ?? undefined}
           defaultEmpIds={pickerSelectedEmpIds}
           onConfirm={handlePickerConfirm}
-          onCreateWorkspace={async () => {
+          onCreateWorkspace={async (name: string) => {
             if (!user) return;
-            const wsId = await createWorkspace(supabase, user.id, "Mi espacio");
+            const wsId = await createWorkspace(supabase, user.id, name || "Mi espacio");
             persistActiveWorkspaceId(wsId);
             setActiveWorkspaceId(wsId);
             const summaries = await loadWorkspaceSummaries(supabase, user.id);
@@ -3483,7 +3483,7 @@ function WorkspacePicker({
   defaultWsId?: string;
   defaultEmpIds: string[];
   onConfirm: (wsId: string, empIds: string[], allEmps: Empresa[], mode?: "map" | "files") => void;
-  onCreateWorkspace: () => Promise<void>;
+  onCreateWorkspace: (name: string) => Promise<void>;
 }) {
   const [step, setStep] = useState<"workspace" | "empresa">("workspace");
   const [selectedWsId, setSelectedWsId] = useState<string>(defaultWsId ?? "");
@@ -3528,6 +3528,7 @@ function WorkspacePicker({
   const selectedWs = workspaceSummaries.find((w) => w.id === selectedWsId);
 
   const [creating, setCreating] = useState(false);
+  const [newWsName, setNewWsName] = useState("");
 
   if (!wsLoaded) {
     return (
@@ -3546,8 +3547,17 @@ function WorkspacePicker({
         <div className="text-center max-w-xs">
           <span className="text-2xl font-bold tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</span>
           <p className="text-sm mt-3 mb-6" style={{ color: "#6a8ab0" }}>No encontramos espacios de trabajo. Creá uno para empezar.</p>
-          <button disabled={creating} onClick={async () => { setCreating(true); await onCreateWorkspace(); setCreating(false); }}
-            className="px-6 py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
+          <input
+            value={newWsName}
+            onChange={(e) => setNewWsName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && newWsName.trim() && !creating) { setCreating(true); onCreateWorkspace(newWsName.trim()).finally(() => setCreating(false)); } }}
+            placeholder="Nombre del espacio de trabajo"
+            style={{ width: "100%", background: "#16213e", border: "1px solid #1a4a80", borderRadius: 10, padding: "10px 14px", color: "#e0e0e0", fontSize: 14, outline: "none", marginBottom: 12, boxSizing: "border-box" as const }}
+          />
+          <button
+            disabled={creating || !newWsName.trim()}
+            onClick={async () => { setCreating(true); await onCreateWorkspace(newWsName.trim()); setCreating(false); }}
+            className="w-full px-6 py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
             style={{ background: "#3dbb6e", color: "#fff" }}>
             {creating ? "Creando..." : "+ Crear espacio de trabajo"}
           </button>
