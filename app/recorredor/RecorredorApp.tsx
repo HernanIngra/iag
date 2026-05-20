@@ -109,6 +109,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const selectedLayerRef = useRef<LeafletGeoJSON | null>(null);
   const lotDimmedRef = useRef<Set<string>>(new Set());
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const workspaceStateRef = useRef<Workspace | null>(null);
   const tilesAddedRef = useRef(false);
   const hasHydratedRef = useRef(false); // true once workspace is loaded (prevents premature auto-save)
 
@@ -547,15 +548,16 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   useEffect(() => {
     if (!hasHydratedRef.current) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    const state: Workspace = {
+      workspaceName, workspaceLogo,
+      fieldName, lotCount, collections, colorMap, cultivoColorMap,
+      lotData, allRows, rindeData, lotVisits, shpFiles, csvFiles, rindeFiles,
+      shpFileMeta, csvFileMeta, rindeFileMeta,
+      empresaDriveLinks,
+      rainData, pluviometroMap,
+    };
+    workspaceStateRef.current = state;
     saveTimeoutRef.current = setTimeout(async () => {
-      const state: Workspace = {
-        workspaceName, workspaceLogo,
-        fieldName, lotCount, collections, colorMap, cultivoColorMap,
-        lotData, allRows, rindeData, lotVisits, shpFiles, csvFiles, rindeFiles,
-        shpFileMeta, csvFileMeta, rindeFileMeta,
-        empresaDriveLinks,
-        rainData, pluviometroMap,
-      };
       saveWorkspaceLocal(state, activeWorkspaceId ?? "local");
       if (user && activeWorkspaceId) {
         setIsSaving(true);
@@ -572,6 +574,17 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collections, lotData, rindeData, lotVisits, empresaDriveLinks, rainData, pluviometroMap, workspaceName, workspaceLogo, user, shpFiles, csvFiles, rindeFiles, shpFileMeta, csvFileMeta, rindeFileMeta]);
+
+  // ── Guardar en localStorage síncrono al cerrar/recargar la pestaña ──────────
+  useEffect(() => {
+    function onBeforeUnload() {
+      if (workspaceStateRef.current && hasHydratedRef.current) {
+        saveWorkspaceLocal(workspaceStateRef.current, activeWorkspaceId ?? "local");
+      }
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [activeWorkspaceId]);
 
   // ── Dim/highlight lots based on tipo/product filter ─────────────────────────
 
