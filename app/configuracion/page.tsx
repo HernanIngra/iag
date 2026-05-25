@@ -271,8 +271,11 @@ export default function ConfiguracionPage() {
       {/* ── Top bar ── */}
       <header className="flex items-center justify-between px-6 py-3 flex-shrink-0"
         style={{ background: "var(--iag-nav)", boxShadow: "0 2px 8px rgba(0,0,0,.4)" }}>
-        <div className="flex items-center gap-4">
-          <a href="/" className="font-bold text-xl tracking-widest" style={{ color: "var(--iag-accent)" }}>I.Ag</a>
+        <div className="flex items-center gap-3">
+          <a href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+            <img src="/icons/iag-logo.svg" alt="I.Ag" className="w-8 h-8 rounded-lg" />
+            <span className="font-bold text-xl tracking-widest" style={{ color: "var(--iag-accent)" }}>I.Ag</span>
+          </a>
           <span className="text-sm" style={{ color: "#6a8ab0" }}>· Configuración</span>
         </div>
         <div className="flex items-center gap-4">

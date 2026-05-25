@@ -30,25 +30,25 @@
 /* ─── Theme tokens ──────────────────────────────────────────────────────────── */
 
 :root {
-  /* Dark (default) */
-  --iag-bg:           #1a1a2e;
-  --iag-surface:      #16213e;
-  --iag-surface-2:    #0d1b35;
-  --iag-surface-3:    #0f2040;
-  --iag-nav:          #0f3460;
-  --iag-border:       #0f3460;
-  --iag-border-soft:  #2a4a6a;
-  --iag-text:         #e0e0e0;
-  --iag-text-muted:   #aac4e0;
+  /* Dark (default) — capas con contraste visible */
+  --iag-bg:           #0e1624;  /* base oscura */
+  --iag-surface:      #1a2d4a;  /* tarjetas — claramente más claro que bg */
+  --iag-surface-2:    #142035;  /* tab bar / inputs — entre bg y surface */
+  --iag-surface-3:    #101a2c;  /* tarjetas anidadas (empresa) */
+  --iag-nav:          #091526;  /* barra nav — la más oscura */
+  --iag-border:       #2a4878;  /* bordes — visibles */
+  --iag-border-soft:  #1e3860;  /* bordes suaves */
+  --iag-text:         #e2e8f0;
+  --iag-text-muted:   #a8c2de;
   --iag-text-dim:     #6a8ab0;
   --iag-text-dimmer:  #4a6a8a;
   --iag-accent:       #e2b04a;
   --iag-accent-dark:  #c8922e;
-  --iag-scrolltrack:  #0d1525;
-  --iag-scrollthumb:  #2a5298;
-  --iag-popup-bg:     #16213e;
-  --iag-popup-border: #0f3460;
-  --iag-popup-text:   #e0e0e0;
+  --iag-scrolltrack:  #0a1020;
+  --iag-scrollthumb:  #2a4878;
+  --iag-popup-bg:     #1a2d4a;
+  --iag-popup-border: #2a4878;
+  --iag-popup-text:   #e2e8f0;
 }
 
 :root.light {
