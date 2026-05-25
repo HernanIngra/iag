@@ -31,8 +31,12 @@ const CANONICAL_TYPES: Record<string, string> = {
   insecticida:  "Insecticida",
   fertilizante: "Fertilizante",
   fertil:       "Fertilizante",
+  fertilizacion: "Fertilizante",
+  fertilización: "Fertilizante",
   coadyuvante:  "Coadyuvante",
   semilla:      "Semilla",
+  siembra:      "Semilla",       // "Siembra" como tarea → tipo Semilla
+  curasemilla:  "Curasemilla",
   laboreo:      "Laboreo",
   labranza:     "Labranza",
   fumigacion:   "Fumigación",
@@ -52,6 +56,70 @@ export function normalizeProductType(raw: string): string {
     if (lower.startsWith(key)) return val;
   }
   return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+// ── Cultivo normalization ─────────────────────────────────────────────────────
+// Catálogo centralizado: los valores de la izquierda son como vienen de cada
+// fuente (case-insensitive). Los de la derecha son la forma canónica.
+// Sufijos de campo (LL, PB, etc.) se eliminan — el campo no es parte del cultivo.
+
+const CULTIVO_CATALOG: Record<string, string> = {
+  // Maíz
+  "maiz":                  "Maíz",
+  "maíz":                  "Maíz",
+  "maiz comun":            "Maíz Común",
+  "maíz comun":            "Maíz Común",
+  "maíz común":            "Maíz Común",
+  "maiz comun ll":         "Maíz Común",
+  "maíz común ll":         "Maíz Común",
+  "maiz comun pb":         "Maíz Común",
+  "maíz común pb":         "Maíz Común",
+  "maiz ganadero":         "Maíz Ganadero",
+  "maíz ganadero":         "Maíz Ganadero",
+  "maiz ganadero ll":      "Maíz Ganadero",
+  "maíz ganadero ll":      "Maíz Ganadero",
+  // Soja
+  "soja":                  "Soja",
+  // Trigo
+  "trigo":                 "Trigo",
+  "trigo pb":              "Trigo",
+  "trigo p.b.":            "Trigo",
+  // Poroto
+  "poroto":                "Poroto",
+  "poroto ll":             "Poroto",
+  "poroto pb":             "Poroto",
+  "por.blanco":            "Poroto Blanco",
+  "poroto blanco":         "Poroto Blanco",
+  "poroto general":        "Poroto",
+  "poroto general ll":     "Poroto",
+  "poroto general pb":     "Poroto",
+  // Sorgo
+  "sorgo":                 "Sorgo",
+  "sorgo ll":              "Sorgo",
+  "sorgo pb":              "Sorgo",
+  // Otros cultivos
+  "mungo":                 "Mungo",
+  "cayote":                "Cayote",
+  "cayote ll":             "Cayote",
+  "garbanzo":              "Garbanzo",
+  "girasol":               "Girasol",
+  "alfalfa":               "Alfalfa",
+  "pasturas":              "Pasturas",
+  "pastura":               "Pasturas",
+  "gramma":                "Gramilla",
+  "gramilla":              "Gramilla",
+  // Administrativos — quedan vacíos (la fila igual se guarda, filtros la ignoran)
+  "estructura":            "Estructura",
+  "servicios":             "Servicios",
+  "casa ll":               "Servicios",
+};
+
+export function normalizeCultivo(raw: string): string {
+  if (!raw) return "";
+  const key = raw.toLowerCase().trim();
+  if (CULTIVO_CATALOG[key] !== undefined) return CULTIVO_CATALOG[key];
+  // Fallback: primera letra mayúscula, resto tal como viene
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
 export const TIPO_COLORS: Record<string, string> = {

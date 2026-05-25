@@ -83,10 +83,19 @@ export interface FileMeta {
 type SerializedParsedRow = Omit<ParsedRow, "_fecha"> & { _fecha: string | null };
 type SerializedLotData = Record<string, SerializedParsedRow[]>;
 
+// Keep only _-prefixed canonical fields — drops raw Excel column spreads that bloat the payload
+function stripRawFields(r: ParsedRow): ParsedRow {
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(r)) {
+    if (k.startsWith("_")) out[k] = r[k];
+  }
+  return out as ParsedRow;
+}
+
 function serializeLotData(data: LotData): SerializedLotData {
   const out: SerializedLotData = {};
   for (const [k, rows] of Object.entries(data)) {
-    out[k] = rows.map((r) => ({ ...r, _fecha: r._fecha ? r._fecha.toISOString() : null }));
+    out[k] = rows.map((r) => ({ ...stripRawFields(r), _fecha: r._fecha ? r._fecha.toISOString() : null }));
   }
   return out;
 }
@@ -103,7 +112,7 @@ function deserializeLotData(data: SerializedLotData): LotData {
 }
 
 function serializeAllRows(rows: ParsedRow[]): SerializedParsedRow[] {
-  return rows.map((r) => ({ ...r, _fecha: r._fecha ? r._fecha.toISOString() : null }));
+  return rows.map((r) => ({ ...stripRawFields(r), _fecha: r._fecha ? r._fecha.toISOString() : null }));
 }
 
 export function deserializeAllRows(rows: SerializedParsedRow[]): ParsedRow[] {
@@ -114,6 +123,9 @@ export function deserializeAllRows(rows: SerializedParsedRow[]): ParsedRow[] {
 }
 
 function deserializeWorkspaceRow(data: Record<string, unknown>): Workspace {
+  const lotData = deserializeLotData((data.lot_data ?? {}) as SerializedLotData);
+  // all_rows is no longer stored separately — reconstruct from lot_data to avoid duplication
+  const allRows: ParsedRow[] = Object.values(lotData).flat();
   return {
     workspaceName: (data.name as string) ?? "",
     workspaceLogo: (data.logo as string) ?? "",
@@ -122,8 +134,8 @@ function deserializeWorkspaceRow(data: Record<string, unknown>): Workspace {
     collections: (data.collections ?? []) as GeoCollection[],
     colorMap: (data.color_map ?? {}) as Record<string, string>,
     cultivoColorMap: (data.cultivo_color_map ?? {}) as Record<string, string>,
-    lotData: deserializeLotData((data.lot_data ?? {}) as SerializedLotData),
-    allRows: deserializeAllRows((data.all_rows ?? []) as SerializedParsedRow[]),
+    lotData,
+    allRows,
     rindeData: (data.rinde_data ?? {}) as RindeData,
     lotVisits: (data.lot_visits ?? {}) as Record<string, LotVisit[]>,
     shpFiles: (data.shp_files ?? []) as string[],
@@ -235,7 +247,6 @@ export async function saveWorkspace(
       color_map: state.colorMap,
       cultivo_color_map: state.cultivoColorMap,
       lot_data: serializeLotData(state.lotData),
-      all_rows: serializeAllRows(state.allRows),
       rinde_data: state.rindeData,
       lot_visits: state.lotVisits,
       shp_files: state.shpFiles,
@@ -287,7 +298,6 @@ export function saveWorkspaceLocal(state: Workspace, workspaceId: string): void 
         colorMap: state.colorMap,
         cultivoColorMap: state.cultivoColorMap,
         lot_data: serializeLotData(state.lotData),
-        all_rows: serializeAllRows(state.allRows),
         rinde_data: state.rindeData,
         lot_visits: state.lotVisits,
         shp_files: state.shpFiles,
@@ -312,6 +322,8 @@ export function loadWorkspaceLocal(workspaceId: string): Workspace | null {
     const raw = localStorage.getItem(localWsKey(workspaceId));
     if (!raw) return null;
     const data = JSON.parse(raw) as Record<string, unknown>;
+    const lotData = deserializeLotData((data.lot_data ?? {}) as SerializedLotData);
+    const allRows: ParsedRow[] = Object.values(lotData).flat();
     return {
       workspaceName: (data.workspaceName as string) ?? "",
       workspaceLogo: (data.workspaceLogo as string) ?? "",
@@ -320,8 +332,8 @@ export function loadWorkspaceLocal(workspaceId: string): Workspace | null {
       collections: (data.collections ?? []) as GeoCollection[],
       colorMap: (data.colorMap ?? {}) as Record<string, string>,
       cultivoColorMap: (data.cultivoColorMap ?? {}) as Record<string, string>,
-      lotData: deserializeLotData((data.lot_data ?? {}) as SerializedLotData),
-      allRows: deserializeAllRows((data.all_rows ?? []) as SerializedParsedRow[]),
+      lotData,
+      allRows,
       rindeData: (data.rinde_data ?? {}) as RindeData,
       lotVisits: (data.lot_visits ?? {}) as Record<string, LotVisit[]>,
       shpFiles: (data.shp_files ?? []) as string[],

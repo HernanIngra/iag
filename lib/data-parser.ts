@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
-import { normalizeProductType } from "./recorredor-types";
+import { normalizeProductType, normalizeCultivo } from "./recorredor-types";
 
 export interface ParsedRow {
   [key: string]: unknown;
@@ -185,7 +185,7 @@ export async function parseManagementFile(
         _prod: prodCol ? String(row[prodCol] ?? "").trim() : "",
         _dosis: dosisCol ? row[dosisCol] : "",
         _unid: unidCol ? String(row[unidCol] ?? "").trim() : "",
-        _cultivo: cultivoCol ? String(row[cultivoCol] ?? "").trim() : "",
+        _cultivo: cultivoCol ? normalizeCultivo(String(row[cultivoCol] ?? "")) : "",
         _genetica: geneticaCol ? String(row[geneticaCol] ?? "").trim() : "",
         _sup: supCol ? row[supCol] : "",
         _campaign: campaign,

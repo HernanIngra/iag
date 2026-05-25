@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import type { ParsedRow } from "./data-parser";
 import type { RainReading, RainData } from "./db";
-import { normalizeProductType } from "./recorredor-types";
+import { normalizeProductType, normalizeCultivo } from "./recorredor-types";
 
 // ── Source format identifiers ─────────────────────────────────────────────────
 
@@ -185,7 +185,7 @@ function parseFinnegansBase(rows: RawRow[], fileName: string): ParsedRow[] {
         tipo: normalizeProductType(String(row["Familia"] ?? row["Subfamilia"] ?? "")),
         dosis: row["Cant./ha"],
         unid: String(row["Unidad"] ?? "").trim(),
-        cultivo: String(row["Actividad"] ?? "").trim(),
+        cultivo: normalizeCultivo(String(row["Actividad"] ?? "")),
         sup: row["Superficie"],
       }, fileName);
     })
@@ -210,7 +210,7 @@ function parseFinnegansCarreta(rows: RawRow[], fileName: string): ParsedRow[] {
         tipo: normalizeProductType(String(row["TipoInsumo"] ?? "")),
         dosis: row["DosisEjecutada"] ?? row["DosisOrdenada"],
         unid: String(row["Unidad"] ?? "").trim(),
-        cultivo: String(row["Cultivo"] ?? "").trim(),
+        cultivo: normalizeCultivo(String(row["Cultivo"] ?? "")),
         sup: row["SuperficieAplicada"] ?? row["AreaSembrada"],
       }, fileName);
     })
@@ -249,21 +249,25 @@ function parseSynagroInsumos(rows: RawRow[], fileName: string): ParsedRow[] {
     .map((row) => {
       const lote = String(row["Lote"] ?? "").trim();
       if (!lote) return null;
-      const prod = String(row["Insumo"] ?? "").trim();
-      if (!prod) return null;
+      const tarea  = String(row["Tarea"]  ?? "").trim();
+      const insumo = String(row["Insumo"] ?? "").trim();
+      const tipo   = normalizeProductType(tarea);
+      // Filas sin Insumo se cargan como labores mecánicas (cincel, cosecha, etc.)
       const { fecha, fechaStr, campaign } = parseDateCell(row["Fecha"]);
       const cantRaw = String(row["Cant. Aplic."] ?? "").trim();
       const supMatch = cantRaw.match(/^([\d.,]+)/);
       return makeRow(row, {
         lote,
         fecha, fechaStr, campaign,
-        labor: String(row["Tarea"] ?? "").trim(),
-        prod,
-        tipo: "",
-        dosis: row["Dosis"],
-        unid: String(row["UM"] ?? "").trim(),
-        cultivo: String(row["Actividad"] ?? "").trim(),
-        sup: supMatch ? parseFloat(supMatch[1].replace(",", ".")) : "",
+        labor: tarea,
+        prod:  insumo,
+        tipo,
+        dosis: row["Dosis"] ?? row["Cantidad"],
+        unid:  String(row["UM"] ?? row["Unidad Medida"] ?? "").trim(),
+        cultivo: normalizeCultivo(String(row["Actividad"] ?? "")),
+        sup: supMatch
+          ? parseFloat(supMatch[1].replace(",", "."))
+          : row["Superf."] ?? row["Superf"] ?? row["Superficie"] ?? "",
       }, fileName);
     })
     .filter((r): r is ParsedRow => r !== null && !!r._linkKey);
@@ -290,7 +294,7 @@ function parseSynagroTareas(rows: RawRow[], fileName: string): ParsedRow[] {
         tipo: "",
         dosis: row["Dosis"],
         unid: String(row["UM"] ?? "").trim(),
-        cultivo: parts[1] ?? "",
+        cultivo: normalizeCultivo(parts[1] ?? ""),
         sup: row["Superf."] ?? row["Superficie"],
       }, fileName);
     })
@@ -378,7 +382,7 @@ async function parseExcelPropio(file: File, fileName: string): Promise<ParsedRow
         tipo: isLabor ? "" : normalizeProductType(tipo),
         dosis: row[dosisKey],
         unid: String(row[unidKey] ?? "").trim(),
-        cultivo: String(row[cultivoKey] ?? "").trim(),
+        cultivo: normalizeCultivo(String(row[cultivoKey] ?? "")),
         sup: row[supKey],
       }, fileName);
     })
