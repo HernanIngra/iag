@@ -27,6 +27,51 @@
   --font-sans: 'Segoe UI', Arial, Helvetica, sans-serif;
 }
 
+/* ─── Theme tokens ──────────────────────────────────────────────────────────── */
+
+:root {
+  /* Dark (default) */
+  --iag-bg:           #1a1a2e;
+  --iag-surface:      #16213e;
+  --iag-surface-2:    #0d1b35;
+  --iag-surface-3:    #0f2040;
+  --iag-nav:          #0f3460;
+  --iag-border:       #0f3460;
+  --iag-border-soft:  #2a4a6a;
+  --iag-text:         #e0e0e0;
+  --iag-text-muted:   #aac4e0;
+  --iag-text-dim:     #6a8ab0;
+  --iag-text-dimmer:  #4a6a8a;
+  --iag-accent:       #e2b04a;
+  --iag-accent-dark:  #c8922e;
+  --iag-scrolltrack:  #0d1525;
+  --iag-scrollthumb:  #2a5298;
+  --iag-popup-bg:     #16213e;
+  --iag-popup-border: #0f3460;
+  --iag-popup-text:   #e0e0e0;
+}
+
+:root.light {
+  --iag-bg:           #f0f5fb;
+  --iag-surface:      #ffffff;
+  --iag-surface-2:    #e8f0f8;
+  --iag-surface-3:    #dce8f5;
+  --iag-nav:          #0f3460;   /* nav siempre oscuro — identidad de marca */
+  --iag-border:       #c5d8ee;
+  --iag-border-soft:  #a8c4de;
+  --iag-text:         #1a2845;
+  --iag-text-muted:   #2e5080;
+  --iag-text-dim:     #5a7898;
+  --iag-text-dimmer:  #8098b8;
+  --iag-accent:       #b07020;
+  --iag-accent-dark:  #8a5018;
+  --iag-scrolltrack:  #dce8f5;
+  --iag-scrollthumb:  #8ab0d8;
+  --iag-popup-bg:     #ffffff;
+  --iag-popup-border: #c5d8ee;
+  --iag-popup-text:   #1a2845;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -34,23 +79,24 @@
 html,
 body {
   height: 100%;
-  background: var(--color-navy-900);
-  color: var(--color-text);
+  background: var(--iag-bg);
+  color: var(--iag-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: var(--color-navy-950); }
-::-webkit-scrollbar-thumb { background: var(--color-navy-500); border-radius: 3px; }
+::-webkit-scrollbar-track { background: var(--iag-scrolltrack); }
+::-webkit-scrollbar-thumb { background: var(--iag-scrollthumb); border-radius: 3px; }
 
 /* Leaflet overrides */
 .leaflet-popup-content-wrapper {
-  background: #16213e !important;
-  color: #e0e0e0 !important;
-  border: 1px solid #0f3460 !important;
+  background: var(--iag-popup-bg) !important;
+  color: var(--iag-popup-text) !important;
+  border: 1px solid var(--iag-popup-border) !important;
   border-radius: 8px !important;
 }
-.leaflet-popup-tip { background: #16213e !important; }
+.leaflet-popup-tip { background: var(--iag-popup-bg) !important; }
 .leaflet-popup-content { font-size: 0.85rem !important; }

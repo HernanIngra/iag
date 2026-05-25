@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type { User } from "@supabase/supabase-js";
+import { useTheme } from "../providers";
 import {
   loadWorkspaceSummaries,
   createWorkspace,
@@ -22,7 +23,7 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Tab = "workspaces";
+type Tab = "workspaces" | "preferencias";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,9 @@ export default function ConfiguracionPage() {
   const supabase = useState(() => createSupabaseBrowserClient())[0];
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const { theme, setTheme } = useTheme();
+
+  const [tab, setTab] = useState<Tab>("workspaces");
 
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [selectedWsId, setSelectedWsId] = useState<string | null>(null);
@@ -75,13 +79,11 @@ export default function ConfiguracionPage() {
   const [empNameDraft, setEmpNameDraft] = useState("");
   const [deletingEmpId, setDeletingEmpId] = useState<string | null>(null);
   const [empMutating, setEmpMutating] = useState(false);
-  const [showInvite, setShowInvite] = useState<string | null>(null); // empresaId
+  const [showInvite, setShowInvite] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteMsg, setInviteMsg] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
   const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null);
-
-  const _tab: Tab = "workspaces"; // single tab for now
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
@@ -241,7 +243,8 @@ export default function ConfiguracionPage() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ background: "#1a1a2e", color: "#aac4e0" }}>
+      <div className="h-screen flex items-center justify-center"
+        style={{ background: "var(--iag-bg)", color: "var(--iag-text-muted)" }}>
         Cargando...
       </div>
     );
@@ -249,9 +252,11 @@ export default function ConfiguracionPage() {
 
   if (!user) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4" style={{ background: "#1a1a2e", color: "#e0e0e0" }}>
+      <div className="h-screen flex flex-col items-center justify-center gap-4"
+        style={{ background: "var(--iag-bg)", color: "var(--iag-text)" }}>
         <p>Necesitás iniciar sesión para acceder a la configuración.</p>
-        <a href="/login" className="px-6 py-2 rounded-lg font-semibold" style={{ background: "#e2b04a", color: "#1a1a2e" }}>
+        <a href="/login" className="px-6 py-2 rounded-lg font-semibold"
+          style={{ background: "var(--iag-accent)", color: "#1a1a2e" }}>
           Iniciar sesión
         </a>
       </div>
@@ -261,13 +266,13 @@ export default function ConfiguracionPage() {
   const selectedWs = workspaces.find((w) => w.id === selectedWsId);
 
   return (
-    <div className="min-h-screen" style={{ background: "#1a1a2e", color: "#e0e0e0" }}>
+    <div className="min-h-screen" style={{ background: "var(--iag-bg)", color: "var(--iag-text)" }}>
 
       {/* ── Top bar ── */}
       <header className="flex items-center justify-between px-6 py-3 flex-shrink-0"
-        style={{ background: "#0f3460", boxShadow: "0 2px 8px rgba(0,0,0,.4)" }}>
+        style={{ background: "var(--iag-nav)", boxShadow: "0 2px 8px rgba(0,0,0,.4)" }}>
         <div className="flex items-center gap-4">
-          <a href="/" className="font-bold text-xl tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</a>
+          <a href="/" className="font-bold text-xl tracking-widest" style={{ color: "var(--iag-accent)" }}>I.Ag</a>
           <span className="text-sm" style={{ color: "#6a8ab0" }}>· Configuración</span>
         </div>
         <div className="flex items-center gap-4">
@@ -286,299 +291,436 @@ export default function ConfiguracionPage() {
 
       <div className="max-w-3xl mx-auto px-4 py-8">
 
-        {/* ── Workspace list ── */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold uppercase tracking-wider" style={{ color: "#6a8ab0" }}>
-            Espacios de trabajo
-          </h2>
-          <button
-            onClick={() => { setShowNewWs(!showNewWs); setNewWsName(""); }}
-            className="text-sm px-3 py-1.5 rounded-lg font-semibold transition-all"
-            style={{ background: "#1a4a80", color: "#e2b04a", border: "1px solid #2a5298" }}
-          >
-            + Nuevo espacio
-          </button>
+        {/* ── Tab switcher ── */}
+        <div className="flex gap-1 mb-8 p-1 rounded-xl w-fit"
+          style={{ background: "var(--iag-surface-2)", border: "1px solid var(--iag-border-soft)" }}>
+          {(["workspaces", "preferencias"] as Tab[]).map((t) => (
+            <button key={t} onClick={() => setTab(t)}
+              className="px-5 py-2 rounded-lg text-sm font-semibold transition-all"
+              style={tab === t
+                ? { background: "var(--iag-surface)", color: "var(--iag-accent)", boxShadow: "0 1px 4px rgba(0,0,0,.2)" }
+                : { background: "transparent", color: "var(--iag-text-dim)" }
+              }>
+              {t === "workspaces" ? "🏢 Espacios" : "⚙️ Preferencias"}
+            </button>
+          ))}
         </div>
 
-        {showNewWs && (
-          <div className="mb-4 p-4 rounded-xl flex gap-2" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
-            <input
-              autoFocus
-              value={newWsName}
-              onChange={(e) => setNewWsName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreateWorkspace()}
-              placeholder="Nombre del espacio (ej: Grupo Bermejo)"
-              className="flex-1 rounded px-3 py-2 text-sm"
-              style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
-            />
-            <button onClick={handleCreateWorkspace} disabled={newWsLoading || !newWsName.trim()}
-              className="px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
-              style={{ background: "#3dbb6e", color: "#fff" }}>
-              {newWsLoading ? "..." : "Crear"}
-            </button>
-            <button onClick={() => setShowNewWs(false)}
-              className="px-3 py-2 rounded-lg text-sm"
-              style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}>
-              Cancelar
-            </button>
-          </div>
-        )}
+        {/* ══════════ WORKSPACES TAB ══════════ */}
+        {tab === "workspaces" && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold uppercase tracking-wider" style={{ color: "var(--iag-text-dim)" }}>
+                Espacios de trabajo
+              </h2>
+              <button
+                onClick={() => { setShowNewWs(!showNewWs); setNewWsName(""); }}
+                className="text-sm px-3 py-1.5 rounded-lg font-semibold transition-all"
+                style={{ background: "#1a4a80", color: "var(--iag-accent)", border: "1px solid #2a5298" }}
+              >
+                + Nuevo espacio
+              </button>
+            </div>
 
-        {workspaces.length === 0 ? (
-          <div className="p-8 rounded-2xl text-center" style={{ background: "#16213e", border: "1px dashed #2a4a6a" }}>
-            <p className="text-sm mb-4" style={{ color: "#6a8ab0" }}>
-              Todavía no tenés espacios de trabajo. Creá uno para empezar.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {workspaces.map((ws) => {
-              const isSelected = ws.id === selectedWsId;
-              const isEditing = editingWsId === ws.id;
-              const isDeleting = deletingWsId === ws.id;
+            {showNewWs && (
+              <div className="mb-4 p-4 rounded-xl flex gap-2"
+                style={{ background: "var(--iag-surface)", border: "1px solid var(--iag-border)" }}>
+                <input
+                  autoFocus
+                  value={newWsName}
+                  onChange={(e) => setNewWsName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCreateWorkspace()}
+                  placeholder="Nombre del espacio (ej: Grupo Bermejo)"
+                  className="flex-1 rounded px-3 py-2 text-sm"
+                  style={{ background: "var(--iag-surface-2)", border: "1px solid var(--iag-border-soft)", color: "var(--iag-text)", outline: "none" }}
+                />
+                <button onClick={handleCreateWorkspace} disabled={newWsLoading || !newWsName.trim()}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+                  style={{ background: "#3dbb6e", color: "#fff" }}>
+                  {newWsLoading ? "..." : "Crear"}
+                </button>
+                <button onClick={() => setShowNewWs(false)}
+                  className="px-3 py-2 rounded-lg text-sm"
+                  style={{ background: "transparent", border: "1px solid var(--iag-border-soft)", color: "var(--iag-text-dim)" }}>
+                  Cancelar
+                </button>
+              </div>
+            )}
 
-              if (isEditing) {
-                return (
-                  <WorkspaceEditCard key={ws.id} ws={ws}
-                    nameDraft={wsNameDraft} logoDraft={wsLogoDraft}
-                    onNameChange={setWsNameDraft} onLogoChange={setWsLogoDraft}
-                    onConfirm={() => handleRenameWorkspace(ws.id)}
-                    onCancel={() => setEditingWsId(null)}
-                    mutating={wsMutating}
-                  />
-                );
-              }
+            {workspaces.length === 0 ? (
+              <div className="p-8 rounded-2xl text-center"
+                style={{ background: "var(--iag-surface)", border: "1px dashed var(--iag-border-soft)" }}>
+                <p className="text-sm mb-4" style={{ color: "var(--iag-text-dim)" }}>
+                  Todavía no tenés espacios de trabajo. Creá uno para empezar.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {workspaces.map((ws) => {
+                  const isSelected = ws.id === selectedWsId;
+                  const isEditing = editingWsId === ws.id;
+                  const isDeleting = deletingWsId === ws.id;
 
-              if (isDeleting) {
-                return (
-                  <div key={ws.id} className="p-4 rounded-xl flex items-center gap-3"
-                    style={{ background: "#2a0a0a", border: "1px solid #6a1a1a" }}>
-                    <span className="flex-1 text-sm" style={{ color: "#e24a4a" }}>
-                      ¿Eliminar <strong>{ws.name}</strong> y todas sus empresas? No se puede deshacer.
-                    </span>
-                    <button disabled={wsMutating} onClick={() => handleDeleteWorkspace(ws.id)}
-                      className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                      style={{ background: "#e24a4a", color: "#fff" }}>
-                      {wsMutating ? "..." : "Eliminar"}
-                    </button>
-                    <button onClick={() => setDeletingWsId(null)}
-                      className="px-3 py-1.5 rounded text-sm"
-                      style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
-                  </div>
-                );
-              }
+                  if (isEditing) {
+                    return (
+                      <WorkspaceEditCard key={ws.id} ws={ws}
+                        nameDraft={wsNameDraft} logoDraft={wsLogoDraft}
+                        onNameChange={setWsNameDraft} onLogoChange={setWsLogoDraft}
+                        onConfirm={() => handleRenameWorkspace(ws.id)}
+                        onCancel={() => setEditingWsId(null)}
+                        mutating={wsMutating}
+                      />
+                    );
+                  }
 
-              return (
-                <div key={ws.id}
-                  className="rounded-xl overflow-hidden"
-                  style={{ background: "#16213e", border: `1px solid ${isSelected ? "#3dbb6e" : "#0f3460"}` }}>
-
-                  {/* Workspace header */}
-                  <div
-                    className="flex items-center gap-3 p-4 cursor-pointer"
-                    onClick={() => setSelectedWsId(isSelected ? null : ws.id)}
-                  >
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
-                      style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
-                      {ws.logo
-                        ? <img src={ws.logo} alt="" className="w-full h-full object-cover" />
-                        : <span className="text-lg">🏢</span>
-                      }
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-sm truncate" style={{ color: isSelected ? "#e2b04a" : "#e0e0e0" }}>
-                        {ws.name}
-                      </p>
-                      <p className="text-xs" style={{ color: "#4a6a8a" }}>
-                        {isSelected ? "▲ ocultar detalle" : "▼ ver detalle"}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => goToRecorredor(ws.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                        style={{ background: "#1a4a80", color: "#e2b04a", border: "1px solid #2a5298" }}>
-                        Recorrer →
-                      </button>
-                      <button onClick={() => { setWsNameDraft(ws.name); setWsLogoDraft(ws.logo); setEditingWsId(ws.id); }}
-                        className="p-1.5 rounded text-sm" style={{ color: "#6a8ab0", background: "#0d1b35" }}
-                        title="Editar">✏️</button>
-                      <button onClick={() => setDeletingWsId(ws.id)}
-                        className="p-1.5 rounded text-sm" style={{ color: "#e24a4a", background: "#2a0a0a" }}
-                        title="Eliminar">🗑</button>
-                    </div>
-                  </div>
-
-                  {/* Empresas (expanded) */}
-                  {isSelected && (
-                    <div className="border-t px-4 pb-4 pt-3" style={{ borderColor: "#0f3460" }}>
-                      <div className="flex items-center justify-between mb-3">
-                        <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresas</p>
-                        <button onClick={() => { setShowNewEmp(!showNewEmp); setNewEmpName(""); }}
-                          className="text-xs px-2.5 py-1 rounded"
-                          style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}>
-                          + Nueva empresa
+                  if (isDeleting) {
+                    return (
+                      <div key={ws.id} className="p-4 rounded-xl flex items-center gap-3"
+                        style={{ background: "#2a0a0a", border: "1px solid #6a1a1a" }}>
+                        <span className="flex-1 text-sm" style={{ color: "#e24a4a" }}>
+                          ¿Eliminar <strong>{ws.name}</strong> y todas sus empresas? No se puede deshacer.
+                        </span>
+                        <button disabled={wsMutating} onClick={() => handleDeleteWorkspace(ws.id)}
+                          className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
+                          style={{ background: "#e24a4a", color: "#fff" }}>
+                          {wsMutating ? "..." : "Eliminar"}
                         </button>
+                        <button onClick={() => setDeletingWsId(null)}
+                          className="px-3 py-1.5 rounded text-sm"
+                          style={{ background: "var(--iag-surface-2)", color: "var(--iag-text-dim)" }}>Cancelar</button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={ws.id}
+                      className="rounded-xl overflow-hidden"
+                      style={{ background: "var(--iag-surface)", border: `1px solid ${isSelected ? "#3dbb6e" : "var(--iag-border)"}` }}>
+
+                      {/* Workspace header */}
+                      <div
+                        className="flex items-center gap-3 p-4 cursor-pointer"
+                        onClick={() => setSelectedWsId(isSelected ? null : ws.id)}
+                      >
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
+                          style={{ background: "var(--iag-surface-2)", border: "1px solid var(--iag-border-soft)" }}>
+                          {ws.logo
+                            ? <img src={ws.logo} alt="" className="w-full h-full object-cover" />
+                            : <span className="text-lg">🏢</span>
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-sm truncate"
+                            style={{ color: isSelected ? "var(--iag-accent)" : "var(--iag-text)" }}>
+                            {ws.name}
+                          </p>
+                          <p className="text-xs" style={{ color: "var(--iag-text-dimmer)" }}>
+                            {isSelected ? "▲ ocultar detalle" : "▼ ver detalle"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={() => goToRecorredor(ws.id)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                            style={{ background: "#1a4a80", color: "var(--iag-accent)", border: "1px solid #2a5298" }}>
+                            Recorrer →
+                          </button>
+                          <button onClick={() => { setWsNameDraft(ws.name); setWsLogoDraft(ws.logo); setEditingWsId(ws.id); }}
+                            className="p-1.5 rounded text-sm"
+                            style={{ color: "var(--iag-text-dim)", background: "var(--iag-surface-2)" }}
+                            title="Editar">✏️</button>
+                          <button onClick={() => setDeletingWsId(ws.id)}
+                            className="p-1.5 rounded text-sm"
+                            style={{ color: "#e24a4a", background: "#2a0a0a" }}
+                            title="Eliminar">🗑</button>
+                        </div>
                       </div>
 
-                      {showNewEmp && (
-                        <div className="mb-3 flex gap-2">
-                          <input autoFocus value={newEmpName}
-                            onChange={(e) => setNewEmpName(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleCreateEmpresa()}
-                            placeholder="Nombre de la empresa"
-                            className="flex-1 rounded px-3 py-1.5 text-sm"
-                            style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
-                          <button onClick={handleCreateEmpresa} disabled={newEmpLoading || !newEmpName.trim()}
-                            className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                            style={{ background: "#3dbb6e", color: "#fff" }}>
-                            {newEmpLoading ? "..." : "Crear"}
-                          </button>
-                          <button onClick={() => setShowNewEmp(false)}
-                            className="px-2 py-1.5 rounded text-sm"
-                            style={{ color: "#6a8ab0" }}>✕</button>
-                        </div>
-                      )}
+                      {/* Empresas (expanded) */}
+                      {isSelected && (
+                        <div className="border-t px-4 pb-4 pt-3"
+                          style={{ borderColor: "var(--iag-border)" }}>
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-xs uppercase tracking-wider" style={{ color: "var(--iag-text-dim)" }}>Empresas</p>
+                            <button onClick={() => { setShowNewEmp(!showNewEmp); setNewEmpName(""); }}
+                              className="text-xs px-2.5 py-1 rounded"
+                              style={{ background: "var(--iag-surface-3)", border: "1px solid var(--iag-border-soft)", color: "var(--iag-text-muted)" }}>
+                              + Nueva empresa
+                            </button>
+                          </div>
 
-                      {empresasLoading ? (
-                        <p className="text-xs py-2" style={{ color: "#4a6a8a" }}>Cargando...</p>
-                      ) : empresas.length === 0 ? (
-                        <p className="text-xs py-2" style={{ color: "#4a6a8a" }}>Sin empresas — agregá una para organizar tus archivos.</p>
-                      ) : (
-                        <div className="space-y-2">
-                          {empresas.map((emp) => {
-                            const isRenamingEmp = renamingEmpId === emp.id;
-                            const isDeletingEmp = deletingEmpId === emp.id;
+                          {showNewEmp && (
+                            <div className="mb-3 flex gap-2">
+                              <input autoFocus value={newEmpName}
+                                onChange={(e) => setNewEmpName(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && handleCreateEmpresa()}
+                                placeholder="Nombre de la empresa"
+                                className="flex-1 rounded px-3 py-1.5 text-sm"
+                                style={{ background: "var(--iag-surface-2)", border: "1px solid var(--iag-border-soft)", color: "var(--iag-text)", outline: "none" }} />
+                              <button onClick={handleCreateEmpresa} disabled={newEmpLoading || !newEmpName.trim()}
+                                className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
+                                style={{ background: "#3dbb6e", color: "#fff" }}>
+                                {newEmpLoading ? "..." : "Crear"}
+                              </button>
+                              <button onClick={() => setShowNewEmp(false)}
+                                className="px-2 py-1.5 rounded text-sm"
+                                style={{ color: "var(--iag-text-dim)" }}>✕</button>
+                            </div>
+                          )}
 
-                            if (isRenamingEmp) {
-                              return (
-                                <div key={emp.id} className="flex gap-2">
-                                  <input autoFocus value={empNameDraft}
-                                    onChange={(e) => setEmpNameDraft(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") handleRenameEmpresa(emp.id);
-                                      if (e.key === "Escape") setRenamingEmpId(null);
-                                    }}
-                                    className="flex-1 rounded px-3 py-1.5 text-sm"
-                                    style={{ background: "#0d1b35", border: "1px solid #3a6aaa", color: "#e0e0e0", outline: "none" }} />
-                                  <button disabled={empMutating || !empNameDraft.trim()}
-                                    onClick={() => handleRenameEmpresa(emp.id)}
-                                    className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                                    style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
-                                  <button onClick={() => setRenamingEmpId(null)}
-                                    className="px-2 py-1.5 rounded text-sm"
-                                    style={{ color: "#6a8ab0" }}>✕</button>
-                                </div>
-                              );
-                            }
+                          {empresasLoading ? (
+                            <p className="text-xs py-2" style={{ color: "var(--iag-text-dimmer)" }}>Cargando...</p>
+                          ) : empresas.length === 0 ? (
+                            <p className="text-xs py-2" style={{ color: "var(--iag-text-dimmer)" }}>Sin empresas — agregá una para organizar tus archivos.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {empresas.map((emp) => {
+                                const isRenamingEmp = renamingEmpId === emp.id;
+                                const isDeletingEmp = deletingEmpId === emp.id;
 
-                            if (isDeletingEmp) {
-                              return (
-                                <div key={emp.id} className="flex items-center gap-2 p-2 rounded-lg"
-                                  style={{ background: "#2a0a0a", border: "1px solid #6a1a1a" }}>
-                                  <span className="flex-1 text-xs" style={{ color: "#e24a4a" }}>
-                                    ¿Eliminar <strong>{emp.name}</strong>?
-                                  </span>
-                                  <button disabled={empMutating} onClick={() => handleDeleteEmpresa(emp.id)}
-                                    className="px-3 py-1 rounded text-xs font-semibold disabled:opacity-50"
-                                    style={{ background: "#e24a4a", color: "#fff" }}>
-                                    {empMutating ? "..." : "Eliminar"}
-                                  </button>
-                                  <button onClick={() => setDeletingEmpId(null)}
-                                    className="px-2 py-1 rounded text-xs"
-                                    style={{ color: "#6a8ab0" }}>Cancelar</button>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <div key={emp.id} className="rounded-lg overflow-hidden"
-                                style={{ background: "#0f2040", border: `1px solid ${expandedEmpId === emp.id ? "#2a5298" : "#1a3460"}` }}>
-                                {/* Empresa header row */}
-                                <div className="flex items-center gap-2 px-3 py-2 group">
-                                  {/* Logo */}
-                                  <label className="cursor-pointer group/logo relative flex-shrink-0" title="Cambiar logo">
-                                    <input type="file" accept="image/*" className="sr-only"
-                                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEmpresaLogo(emp.id, f); }} />
-                                    <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"
-                                      style={{ background: "#16213e", border: "1px solid #2a4a6a" }}>
-                                      {emp.logo
-                                        ? <img src={emp.logo} alt="" className="w-full h-full object-cover" />
-                                        : <span className="text-sm">🏛</span>
-                                      }
-                                    </div>
-                                    <div className="absolute inset-0 rounded-lg flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity"
-                                      style={{ background: "rgba(0,0,0,0.6)", fontSize: 11 }}>🖼</div>
-                                  </label>
-                                  <button className="flex-1 text-left text-sm font-semibold"
-                                    style={{ color: "#aac4e0" }}
-                                    onClick={() => setExpandedEmpId(expandedEmpId === emp.id ? null : emp.id)}>
-                                    {emp.name}
-                                    <span className="ml-2 text-xs" style={{ color: "#4a6a8a" }}>
-                                      {expandedEmpId === emp.id ? "▲" : "▼"}
-                                    </span>
-                                  </button>
-                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => { setInviteEmail(""); setInviteMsg(""); setShowInvite(showInvite === emp.id ? null : emp.id); }}
-                                      className="px-2 py-1 rounded text-xs"
-                                      style={{ background: "#0d1b35", color: "#6a8ab0", border: "1px solid #2a4a6a" }}>
-                                      Invitar
-                                    </button>
-                                    <button onClick={() => { setEmpNameDraft(emp.name); setRenamingEmpId(emp.id); }}
-                                      className="p-1.5 rounded text-xs" style={{ color: "#6a8ab0", background: "#0d1b35" }}>✏️</button>
-                                    <button onClick={() => setDeletingEmpId(emp.id)}
-                                      className="p-1.5 rounded text-xs" style={{ color: "#e24a4a", background: "#2a0a0a" }}>🗑</button>
-                                  </div>
-                                </div>
-
-                                {/* Expanded: file management */}
-                                {expandedEmpId === emp.id && (
-                                  <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid #1a3460" }}>
-                                    <p className="text-xs mb-2 mt-2" style={{ color: "#6a8ab0" }}>
-                                      Subí y gestioná los archivos de esta empresa desde el Recorredor.
-                                    </p>
-                                    <button
-                                      onClick={() => goToRecorredorWithEmpresa(ws.id, emp.id)}
-                                      className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
-                                      style={{ background: "#1a4a80", color: "#e2b04a", border: "1px solid #2a5298" }}>
-                                      📂 Gestionar archivos (Mapa, Manejo, Rindes, Lluvias) →
-                                    </button>
-                                  </div>
-                                )}
-
-                                {/* Invite panel */}
-                                {showInvite === emp.id && (
-                                  <div className="mx-2 mb-2 p-3 rounded-lg flex gap-2 flex-col"
-                                    style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
-                                    <div className="flex gap-2">
-                                      <input type="email" value={inviteEmail}
-                                        onChange={(e) => setInviteEmail(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && handleInvite(emp.id)}
-                                        placeholder="email@ejemplo.com"
+                                if (isRenamingEmp) {
+                                  return (
+                                    <div key={emp.id} className="flex gap-2">
+                                      <input autoFocus value={empNameDraft}
+                                        onChange={(e) => setEmpNameDraft(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") handleRenameEmpresa(emp.id);
+                                          if (e.key === "Escape") setRenamingEmpId(null);
+                                        }}
                                         className="flex-1 rounded px-3 py-1.5 text-sm"
-                                        style={{ background: "#16213e", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
-                                      <button onClick={() => handleInvite(emp.id)} disabled={inviteLoading || !inviteEmail.trim()}
+                                        style={{ background: "var(--iag-surface-2)", border: "1px solid #3a6aaa", color: "var(--iag-text)", outline: "none" }} />
+                                      <button disabled={empMutating || !empNameDraft.trim()}
+                                        onClick={() => handleRenameEmpresa(emp.id)}
                                         className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                                        style={{ background: "#e2b04a", color: "#1a1a2e" }}>
-                                        {inviteLoading ? "..." : "Enviar"}
-                                      </button>
+                                        style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
+                                      <button onClick={() => setRenamingEmpId(null)}
+                                        className="px-2 py-1.5 rounded text-sm"
+                                        style={{ color: "var(--iag-text-dim)" }}>✕</button>
                                     </div>
-                                    {inviteMsg && (
-                                      <p className="text-xs" style={{ color: inviteMsg.startsWith("Invitación") ? "#3dbb6e" : "#e24a4a" }}>
-                                        {inviteMsg}
-                                      </p>
+                                  );
+                                }
+
+                                if (isDeletingEmp) {
+                                  return (
+                                    <div key={emp.id} className="flex items-center gap-2 p-2 rounded-lg"
+                                      style={{ background: "#2a0a0a", border: "1px solid #6a1a1a" }}>
+                                      <span className="flex-1 text-xs" style={{ color: "#e24a4a" }}>
+                                        ¿Eliminar <strong>{emp.name}</strong>?
+                                      </span>
+                                      <button disabled={empMutating} onClick={() => handleDeleteEmpresa(emp.id)}
+                                        className="px-3 py-1 rounded text-xs font-semibold disabled:opacity-50"
+                                        style={{ background: "#e24a4a", color: "#fff" }}>
+                                        {empMutating ? "..." : "Eliminar"}
+                                      </button>
+                                      <button onClick={() => setDeletingEmpId(null)}
+                                        className="px-2 py-1 rounded text-xs"
+                                        style={{ color: "var(--iag-text-dim)" }}>Cancelar</button>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <div key={emp.id} className="rounded-lg overflow-hidden"
+                                    style={{ background: "var(--iag-surface-3)", border: `1px solid ${expandedEmpId === emp.id ? "#2a5298" : "var(--iag-border-soft)"}` }}>
+                                    {/* Empresa header row */}
+                                    <div className="flex items-center gap-2 px-3 py-2 group">
+                                      {/* Logo */}
+                                      <label className="cursor-pointer group/logo relative flex-shrink-0" title="Cambiar logo">
+                                        <input type="file" accept="image/*" className="sr-only"
+                                          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEmpresaLogo(emp.id, f); }} />
+                                        <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"
+                                          style={{ background: "var(--iag-surface)", border: "1px solid var(--iag-border-soft)" }}>
+                                          {emp.logo
+                                            ? <img src={emp.logo} alt="" className="w-full h-full object-cover" />
+                                            : <span className="text-sm">🏛</span>
+                                          }
+                                        </div>
+                                        <div className="absolute inset-0 rounded-lg flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity"
+                                          style={{ background: "rgba(0,0,0,0.6)", fontSize: 11 }}>🖼</div>
+                                      </label>
+                                      <button className="flex-1 text-left text-sm font-semibold"
+                                        style={{ color: "var(--iag-text-muted)" }}
+                                        onClick={() => setExpandedEmpId(expandedEmpId === emp.id ? null : emp.id)}>
+                                        {emp.name}
+                                        <span className="ml-2 text-xs" style={{ color: "var(--iag-text-dimmer)" }}>
+                                          {expandedEmpId === emp.id ? "▲" : "▼"}
+                                        </span>
+                                      </button>
+                                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => { setInviteEmail(""); setInviteMsg(""); setShowInvite(showInvite === emp.id ? null : emp.id); }}
+                                          className="px-2 py-1 rounded text-xs"
+                                          style={{ background: "var(--iag-surface-2)", color: "var(--iag-text-dim)", border: "1px solid var(--iag-border-soft)" }}>
+                                          Invitar
+                                        </button>
+                                        <button onClick={() => { setEmpNameDraft(emp.name); setRenamingEmpId(emp.id); }}
+                                          className="p-1.5 rounded text-xs"
+                                          style={{ color: "var(--iag-text-dim)", background: "var(--iag-surface-2)" }}>✏️</button>
+                                        <button onClick={() => setDeletingEmpId(emp.id)}
+                                          className="p-1.5 rounded text-xs"
+                                          style={{ color: "#e24a4a", background: "#2a0a0a" }}>🗑</button>
+                                      </div>
+                                    </div>
+
+                                    {/* Expanded: file management */}
+                                    {expandedEmpId === emp.id && (
+                                      <div className="px-3 pb-3 pt-1"
+                                        style={{ borderTop: "1px solid var(--iag-border-soft)" }}>
+                                        <p className="text-xs mb-2 mt-2" style={{ color: "var(--iag-text-dim)" }}>
+                                          Subí y gestioná los archivos de esta empresa desde el Recorredor.
+                                        </p>
+                                        <button
+                                          onClick={() => goToRecorredorWithEmpresa(ws.id, emp.id)}
+                                          className="w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
+                                          style={{ background: "#1a4a80", color: "var(--iag-accent)", border: "1px solid #2a5298" }}>
+                                          📂 Gestionar archivos (Mapa, Manejo, Rindes, Lluvias) →
+                                        </button>
+                                      </div>
+                                    )}
+
+                                    {/* Invite panel */}
+                                    {showInvite === emp.id && (
+                                      <div className="mx-2 mb-2 p-3 rounded-lg flex gap-2 flex-col"
+                                        style={{ background: "var(--iag-surface-2)", border: "1px solid var(--iag-border-soft)" }}>
+                                        <div className="flex gap-2">
+                                          <input type="email" value={inviteEmail}
+                                            onChange={(e) => setInviteEmail(e.target.value)}
+                                            onKeyDown={(e) => e.key === "Enter" && handleInvite(emp.id)}
+                                            placeholder="email@ejemplo.com"
+                                            className="flex-1 rounded px-3 py-1.5 text-sm"
+                                            style={{ background: "var(--iag-surface)", border: "1px solid var(--iag-border-soft)", color: "var(--iag-text)", outline: "none" }} />
+                                          <button onClick={() => handleInvite(emp.id)} disabled={inviteLoading || !inviteEmail.trim()}
+                                            className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
+                                            style={{ background: "var(--iag-accent)", color: "#1a1a2e" }}>
+                                            {inviteLoading ? "..." : "Enviar"}
+                                          </button>
+                                        </div>
+                                        {inviteMsg && (
+                                          <p className="text-xs"
+                                            style={{ color: inviteMsg.startsWith("Invitación") ? "#3dbb6e" : "#e24a4a" }}>
+                                            {inviteMsg}
+                                          </p>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ══════════ PREFERENCIAS TAB ══════════ */}
+        {tab === "preferencias" && (
+          <div className="space-y-6">
+
+            {/* ── Apariencia ── */}
+            <section className="rounded-2xl p-6"
+              style={{ background: "var(--iag-surface)", border: "1px solid var(--iag-border)" }}>
+              <h3 className="text-sm font-bold uppercase tracking-wider mb-1"
+                style={{ color: "var(--iag-text-dim)" }}>
+                Apariencia
+              </h3>
+              <p className="text-xs mb-5" style={{ color: "var(--iag-text-dimmer)" }}>
+                Elegí cómo se ve la aplicación.
+              </p>
+
+              <div className="flex gap-3">
+                {/* Dark option */}
+                <button
+                  onClick={() => setTheme("dark")}
+                  className="flex-1 rounded-xl p-4 flex flex-col items-center gap-3 transition-all"
+                  style={{
+                    background: theme === "dark" ? "#0d1b35" : "var(--iag-surface-2)",
+                    border: theme === "dark" ? "2px solid var(--iag-accent)" : "2px solid var(--iag-border-soft)",
+                  }}>
+                  {/* Mini preview — dark */}
+                  <div className="w-full rounded-lg overflow-hidden"
+                    style={{ background: "#1a1a2e", border: "1px solid #0f3460", height: 64 }}>
+                    <div className="h-5 flex items-center px-2 gap-1.5"
+                      style={{ background: "#0f3460" }}>
+                      <div className="h-1.5 w-8 rounded-full" style={{ background: "#e2b04a" }} />
+                      <div className="h-1.5 w-5 rounded-full ml-auto" style={{ background: "#2a5298" }} />
+                    </div>
+                    <div className="px-2 pt-2 space-y-1">
+                      <div className="h-1.5 w-3/4 rounded-full" style={{ background: "#16213e" }} />
+                      <div className="h-1.5 w-1/2 rounded-full" style={{ background: "#16213e" }} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🌙</span>
+                    <span className="text-sm font-semibold" style={{ color: "var(--iag-text)" }}>Oscuro</span>
+                    {theme === "dark" && (
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-bold"
+                        style={{ background: "var(--iag-accent)", color: "#1a1a2e" }}>✓</span>
+                    )}
+                  </div>
+                </button>
+
+                {/* Light option */}
+                <button
+                  onClick={() => setTheme("light")}
+                  className="flex-1 rounded-xl p-4 flex flex-col items-center gap-3 transition-all"
+                  style={{
+                    background: theme === "light" ? "#e8f0f8" : "var(--iag-surface-2)",
+                    border: theme === "light" ? "2px solid var(--iag-accent)" : "2px solid var(--iag-border-soft)",
+                  }}>
+                  {/* Mini preview — light */}
+                  <div className="w-full rounded-lg overflow-hidden"
+                    style={{ background: "#f0f5fb", border: "1px solid #c5d8ee", height: 64 }}>
+                    <div className="h-5 flex items-center px-2 gap-1.5"
+                      style={{ background: "#0f3460" }}>
+                      <div className="h-1.5 w-8 rounded-full" style={{ background: "#e2b04a" }} />
+                      <div className="h-1.5 w-5 rounded-full ml-auto" style={{ background: "#2a5298" }} />
+                    </div>
+                    <div className="px-2 pt-2 space-y-1">
+                      <div className="h-1.5 w-3/4 rounded-full" style={{ background: "#c5d8ee" }} />
+                      <div className="h-1.5 w-1/2 rounded-full" style={{ background: "#c5d8ee" }} />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">☀️</span>
+                    <span className="text-sm font-semibold" style={{ color: "var(--iag-text)" }}>Claro</span>
+                    {theme === "light" && (
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-bold"
+                        style={{ background: "var(--iag-accent)", color: "#1a1a2e" }}>✓</span>
+                    )}
+                  </div>
+                </button>
+              </div>
+            </section>
+
+            {/* ── Cuenta ── */}
+            <section className="rounded-2xl p-6"
+              style={{ background: "var(--iag-surface)", border: "1px solid var(--iag-border)" }}>
+              <h3 className="text-sm font-bold uppercase tracking-wider mb-1"
+                style={{ color: "var(--iag-text-dim)" }}>
+                Cuenta
+              </h3>
+              <p className="text-xs mb-4" style={{ color: "var(--iag-text-dimmer)" }}>
+                Información de tu sesión.
+              </p>
+              <div className="flex items-center gap-3 p-3 rounded-lg"
+                style={{ background: "var(--iag-surface-2)", border: "1px solid var(--iag-border-soft)" }}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0"
+                  style={{ background: "#1a4a80" }}>
+                  👤
                 </div>
-              );
-            })}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate" style={{ color: "var(--iag-text)" }}>
+                    {user.email}
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--iag-text-dimmer)" }}>Usuario autenticado</p>
+                </div>
+              </div>
+            </section>
+
           </div>
         )}
 
@@ -604,7 +746,8 @@ function WorkspaceEditCard({
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="p-4 rounded-xl" style={{ background: "#16213e", border: "1px solid #2a6aaa" }}>
+    <div className="p-4 rounded-xl"
+      style={{ background: "var(--iag-surface)", border: "1px solid #2a6aaa" }}>
       <div className="flex items-center gap-3 mb-3">
         <label className="cursor-pointer group relative flex-shrink-0" title="Cambiar logo">
           <input ref={fileRef} type="file" accept="image/*" className="sr-only"
@@ -614,7 +757,7 @@ function WorkspaceEditCard({
               try { onLogoChange(await resizeLogoToBase64(f)); } catch { /* ignore */ }
             }} />
           <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden"
-            style={{ background: "#0d1b35", border: "2px solid #2a6aaa" }}>
+            style={{ background: "var(--iag-surface-2)", border: "2px solid #2a6aaa" }}>
             {logoDraft
               ? <img src={logoDraft} alt="" className="w-full h-full object-cover" />
               : <span className="text-lg">🏢</span>
@@ -627,7 +770,7 @@ function WorkspaceEditCard({
           onChange={(e) => onNameChange(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onConfirm()}
           className="flex-1 rounded px-3 py-2 text-sm font-bold"
-          style={{ background: "#0d1b35", border: "1px solid #3a6aaa", color: "#e2b04a", outline: "none" }} />
+          style={{ background: "var(--iag-surface-2)", border: "1px solid #3a6aaa", color: "var(--iag-accent)", outline: "none" }} />
       </div>
       <div className="flex gap-2 justify-end">
         <button disabled={mutating || !nameDraft.trim()} onClick={onConfirm}
@@ -637,7 +780,7 @@ function WorkspaceEditCard({
         </button>
         <button onClick={onCancel}
           className="px-3 py-1.5 rounded-lg text-sm"
-          style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}>
+          style={{ background: "transparent", border: "1px solid var(--iag-border-soft)", color: "var(--iag-text-dim)" }}>
           Cancelar
         </button>
       </div>
