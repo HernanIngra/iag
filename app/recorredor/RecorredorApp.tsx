@@ -1561,6 +1561,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           )}
         </div>
         <div className="flex items-center gap-3">
+          {view === "map" && (
+            <a href="/configuracion" className="text-xs px-2 py-1 rounded hidden sm:inline-block" style={{ color: "#aac4e0", border: "1px solid #2a5298" }}>
+              ⚙️
+            </a>
+          )}
           {isAdmin && !asUserId && (
             <a href="/admin" className="text-xs font-semibold px-2 py-1 rounded" style={{ background: "#1a2a10", color: "#3dbb6e", border: "1px solid #1a4a20" }}>
               Admin
@@ -1826,10 +1831,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           const panelContent = (
             <>
               {/* ── 1. LOTE SELECCIONADO (arriba de todo) ── */}
-              <div className="p-4" style={{ borderBottom: "1px solid #0f3460" }}>
-                <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#aac4e0" }}>📌 Lote seleccionado</p>
+              <div className="p-4" style={{ borderBottom: "1px solid #e2e8f0" }}>
+                <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#374151" }}>📌 Lote seleccionado</p>
                 {!selectedLot ? (
-                  <p className="text-xs italic" style={{ color: "#445" }}>Tocá un lote del mapa para ver su información.</p>
+                  <p className="text-xs italic" style={{ color: "#94a3b8" }}>Tocá un lote del mapa para ver su información.</p>
                 ) : (
                   <LotInfo
                     lotName={selectedLot.lotName}
@@ -1854,16 +1859,16 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
               {/* ── 2. LEYENDA CULTIVOS / EMPRESAS ── */}
               {myEmpresas.length > 1 && (
-                <div className="px-3 py-2" style={{ borderBottom: "1px solid #0f3460" }}>
-                  <p className="text-xs mb-2" style={{ color: "#6a8ab0" }}>Color por</p>
+                <div className="px-3 py-2" style={{ borderBottom: "1px solid #e2e8f0" }}>
+                  <p className="text-xs mb-2" style={{ color: "#64748b" }}>Color por</p>
                   <div className="flex gap-1">
                     {(["cultivo", "empresa"] as const).map((mode) => (
                       <button key={mode} onClick={() => setColorMode(mode)}
                         className="px-3 py-1 rounded-full text-xs font-medium transition-all"
                         style={{
-                          background: colorMode === mode ? "#2a5298" : "#0d1b35",
-                          color: colorMode === mode ? "#e2b04a" : "#6a8ab0",
-                          border: `1px solid ${colorMode === mode ? "#3a6aaa" : "#1a3a6a"}`,
+                          background: colorMode === mode ? "#3b82f6" : "#f1f5f9",
+                          color: colorMode === mode ? "#e2b04a" : "#64748b",
+                          border: `1px solid ${colorMode === mode ? "#3a6aaa" : "#cbd5e1"}`,
                         }}>
                         {mode === "cultivo" ? "🌱 Cultivo" : "🏛 Empresa"}
                       </button>
@@ -1876,7 +1881,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                 <SidebarSection title="🏛 Empresas" collapsible defaultOpen={true}>
                   <ul className="space-y-1">
                     {myEmpresas.map((emp) => (
-                      <li key={emp.id} className="flex items-center gap-2 text-xs" style={{ color: "#ccd" }}>
+                      <li key={emp.id} className="flex items-center gap-2 text-xs" style={{ color: "#374151" }}>
                         <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: empresaColorMap[emp.id] ?? "#8ab4d4" }} />
                         {emp.name}
                       </li>
@@ -1889,7 +1894,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                 <SidebarSection title="🌱 Cultivos" collapsible defaultOpen={false}>
                   <ul className="space-y-1">
                     {Object.entries(cultivoColorMap).sort((a, b) => a[0].localeCompare(b[0])).map(([name, color]) => (
-                      <li key={name} className="flex items-center gap-2 text-xs" style={{ color: "#ccd" }}>
+                      <li key={name} className="flex items-center gap-2 text-xs" style={{ color: "#374151" }}>
                         <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
                         {name}
                       </li>
@@ -1900,8 +1905,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
               {/* ── 3. CENTRAR EN LOTES ── */}
               {lotCount > 0 && (
-                <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
-                  <button className="w-full text-xs py-1 rounded" style={{ background: "#1a4a80", color: "#e0e8f0" }}
+                <div className="p-3" style={{ borderBottom: "1px solid #e2e8f0" }}>
+                  <button className="w-full text-xs py-1 rounded" style={{ background: "#1d4ed8", color: "#1e293b" }}
                     onClick={() => {
                       if (!shpLayerRef.current || !mapRef.current) return;
                       const layers = allLotLayersRef.current.map((l) => l.layer);
@@ -1940,10 +1945,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
               {/* ── 6. EXPORTAR HISTORIAL ── */}
               {Object.values(lotVisits).some((vs) => vs.some((v) => v.note || v.yieldStars || v.sprayTarget)) && (
-                <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
+                <div className="p-3" style={{ borderBottom: "1px solid #e2e8f0" }}>
                   <button
                     className="w-full py-1.5 text-xs rounded"
-                    style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+                    style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
                     onClick={downloadVisitsCSV}
                   >
                     ⬇ Exportar historial de recorridas (.csv)
@@ -1955,7 +1960,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
           if (isMobile) {
             return (
-              <div className="flex-1 overflow-y-auto" style={{ background: "#16213e", borderTop: "1px solid #0f3460" }}>
+              <div className="flex-1 overflow-y-auto" style={{ background: "#ffffff", borderTop: "1px solid #e2e8f0" }}>
                 {panelContent}
               </div>
             );
@@ -1972,8 +1977,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                 style={{
                   width: sidebarOpen ? "300px" : "0",
                   overflow: sidebarOpen ? "auto" : "hidden",
-                  background: "#16213e",
-                  borderRight: "1px solid #0f3460",
+                  background: "#ffffff",
+                  borderRight: "1px solid #e2e8f0",
                 }}
               >
                 {panelContent}
@@ -2084,17 +2089,17 @@ function SidebarSection({ title, children, optional, collapsible, defaultOpen = 
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
+    <div className="p-3" style={{ borderBottom: "1px solid #e2e8f0" }}>
       <button
         className="flex items-center justify-between w-full mb-0"
         style={{ cursor: collapsible ? "pointer" : "default", background: "none", border: "none", padding: 0 }}
         onClick={() => collapsible && setOpen((o) => !o)}
       >
-        <p className="text-xs uppercase tracking-wider flex items-center gap-2" style={{ color: "#aac4e0" }}>
+        <p className="text-xs uppercase tracking-wider flex items-center gap-2" style={{ color: "#374151" }}>
           {title}
-          {optional && <span className="text-xs normal-case px-2 py-0.5 rounded-full" style={{ background: "#1e2e3e", color: "#6a8ab0", letterSpacing: 0, textTransform: "none" }}>Optativo</span>}
+          {optional && <span className="text-xs normal-case px-2 py-0.5 rounded-full" style={{ background: "#f1f5f9", color: "#64748b", letterSpacing: 0, textTransform: "none" }}>Optativo</span>}
         </p>
-        {collapsible && <span className="text-xs flex-shrink-0 ml-2" style={{ color: "#6a8ab0" }}>{open ? "▲" : "▼"}</span>}
+        {collapsible && <span className="text-xs flex-shrink-0 ml-2" style={{ color: "#64748b" }}>{open ? "▲" : "▼"}</span>}
       </button>
       {open && <div className="mt-2">{children}</div>}
     </div>
@@ -2117,7 +2122,7 @@ function UploadZone({
     return (
       <div className="space-y-1">
         {loadedFiles.map((name, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs px-2 py-1 rounded" style={{ background: "#0d2a1a", border: "1px solid #1e5a2e", color: "#3dbb6e" }}>
+          <div key={i} className="flex items-center gap-2 text-xs px-2 py-1 rounded" style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#15803d" }}>
             <span className="truncate flex-1">✓ {name}</span>
             {onRemove && (
               <button
@@ -2131,7 +2136,7 @@ function UploadZone({
         ))}
         <label
           className="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded text-xs transition-colors hover:opacity-80"
-          style={{ background: "#0d1b35", border: "1px dashed #2a5298", color: "#6a8ab0" }}
+          style={{ background: "#f1f5f9", border: "1px dashed #2a5298", color: "#64748b" }}
         >
           <input type="file" accept={accept} multiple={multiple} className="sr-only"
             onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />
@@ -2149,8 +2154,8 @@ function UploadZone({
       <label
         className="block rounded-lg text-center cursor-pointer transition-all relative"
         style={{
-          border: `2px dashed ${drag ? "#e2b04a" : "#2a5298"}`,
-          background: drag ? "#1a2a4a" : "#0d1b35",
+          border: `2px dashed ${drag ? "#e2b04a" : "#3b82f6"}`,
+          background: drag ? "#f0f4ff" : "#f1f5f9",
           padding: "12px 10px",
         }}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
@@ -2160,8 +2165,8 @@ function UploadZone({
         <input type="file" accept={accept} multiple={multiple} className="sr-only"
           onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />
         <div className="text-2xl mb-1">{icon}</div>
-        <p className="text-xs" style={{ color: "#8ab" }}>Clic para subir o arrastrá acá</p>
-        <p className="text-xs mt-1" style={{ color: "#445" }}>{hint}</p>
+        <p className="text-xs" style={{ color: "#64748b" }}>Clic para subir o arrastrá acá</p>
+        <p className="text-xs mt-1" style={{ color: "#94a3b8" }}>{hint}</p>
       </label>
       {status && !status.ok && (
         <p className="text-xs mt-1 px-2 py-1 rounded" style={{ background: "#3a2a0a", color: "#e2b04a" }}>{status.msg}</p>
@@ -2211,11 +2216,11 @@ function FiltersPanel({
       <div className="space-y-3 text-xs">
         <div>
           <div className="flex justify-between items-center mb-1">
-            <span style={{ color: "#6a8ab0" }}>Tipo de aplicación</span>
+            <span style={{ color: "#64748b" }}>Tipo de aplicación</span>
             <div className="flex gap-1">
-              <button className="px-1.5 py-0.5 rounded text-xs" style={{ background: "none", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+              <button className="px-1.5 py-0.5 rounded text-xs" style={{ background: "none", border: "1px solid #94a3b8", color: "#64748b" }}
                 onClick={() => onChange({ ...filters, tipos })}>Todos</button>
-              <button className="px-1.5 py-0.5 rounded text-xs" style={{ background: "none", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+              <button className="px-1.5 py-0.5 rounded text-xs" style={{ background: "none", border: "1px solid #94a3b8", color: "#64748b" }}
                 onClick={() => onChange({ ...filters, tipos: [] })}>Ninguno</button>
             </div>
           </div>
@@ -2239,10 +2244,10 @@ function FiltersPanel({
         {/* Product filter — collapsible */}
         <div>
           <div className="flex justify-between items-center mb-1">
-            <span style={{ color: "#6a8ab0" }}>Producto</span>
+            <span style={{ color: "#64748b" }}>Producto</span>
             <button
               className="px-1.5 py-0.5 rounded text-xs font-bold"
-              style={{ background: showProdFilter ? "#1a3a5a" : "none", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+              style={{ background: showProdFilter ? "#dbeafe" : "none", border: "1px solid #94a3b8", color: "#64748b" }}
               onClick={() => { setShowProdFilter((v) => !v); if (showProdFilter) onChange({ ...filters, prod: "" }); }}
             >{showProdFilter ? "−" : "+"}</button>
           </div>
@@ -2252,15 +2257,15 @@ function FiltersPanel({
                 type="text"
                 placeholder="Buscar producto..."
                 className="w-full rounded px-2 py-1.5 mb-1"
-                style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
+                style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#374151" }}
                 value={filters.prod}
                 onChange={(e) => onChange({ ...filters, prod: e.target.value })}
               />
               {filters.prod && filteredProducts.length > 0 && (
-                <div className="max-h-28 overflow-y-auto rounded" style={{ background: "#0a1628", border: "1px solid #2a4a6a" }}>
+                <div className="max-h-28 overflow-y-auto rounded" style={{ background: "#f1f5f9", border: "1px solid #94a3b8" }}>
                   {filteredProducts.slice(0, 20).map((p) => (
                     <button key={p} className="w-full text-left px-2 py-1 text-xs hover:opacity-80"
-                      style={{ color: filters.prod === p ? "#7ab8e8" : "#aac", background: filters.prod === p ? "#1a3a5a" : "transparent" }}
+                      style={{ color: filters.prod === p ? "#7ab8e8" : "#aac", background: filters.prod === p ? "#dbeafe" : "transparent" }}
                       onClick={() => onChange({ ...filters, prod: p })}>
                       {p}
                     </button>
@@ -2268,21 +2273,21 @@ function FiltersPanel({
                 </div>
               )}
               {filters.prod && (
-                <button className="mt-1 text-xs" style={{ color: "#6a8ab0" }}
+                <button className="mt-1 text-xs" style={{ color: "#64748b" }}
                   onClick={() => onChange({ ...filters, prod: "" })}>✕ Limpiar producto</button>
               )}
             </div>
           )}
         </div>
 
-        <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
+        <select className="w-full rounded px-2 py-1.5" style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#374151" }}
           value={filters.campaign} onChange={(e) => onChange({ ...filters, campaign: e.target.value })}>
           <option value="">Todas las campañas</option>
           {campaigns.map((c) => <option key={c} value={c}>Campaña {c}</option>)}
         </select>
 
         {cultivos.length > 0 && (
-          <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
+          <select className="w-full rounded px-2 py-1.5" style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#374151" }}
             value={filters.cultivo} onChange={(e) => onChange({ ...filters, cultivo: e.target.value })}>
             <option value="">Todos los cultivos</option>
             {cultivos.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -2290,14 +2295,14 @@ function FiltersPanel({
         )}
 
         {geneticas.length > 0 && (
-          <select className="w-full rounded px-2 py-1.5" style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#ccd" }}
+          <select className="w-full rounded px-2 py-1.5" style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#374151" }}
             value={filters.genetica} onChange={(e) => onChange({ ...filters, genetica: e.target.value })}>
             <option value="">Todas las genéticas</option>
             {geneticas.map((g) => <option key={g} value={g}>{g}</option>)}
           </select>
         )}
 
-        <button className="w-full py-1.5 rounded font-semibold text-xs" style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+        <button className="w-full py-1.5 rounded font-semibold text-xs" style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
           onClick={() => {
             const dates = allRows.map((r) => r._fecha).filter((d): d is Date => !!d && !isNaN(d.getTime()));
             const from = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
@@ -2315,13 +2320,13 @@ function FiltersPanel({
 function StarRating({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
   return (
     <div>
-      <p className="text-xs mb-1" style={{ color: "#6a8ab0" }}>{label}</p>
+      <p className="text-xs mb-1" style={{ color: "#64748b" }}>{label}</p>
       <div className="flex gap-1">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
             type="button"
-            style={{ fontSize: "1.4rem", lineHeight: 1, color: n <= value ? "#e2b04a" : "#2a4a6a", background: "none", border: "none", cursor: "pointer", padding: "2px" }}
+            style={{ fontSize: "1.4rem", lineHeight: 1, color: n <= value ? "#e2b04a" : "#94a3b8", background: "none", border: "none", cursor: "pointer", padding: "2px" }}
             onClick={() => onChange(n === value ? 0 : n)}
           >
             ★
@@ -2348,18 +2353,18 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings,
     <div className="space-y-3">
       <StarRating value={visit.yieldStars} onChange={(n) => onSave({ yieldStars: n })} label="Estimación de rinde" />
       {hasSprayingContext && (
-        <div className="p-2 rounded space-y-2" style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
-          <p className="text-xs" style={{ color: "#6a8ab0" }}>
+        <div className="p-2 rounded space-y-2" style={{ background: "#f1f5f9", border: "1px solid #94a3b8" }}>
+          <p className="text-xs" style={{ color: "#64748b" }}>
             Aplicación reciente:{" "}
             {recentSprayings.slice(0, 3).map((r, i) => (
               <span key={i}>{i > 0 ? ", " : ""}<strong style={{ color: "#e2b04a" }}>{r._prod || r._tipo}</strong>{r._fechaStr ? ` (${r._fechaStr})` : ""}</span>
             ))}
           </p>
           <div>
-            <label className="text-xs block mb-1" style={{ color: "#aac4e0" }}>¿Cuál fue el blanco?</label>
+            <label className="text-xs block mb-1" style={{ color: "#374151" }}>¿Cuál fue el blanco?</label>
             <input
               className="w-full rounded px-2 py-1 text-xs"
-              style={{ background: "#16213e", border: "1px solid #2a5298", color: "#e0e0e0", outline: "none" }}
+              style={{ background: "#ffffff", border: "1px solid #2a5298", color: "#1e293b", outline: "none" }}
               placeholder="Ej: yuyo colorado, roya..."
               value={localTarget}
               onChange={(e) => setLocalTarget(e.target.value)}
@@ -2370,21 +2375,21 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings,
         </div>
       )}
       {lastAppWasHerbicide && (
-        <div className="p-2 rounded space-y-2" style={{ background: "#1a0d0d", border: "1px solid #6a2a2a" }}>
+        <div className="p-2 rounded space-y-2" style={{ background: "#fff7f5", border: "1px solid #fca5a5" }}>
           <p className="text-xs font-semibold" style={{ color: "#e2804a" }}>Fitotoxicidad</p>
-          <p className="text-xs" style={{ color: "#8a6a5a" }}>La última aplicación fue un herbicida. ¿Se observa daño en el cultivo?</p>
+          <p className="text-xs" style={{ color: "#64748b" }}>La última aplicación fue un herbicida. ¿Se observa daño en el cultivo?</p>
           <div className="flex gap-1 flex-wrap">
             {FITO_LABELS.map((label, i) => {
               const active = visit.fitotoxicity === i;
-              const color = i === 0 ? "#3dbb6e" : i <= 2 ? "#e2b04a" : "#e24a4a";
+              const color = i === 0 ? "#15803d" : i <= 2 ? "#e2b04a" : "#e24a4a";
               return (
                 <button key={i}
                   onClick={() => onSave({ fitotoxicity: active ? undefined : i })}
                   className="px-2 py-1 rounded text-xs font-semibold transition-all"
                   style={{
-                    background: active ? color + "33" : "#0d1b35",
-                    border: `1px solid ${active ? color : "#3a2a2a"}`,
-                    color: active ? color : "#6a5a5a",
+                    background: active ? color + "33" : "#f1f5f9",
+                    border: `1px solid ${active ? color : "#fca5a5"}`,
+                    color: active ? color : "#64748b",
                   }}>
                   {label}
                 </button>
@@ -2394,18 +2399,18 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings,
         </div>
       )}
       <div>
-        <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "#6a8ab0" }}>Notas</label>
+        <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "#64748b" }}>Notas</label>
         <textarea
           value={localNote}
           onChange={(e) => setLocalNote(e.target.value)}
           onBlur={() => onSave({ note: localNote })}
           placeholder="Observaciones del recorrido..."
           className="w-full rounded-md p-2 text-sm resize-y leading-relaxed"
-          style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none", minHeight: "70px" }}
+          style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#1e293b", outline: "none", minHeight: "70px" }}
         />
       </div>
       {onDone && (
-        <button className="text-xs py-1 px-3 rounded" style={{ background: "#1a2a4a", border: "1px solid #2a5298", color: "#aac4e0" }} onClick={onDone}>
+        <button className="text-xs py-1 px-3 rounded" style={{ background: "#f0f4ff", border: "1px solid #2a5298", color: "#374151" }} onClick={onDone}>
           Listo
         </button>
       )}
@@ -2444,25 +2449,25 @@ function LotInfo({
   return (
     <div>
       <div className="text-xl font-bold mb-1" style={{ color }}>🌿 {lotName}</div>
-      <div className="text-xs mb-3" style={{ color: "#8ab" }}>Campo: {zone}</div>
+      <div className="text-xs mb-3" style={{ color: "#64748b" }}>Campo: {zone}</div>
 
       {allRows.length > 0 && (
-        <div className="rounded-lg p-2 mb-3 text-xs space-y-1" style={{ background: "#0d1b35", color: "#8ab" }}>
+        <div className="rounded-lg p-2 mb-3 text-xs space-y-1" style={{ background: "#f1f5f9", color: "#64748b" }}>
           {cultivos.length > 0 && <div>🌱 <strong style={{ color: "#e2b04a" }}>Cultivo:</strong> {cultivos.join(", ")}</div>}
           {sups.length > 0 && <div>📐 <strong style={{ color: "#e2b04a" }}>Sup:</strong> {sups[0]} ha</div>}
           {campaigns.length > 0 && <div>📅 <strong style={{ color: "#e2b04a" }}>Campaña:</strong> {campaigns.join(", ")}</div>}
           <div>📋 <strong style={{ color: "#e2b04a" }}>{filteredRows.length}</strong> registro{filteredRows.length !== 1 ? "s" : ""}
-            {filteredRows.length < allRows.length && <span style={{ color: "#6a8ab0" }}> (de {allRows.length})</span>}
+            {filteredRows.length < allRows.length && <span style={{ color: "#64748b" }}> (de {allRows.length})</span>}
           </div>
         </div>
       )}
 
       {/* ── Rindes históricos (collapsible) ── */}
       {lotRindes.length > 0 && (
-        <div style={{ borderTop: "1px solid #1e2e4e", marginBottom: "8px" }}>
+        <div style={{ borderTop: "1px solid #e2e8f0", marginBottom: "8px" }}>
           <button
             className="flex items-center justify-between w-full py-2 text-xs uppercase tracking-wider"
-            style={{ background: "none", border: "none", color: "#6a8ab0", cursor: "pointer" }}
+            style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer" }}
             onClick={() => setRindesOpen((o) => !o)}
           >
             <span>🌾 Rindes históricos</span>
@@ -2473,10 +2478,10 @@ function LotInfo({
       )}
 
       {/* ── Lluvia ── */}
-      <div style={{ borderTop: "1px solid #1e2e4e", marginBottom: "8px" }}>
+      <div style={{ borderTop: "1px solid #e2e8f0", marginBottom: "8px" }}>
         <button
           className="flex items-center justify-between w-full py-2 text-xs uppercase tracking-wider"
-          style={{ background: "none", border: "none", color: "#6a8ab0", cursor: "pointer" }}
+          style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer" }}
           onClick={() => setRainOpen((o) => !o)}
         >
           <span>🌧 Lluvia</span>
@@ -2487,11 +2492,11 @@ function LotInfo({
             <div className="flex gap-2 mb-2 items-center">
               <input type="date" value={rainDate} onChange={(e) => setRainDate(e.target.value)}
                 className="text-xs px-2 py-1 rounded flex-1"
-                style={{ background: "#0f2040", border: "1px solid #1a3460", color: "#e0e0e0" }} />
+                style={{ background: "#f8fafc", border: "1px solid #cbd5e1", color: "#1e293b" }} />
               <input type="number" value={rainMm} onChange={(e) => setRainMm(e.target.value)}
                 placeholder="mm" min={0} step={0.1}
                 className="text-xs px-2 py-1 rounded w-16 text-right"
-                style={{ background: "#0f2040", border: "1px solid #1a3460", color: "#e0e0e0" }} />
+                style={{ background: "#f8fafc", border: "1px solid #cbd5e1", color: "#1e293b" }} />
               <button
                 onClick={() => {
                   const mm = parseFloat(rainMm);
@@ -2503,18 +2508,18 @@ function LotInfo({
                   setRainMm("");
                 }}
                 className="px-3 py-1 rounded text-xs font-bold"
-                style={{ background: "#1a4a80", color: "#e2b04a", border: "1px solid #2a5298" }}>
+                style={{ background: "#1d4ed8", color: "#e2b04a", border: "1px solid #2a5298" }}>
                 +
               </button>
             </div>
             {rainReadings.slice(0, 5).map((r, i) => (
-              <div key={i} className="flex justify-between text-xs py-0.5" style={{ color: "#aac4e0" }}>
+              <div key={i} className="flex justify-between text-xs py-0.5" style={{ color: "#374151" }}>
                 <span>{r.date}</span>
-                <span className="font-semibold" style={{ color: "#5ab0e0" }}>{r.mm} mm</span>
+                <span className="font-semibold" style={{ color: "#1d4ed8" }}>{r.mm} mm</span>
               </div>
             ))}
             {rainReadings.length === 0 && (
-              <p className="text-xs" style={{ color: "#445" }}>Sin lecturas registradas</p>
+              <p className="text-xs" style={{ color: "#94a3b8" }}>Sin lecturas registradas</p>
             )}
           </div>
         )}
@@ -2522,21 +2527,21 @@ function LotInfo({
 
       {/* ── Applications table ── */}
       {sortedRows.length > 0 && (
-        <div style={{ borderTop: "1px solid #1e2e4e" }}>
-          <p className="text-xs uppercase tracking-wider mt-3 mb-2" style={{ color: "#6a8ab0" }}>Historial de aplicaciones</p>
+        <div style={{ borderTop: "1px solid #e2e8f0" }}>
+          <p className="text-xs uppercase tracking-wider mt-3 mb-2" style={{ color: "#64748b" }}>Historial de aplicaciones</p>
           {allRows.length === 0 && (
-            <p className="text-xs italic mb-2" style={{ color: "#445" }}>
+            <p className="text-xs italic mb-2" style={{ color: "#94a3b8" }}>
               No hay datos de manejo. Cargá un CSV/XLSX con columna "Lote".
             </p>
           )}
           <div className="overflow-x-auto mb-2">
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr style={{ background: "#0d1b35" }}>
-                  <th className="text-left px-2 py-1" style={{ color: "#667" }}>Tipo</th>
-                  {hasLabor && <th className="text-left px-2 py-1" style={{ color: "#667" }}>Labor</th>}
-                  <th className="text-left px-2 py-1" style={{ color: "#667" }}>{hasLabor ? "Producto" : "Producto / Labor"}</th>
-                  <th className="text-left px-2 py-1" style={{ color: "#667" }}>Dosis</th>
+                <tr style={{ background: "#f1f5f9" }}>
+                  <th className="text-left px-2 py-1" style={{ color: "#94a3b8" }}>Tipo</th>
+                  {hasLabor && <th className="text-left px-2 py-1" style={{ color: "#94a3b8" }}>Labor</th>}
+                  <th className="text-left px-2 py-1" style={{ color: "#94a3b8" }}>{hasLabor ? "Producto" : "Producto / Labor"}</th>
+                  <th className="text-left px-2 py-1" style={{ color: "#94a3b8" }}>Dosis</th>
                 </tr>
               </thead>
               <tbody>
@@ -2554,22 +2559,22 @@ function LotInfo({
                       cells.push(
                         <tr key={`fecha-${i}`}>
                           <td colSpan={colSpan} className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide"
-                            style={{ background: "#0f3460", color: "#e2b04a", borderTop: "2px solid #1e3a5a", borderBottom: "1px solid #2a5298" }}>
+                            style={{ background: "#e2e8f0", color: "#e2b04a", borderTop: "2px solid #bfdbfe", borderBottom: "1px solid #2a5298" }}>
                             📅 {fechaStr}
                           </td>
                         </tr>
                       );
                     }
                     cells.push(
-                      <tr key={i} style={{ borderBottom: "1px solid #1e2e4e" }}>
+                      <tr key={i} style={{ borderBottom: "1px solid #e2e8f0" }}>
                         <td className="px-2 py-1.5">
                           <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: tc + "22", color: tc, border: `1px solid ${tc}44` }}>
                             {row._tipo || "–"}
                           </span>
                         </td>
-                        {hasLabor && <td className="px-2 py-1.5" style={{ color: "#aac4e0" }}>{row._labor || "–"}</td>}
-                        <td className="px-2 py-1.5" style={{ color: "#ccd" }}>{row._prod || "–"}</td>
-                        <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: "#ccd" }}>{dosisStr}</td>
+                        {hasLabor && <td className="px-2 py-1.5" style={{ color: "#374151" }}>{row._labor || "–"}</td>}
+                        <td className="px-2 py-1.5" style={{ color: "#374151" }}>{row._prod || "–"}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: "#374151" }}>{dosisStr}</td>
                       </tr>
                     );
                     return cells;
@@ -2583,19 +2588,19 @@ function LotInfo({
 
       {/* ── Past visits ── */}
       {pastVisits.length > 0 && (
-        <div className="mt-4 pt-3" style={{ borderTop: "1px solid #1e2e4e" }}>
-          <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#6a8ab0" }}>Visitas anteriores</p>
+        <div className="mt-4 pt-3" style={{ borderTop: "1px solid #e2e8f0" }}>
+          <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#64748b" }}>Visitas anteriores</p>
           <div className="space-y-3">
             {pastVisits.map((v) => {
               const formatted = new Date(v.date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
               const hasContent = v.note || v.yieldStars || v.sprayTarget;
               const isEditing = editingDate === v.date;
               return (
-                <div key={v.date} className="rounded-lg p-2 text-xs" style={{ background: "#0d1b35", border: "1px solid #1e3050" }}>
+                <div key={v.date} className="rounded-lg p-2 text-xs" style={{ background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold" style={{ color: "#aac4e0" }}>📅 {formatted}</span>
+                    <span className="font-semibold" style={{ color: "#374151" }}>📅 {formatted}</span>
                     <button className="text-xs px-2 py-0.5 rounded"
-                      style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+                      style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
                       onClick={() => setEditingDate(isEditing ? null : v.date)}>
                       {isEditing ? "Cerrar" : "Editar"}
                     </button>
@@ -2604,22 +2609,22 @@ function LotInfo({
                     <VisitForm visit={v} onSave={(u) => onSaveVisit(v.date, u)} onDone={() => setEditingDate(null)} hasSprayingContext={recentSprayings.length > 0} recentSprayings={recentSprayings} lastAppWasHerbicide={lastAppWasHerbicide} />
                   ) : (
                     <>
-                      {!hasContent && <p style={{ color: "#445" }}>Sin anotaciones</p>}
+                      {!hasContent && <p style={{ color: "#94a3b8" }}>Sin anotaciones</p>}
                       {v.yieldStars > 0 && (
                         <p style={{ color: "#e2b04a" }}>{"★".repeat(v.yieldStars)}{"☆".repeat(5 - v.yieldStars)} rinde estimado</p>
                       )}
                       {v.sprayTarget && (
-                        <p style={{ color: "#ccd" }}>
+                        <p style={{ color: "#374151" }}>
                           Blanco: {v.sprayTarget}
                           {v.sprayEffect > 0 && <span style={{ color: "#e2b04a" }}> · {"★".repeat(v.sprayEffect)}{"☆".repeat(5 - v.sprayEffect)}</span>}
                         </p>
                       )}
                       {v.fitotoxicity !== undefined && (
-                        <p style={{ color: v.fitotoxicity === 0 ? "#3dbb6e" : v.fitotoxicity <= 2 ? "#e2b04a" : "#e24a4a" }}>
+                        <p style={{ color: v.fitotoxicity === 0 ? "#15803d" : v.fitotoxicity <= 2 ? "#e2b04a" : "#e24a4a" }}>
                           Fitotoxicidad: {FITO_LABELS[v.fitotoxicity]}
                         </p>
                       )}
-                      {v.note && <p style={{ color: "#ccd", whiteSpace: "pre-wrap", marginTop: "4px" }}>{v.note}</p>}
+                      {v.note && <p style={{ color: "#374151", whiteSpace: "pre-wrap", marginTop: "4px" }}>{v.note}</p>}
                     </>
                   )}
                 </div>
@@ -2641,14 +2646,14 @@ function YieldBar({ lotRindes }: { lotRindes: Array<{ campana: string; cultivo: 
   const campaigns = Object.keys(byCampaign).sort((a, b) => b.localeCompare(a)).slice(0, 5);
 
   return (
-    <div className="mt-3 pt-3" style={{ borderTop: "1px solid #1e2e4e" }}>
-      <p className="text-xs uppercase tracking-wider mb-2" style={{ color: "#6a8ab0" }}>🌾 Rindes históricos</p>
+    <div className="mt-3 pt-3" style={{ borderTop: "1px solid #e2e8f0" }}>
+      <p className="text-xs uppercase tracking-wider mb-2" style={{ color: "#64748b" }}>🌾 Rindes históricos</p>
       <div className="overflow-x-auto">
         <table className="text-xs border-collapse whitespace-nowrap">
           <thead>
             <tr>
               <th className="pr-3 text-left" style={{ color: "#4a6a8a" }} />
-              {campaigns.map((c) => <th key={c} className="px-3 text-left" style={{ color: "#6a8ab0" }}>{c}</th>)}
+              {campaigns.map((c) => <th key={c} className="px-3 text-left" style={{ color: "#64748b" }}>{c}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -2663,7 +2668,7 @@ function YieldBar({ lotRindes }: { lotRindes: Array<{ campana: string; cultivo: 
                   const winter = records.find((r) => isWinterCrop(r.cultivo));
                   const main = summer ?? (!winter ? records[0] : null);
                   return (
-                    <td key={camp} className="px-3 py-1" style={{ borderLeft: "1px solid #1e3050", color: "#ccd" }}>
+                    <td key={camp} className="px-3 py-1" style={{ borderLeft: "1px solid #e2e8f0", color: "#374151" }}>
                       {row === "cultivo" ? (
                         <div>
                           {main && <span>{cultivoIcon(main.cultivo)} {main.cultivo}</span>}
@@ -2702,22 +2707,22 @@ function ColumnPickerModal({
 }) {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.7)" }}>
-      <div className="rounded-xl p-6 w-full max-w-sm" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+      <div className="rounded-xl p-6 w-full max-w-sm" style={{ background: "#ffffff", border: "1px solid #e2e8f0" }}>
         <h3 className="font-bold text-base mb-1" style={{ color: "#e2b04a" }}>¿Qué columna identifica el lote?</h3>
-        <p className="text-xs mb-4" style={{ color: "#aac4e0" }}>
+        <p className="text-xs mb-4" style={{ color: "#374151" }}>
           Archivo: <strong>{fileName}</strong><br />
           Elegí la columna que contiene el nombre del lote, para vincularlo con el mapa.
         </p>
         <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
           {columns.map((col) => (
             <button key={col} className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors"
-              style={{ background: "#0d1b35", border: "1px solid #2a5298", color: "#ccd" }}
+              style={{ background: "#f1f5f9", border: "1px solid #2a5298", color: "#374151" }}
               onClick={() => onSelect(col)}>
               {col}
             </button>
           ))}
         </div>
-        <button className="w-full py-2 rounded text-xs" style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+        <button className="w-full py-2 rounded text-xs" style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
           onClick={onCancel}>Cancelar</button>
       </div>
     </div>
@@ -2753,9 +2758,9 @@ function ColumnMappingModal({
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.75)" }}>
-      <div className="rounded-xl p-6 w-full max-w-md flex flex-col" style={{ background: "#16213e", border: "1px solid #0f3460", maxHeight: "90vh" }}>
+      <div className="rounded-xl p-6 w-full max-w-md flex flex-col" style={{ background: "#ffffff", border: "1px solid #e2e8f0", maxHeight: "90vh" }}>
         <h3 className="font-bold text-base mb-1 flex-shrink-0" style={{ color: "#e2b04a" }}>Configurar columnas</h3>
-        <p className="text-xs mb-3 flex-shrink-0" style={{ color: "#aac4e0" }}>
+        <p className="text-xs mb-3 flex-shrink-0" style={{ color: "#374151" }}>
           Archivo: <strong>{fileName}</strong> · Columna lote: <strong>{local.linkCol}</strong><br />
           Revisá cómo mapeamos el resto de columnas. Podés cambiar cualquiera.
         </p>
@@ -2766,15 +2771,15 @@ function ColumnMappingModal({
             const detected = !!local[key];
             return (
               <div key={key} className="flex items-center gap-2 text-xs">
-                <span className="w-36 flex-shrink-0" style={{ color: detected ? "#ccd" : "#556" }}>
+                <span className="w-36 flex-shrink-0" style={{ color: detected ? "#374151" : "#556" }}>
                   {label}
                 </span>
                 <select
                   className="flex-1 rounded px-2 py-1 text-xs"
                   style={{
-                    background: "#0d1b35",
-                    border: `1px solid ${detected ? "#2a7a5a" : "#2a5298"}`,
-                    color: detected ? "#ccd" : "#6a8ab0",
+                    background: "#f1f5f9",
+                    border: `1px solid ${detected ? "#2a7a5a" : "#3b82f6"}`,
+                    color: detected ? "#374151" : "#64748b",
                   }}
                   value={local[key]}
                   onChange={(e) => setLocal({ ...local, [key]: e.target.value })}
@@ -2782,7 +2787,7 @@ function ColumnMappingModal({
                   <option value="">— No vincular —</option>
                   {allColumns.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <span className="w-3 flex-shrink-0 text-center" style={{ color: detected ? "#3dbb6e" : "#333" }}>
+                <span className="w-3 flex-shrink-0 text-center" style={{ color: detected ? "#15803d" : "#333" }}>
                   {detected ? "✓" : ""}
                 </span>
               </div>
@@ -2792,17 +2797,17 @@ function ColumnMappingModal({
 
         {/* Merge mode (only when existing data is present) */}
         {hasExistingData && (
-          <div className="flex-shrink-0 mb-4 p-3 rounded-lg text-xs space-y-2" style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
-            <p style={{ color: "#aac4e0" }}>¿Qué hacer con los datos de la/s campaña/s de este archivo?</p>
+          <div className="flex-shrink-0 mb-4 p-3 rounded-lg text-xs space-y-2" style={{ background: "#f1f5f9", border: "1px solid #94a3b8" }}>
+            <p style={{ color: "#374151" }}>¿Qué hacer con los datos de la/s campaña/s de este archivo?</p>
             <label className="flex items-start gap-2 cursor-pointer">
               <input type="radio" name="mergeMode" value="replace" checked={mergeMode === "replace"} onChange={() => setMergeMode("replace")} className="mt-0.5 flex-shrink-0" />
-              <span style={{ color: mergeMode === "replace" ? "#ccd" : "#6a8ab0" }}>
+              <span style={{ color: mergeMode === "replace" ? "#374151" : "#64748b" }}>
                 <strong>Reemplazar la campaña</strong> — este archivo incluye todo el historial de la temporada
               </span>
             </label>
             <label className="flex items-start gap-2 cursor-pointer">
               <input type="radio" name="mergeMode" value="add" checked={mergeMode === "add"} onChange={() => setMergeMode("add")} className="mt-0.5 flex-shrink-0" />
-              <span style={{ color: mergeMode === "add" ? "#ccd" : "#6a8ab0" }}>
+              <span style={{ color: mergeMode === "add" ? "#374151" : "#64748b" }}>
                 <strong>Solo agregar nuevos registros</strong> — el archivo tiene solo registros adicionales
               </span>
             </label>
@@ -2819,7 +2824,7 @@ function ColumnMappingModal({
           </button>
           <button
             className="px-4 py-2 rounded text-xs"
-            style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+            style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
             onClick={onCancel}
           >
             Cancelar
@@ -3103,13 +3108,13 @@ function FileDashboard({
 
         {/* ── Espacio de trabajo header ── */}
         {user && (
-          <div className="mb-6 p-5 rounded-2xl relative" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+          <div className="mb-6 p-5 rounded-2xl relative" style={{ background: "#ffffff", border: "1px solid #e2e8f0" }}>
             <div className="flex items-center gap-4">
               {/* Logo — click to open workspace switcher */}
               <button className="flex-shrink-0 relative group" title="Cambiar espacio de trabajo"
                 onClick={() => setWsSwitcherOpen((v) => !v)}>
                 <div className="w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center"
-                  style={{ background: "#0d1b35", border: `2px solid ${wsSwitcherOpen ? "#e2b04a" : "#2a4a6a"}` }}>
+                  style={{ background: "#f1f5f9", border: `2px solid ${wsSwitcherOpen ? "#e2b04a" : "#94a3b8"}` }}>
                   {workspaceLogo
                     ? <img src={workspaceLogo} alt="logo" className="w-full h-full object-cover" />
                     : <span className="text-2xl select-none">🏢</span>
@@ -3130,13 +3135,13 @@ function FileDashboard({
                         if (e.key === "Escape") setEditingWsName(false);
                       }}
                       className="flex-1 rounded px-3 py-1.5 text-lg font-bold"
-                      style={{ background: "#0d1b35", border: "1px solid #3a6aaa", color: "#e2b04a", outline: "none" }} />
+                      style={{ background: "#f1f5f9", border: "1px solid #3a6aaa", color: "#e2b04a", outline: "none" }} />
                     <button onClick={() => { onRenameWorkspace(wsNameDraft.trim()); setEditingWsName(false); }}
                       className="px-3 py-1.5 rounded font-semibold text-sm"
-                      style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
+                      style={{ background: "#15803d", color: "#fff" }}>✓</button>
                     <button onClick={() => setEditingWsName(false)}
                       className="px-3 py-1.5 rounded text-sm"
-                      style={{ background: "#1a2a4a", color: "#6a8ab0" }}>✕</button>
+                      style={{ background: "#f0f4ff", color: "#64748b" }}>✕</button>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 group">
@@ -3145,7 +3150,7 @@ function FileDashboard({
                     </h2>
                     <button onClick={() => { setWsNameDraft(workspaceName); setEditingWsName(true); }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-sm px-1.5 py-0.5 rounded"
-                      style={{ color: "#6a8ab0", background: "#0d1b35" }}>✏️</button>
+                      style={{ color: "#64748b", background: "#f1f5f9" }}>✏️</button>
                   </div>
                 )}
                 <p className="text-xs mt-0.5" style={{ color: "#4a6a8a" }}>Espacio de trabajo · tocá el logo para cambiar</p>
@@ -3153,7 +3158,7 @@ function FileDashboard({
 
               {/* Logo upload (small button) */}
               <label className="cursor-pointer text-xs px-2 py-1 rounded flex-shrink-0"
-                style={{ background: "#0d1b35", color: "#6a8ab0", border: "1px solid #1a3460" }}
+                style={{ background: "#f1f5f9", color: "#64748b", border: "1px solid #cbd5e1" }}
                 title="Cambiar logo">
                 <input type="file" accept="image/*" className="sr-only"
                   onChange={async (e) => {
@@ -3170,16 +3175,16 @@ function FileDashboard({
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setWsSwitcherOpen(false)} />
                 <div className="absolute left-5 top-20 z-20 rounded-xl overflow-hidden w-64 shadow-xl"
-                  style={{ background: "#0f2040", border: "1px solid #2a5298" }}>
+                  style={{ background: "#f8fafc", border: "1px solid #2a5298" }}>
                   {workspaceSummaries.map((ws) => (
                     <button key={ws.id} onClick={async () => { await onSwitchWorkspace(ws.id); setWsSwitcherOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#1a3060] transition-colors"
-                      style={{ borderBottom: "1px solid #1a3460" }}>
+                      style={{ borderBottom: "1px solid #cbd5e1" }}>
                       <div className="w-7 h-7 rounded overflow-hidden flex items-center justify-center flex-shrink-0"
-                        style={{ background: "#1a2a4a" }}>
+                        style={{ background: "#f0f4ff" }}>
                         {ws.logo ? <img src={ws.logo} alt="" className="w-full h-full object-cover" /> : <span className="text-sm">🏢</span>}
                       </div>
-                      <span className="text-sm truncate" style={{ color: ws.id === activeWorkspaceId ? "#e2b04a" : "#aac4e0" }}>
+                      <span className="text-sm truncate" style={{ color: ws.id === activeWorkspaceId ? "#e2b04a" : "#374151" }}>
                         {ws.name}
                         {ws.id === activeWorkspaceId && <span className="ml-1 text-xs opacity-60">✓</span>}
                       </span>
@@ -3187,7 +3192,7 @@ function FileDashboard({
                   ))}
                   <div className="p-2">
                     {newWsSwitcherLoading ? (
-                      <p className="text-xs text-center py-1" style={{ color: "#6a8ab0" }}>Creando...</p>
+                      <p className="text-xs text-center py-1" style={{ color: "#64748b" }}>Creando...</p>
                     ) : newWsSwitcherName !== "" ? (
                       <div className="flex gap-1">
                         <input autoFocus value={newWsSwitcherName}
@@ -3202,19 +3207,19 @@ function FileDashboard({
                           }}
                           placeholder="Nombre"
                           className="flex-1 rounded px-2 py-1 text-xs"
-                          style={{ background: "#0d1b35", border: "1px solid #2a5298", color: "#e0e0e0", outline: "none" }} />
+                          style={{ background: "#f1f5f9", border: "1px solid #2a5298", color: "#1e293b", outline: "none" }} />
                         <button onClick={async () => {
                           if (!newWsSwitcherName.trim()) return;
                           setNewWsSwitcherLoading(true);
                           await onCreateWorkspace(newWsSwitcherName.trim());
                           setNewWsSwitcherName(""); setNewWsSwitcherLoading(false); setWsSwitcherOpen(false);
                         }} className="px-2 py-1 rounded text-xs font-semibold"
-                          style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
+                          style={{ background: "#15803d", color: "#fff" }}>✓</button>
                       </div>
                     ) : (
                       <button onClick={() => setNewWsSwitcherName(" ")}
                         className="w-full text-xs py-1.5 rounded hover:bg-[#1a3060] transition-colors"
-                        style={{ color: "#6a8ab0" }}>+ Nuevo espacio</button>
+                        style={{ color: "#64748b" }}>+ Nuevo espacio</button>
                     )}
                   </div>
                 </div>
@@ -3222,15 +3227,15 @@ function FileDashboard({
             )}
 
             {/* Link to configuracion + back to picker */}
-            <div className="mt-3 pt-3 flex justify-between items-center" style={{ borderTop: "1px solid #1a3460" }}>
+            <div className="mt-3 pt-3 flex justify-between items-center" style={{ borderTop: "1px solid #cbd5e1" }}>
               <button onClick={onGoToPicker}
                 className="text-xs px-3 py-1 rounded-lg transition-all"
-                style={{ color: "#e2b04a", background: "#1a3060", border: "1px solid #2a5298" }}>
+                style={{ color: "#e2b04a", background: "#e2e8f0", border: "1px solid #2a5298" }}>
                 ↩ Cambiar espacio / empresa
               </button>
               <a href="/configuracion"
                 className="text-xs px-3 py-1 rounded-lg transition-all"
-                style={{ color: "#6a8ab0", background: "#0f2040", border: "1px solid #1a3460" }}>
+                style={{ color: "#64748b", background: "#f8fafc", border: "1px solid #cbd5e1" }}>
                 ⚙️ Administrar →
               </a>
             </div>
@@ -3241,9 +3246,9 @@ function FileDashboard({
           <>
             {/* ── Empresas con archivos anidados ── */}
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>Empresas</p>
+              <p className="text-xs uppercase tracking-wider" style={{ color: "#64748b" }}>Empresas</p>
               <button className="text-xs px-2 py-1 rounded"
-                style={{ background: "#0f2040", border: "1px solid #2a4a6a", color: "#aac4e0" }}
+                style={{ background: "#f8fafc", border: "1px solid #94a3b8", color: "#374151" }}
                 onClick={() => { setShowNewEmpresa(!showNewEmpresa); setInvitingEmpresaId(null); }}>
                 + Nueva
               </button>
@@ -3256,18 +3261,18 @@ function FileDashboard({
                   onKeyDown={(e) => e.key === "Enter" && handleNewEmpresa()}
                   placeholder="Nombre de la empresa"
                   className="flex-1 rounded px-3 py-1.5 text-sm"
-                  style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }} />
+                  style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#1e293b", outline: "none" }} />
                 <button onClick={handleNewEmpresa} disabled={newEmpresaLoading}
                   className="px-3 py-1.5 rounded text-sm font-semibold"
-                  style={{ background: "#3dbb6e", color: "#fff" }}>
+                  style={{ background: "#15803d", color: "#fff" }}>
                   {newEmpresaLoading ? "..." : "Crear"}
                 </button>
               </div>
             )}
 
             {availableEmpresas.length === 0 && !showNewEmpresa && (
-              <div className="mb-4 p-4 rounded-xl text-center" style={{ background: "#16213e", border: "1px dashed #2a4a6a" }}>
-                <p className="text-sm mb-3" style={{ color: "#6a8ab0" }}>
+              <div className="mb-4 p-4 rounded-xl text-center" style={{ background: "#ffffff", border: "1px dashed #2a4a6a" }}>
+                <p className="text-sm mb-3" style={{ color: "#64748b" }}>
                   Creá una empresa para empezar a cargar archivos
                 </p>
                 <button onClick={() => setShowNewEmpresa(true)}
@@ -3363,7 +3368,7 @@ function FileDashboard({
                           if (e.key === "Escape") setRenamingEmpresaId(null);
                         }}
                         className="flex-1 rounded px-3 py-1.5 text-sm"
-                        style={{ background: "#0d1b35", border: "1px solid #3a6aaa", color: "#e0e0e0", outline: "none" }} />
+                        style={{ background: "#f1f5f9", border: "1px solid #3a6aaa", color: "#1e293b", outline: "none" }} />
                       <button disabled={empresaMutating || !empresaNameDraft.trim()}
                         onClick={async () => {
                           setEmpresaMutating(true);
@@ -3372,10 +3377,10 @@ function FileDashboard({
                           setEmpresaMutating(false);
                         }}
                         className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                        style={{ background: "#3dbb6e", color: "#fff" }}>✓</button>
+                        style={{ background: "#15803d", color: "#fff" }}>✓</button>
                       <button onClick={() => setRenamingEmpresaId(null)}
                         className="px-2 py-1.5 rounded text-sm"
-                        style={{ background: "#1a2a4a", color: "#6a8ab0" }}>✕</button>
+                        style={{ background: "#f0f4ff", color: "#64748b" }}>✕</button>
                     </div>
                   );
                 }
@@ -3395,7 +3400,7 @@ function FileDashboard({
 
                 return (
                   <div key={emp.id} className="rounded-xl overflow-hidden"
-                    style={{ background: "#16213e", border: `1px solid ${isOpen ? "#2a5298" : "#0f3460"}` }}>
+                    style={{ background: "#ffffff", border: `1px solid ${isOpen ? "#3b82f6" : "#e2e8f0"}` }}>
                     {/* Folder header */}
                     <div className="flex items-center gap-2 px-3 py-2">
                       {/* Empresa logo — upload on click */}
@@ -3406,7 +3411,7 @@ function FileDashboard({
                             try { await onUpdateEmpresaLogo(emp.id, await resizeLogoToBase64(f)); } catch { /* ignore */ }
                           }} />
                         <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"
-                          style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
+                          style={{ background: "#f1f5f9", border: "1px solid #94a3b8" }}>
                           {emp.logo
                             ? <img src={emp.logo} alt="" className="w-full h-full object-cover" />
                             : <span className="text-sm">🏛</span>
@@ -3422,7 +3427,7 @@ function FileDashboard({
                           if (next) onSelectEmpresa(emp.id);
                         }}
                         className="flex-1 flex items-center gap-2 text-left min-w-0">
-                        <span className="text-sm font-semibold truncate" style={{ color: isOpen ? "#e2b04a" : "#aac4e0" }}>
+                        <span className="text-sm font-semibold truncate" style={{ color: isOpen ? "#e2b04a" : "#374151" }}>
                           {emp.name}
                         </span>
                         <span className="text-xs shrink-0" style={{ color: "#4a6a8a" }}>{isOpen ? "▲" : "▼"}</span>
@@ -3433,10 +3438,10 @@ function FileDashboard({
                             setInvitingEmpresaId(isInviting ? null : emp.id);
                             setInviteEmail(""); setInviteMsg("");
                           }}
-                            className="p-1.5 rounded text-xs" style={{ background: isInviting ? "#1a3060" : "#1a2a4a", color: "#6ab0e0" }}
+                            className="p-1.5 rounded text-xs" style={{ background: isInviting ? "#e2e8f0" : "#f0f4ff", color: "#6ab0e0" }}
                             title="Invitar usuario">✉️</button>
                           <button onClick={() => { setEmpresaNameDraft(emp.name); setRenamingEmpresaId(emp.id); }}
-                            className="p-1.5 rounded text-xs" style={{ background: "#1a2a4a", color: "#6a8ab0" }}
+                            className="p-1.5 rounded text-xs" style={{ background: "#f0f4ff", color: "#64748b" }}
                             title="Renombrar">✏️</button>
                           <button onClick={() => setDeletingEmpresaId(emp.id)}
                             className="p-1.5 rounded text-xs" style={{ background: "#2a0a0a", color: "#e24a4a" }}
@@ -3447,8 +3452,8 @@ function FileDashboard({
 
                     {/* Invite form */}
                     {isInviting && (
-                      <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid #1a3460" }}>
-                        <p className="text-xs mb-2" style={{ color: "#6a8ab0" }}>
+                      <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid #cbd5e1" }}>
+                        <p className="text-xs mb-2" style={{ color: "#64748b" }}>
                           Invitar a un usuario a ver esta empresa:
                         </p>
                         <div className="flex gap-2">
@@ -3457,15 +3462,15 @@ function FileDashboard({
                             onKeyDown={(e) => { if (e.key === "Enter") handleInvite(emp.id); if (e.key === "Escape") { setInvitingEmpresaId(null); setInviteEmail(""); setInviteMsg(""); } }}
                             placeholder="email@ejemplo.com"
                             className="flex-1 rounded px-3 py-1.5 text-sm"
-                            style={{ background: "#0d1b35", border: "1px solid #2a5298", color: "#e0e0e0", outline: "none" }} />
+                            style={{ background: "#f1f5f9", border: "1px solid #2a5298", color: "#1e293b", outline: "none" }} />
                           <button onClick={() => handleInvite(emp.id)} disabled={inviteLoading || !inviteEmail.trim()}
                             className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                            style={{ background: "#3dbb6e", color: "#fff" }}>
+                            style={{ background: "#15803d", color: "#fff" }}>
                             {inviteLoading ? "..." : "Invitar"}
                           </button>
                         </div>
                         {inviteMsg && (
-                          <p className="text-xs mt-1.5" style={{ color: inviteMsg.startsWith("Invitación") ? "#3dbb6e" : "#e24a4a" }}>
+                          <p className="text-xs mt-1.5" style={{ color: inviteMsg.startsWith("Invitación") ? "#15803d" : "#e24a4a" }}>
                             {inviteMsg}
                           </p>
                         )}
@@ -3558,7 +3563,7 @@ function FileDashboard({
         <div className="mt-6">
           <button onClick={onGoToMap}
             className="w-full py-4 rounded-xl text-lg font-bold transition-all"
-            style={{ background: "#1a4a80", color: "#e2b04a", border: "2px solid #2a5298" }}>
+            style={{ background: "#1d4ed8", color: "#e2b04a", border: "2px solid #2a5298" }}>
             Ir a recorrer →
           </button>
         </div>
@@ -3631,7 +3636,7 @@ function WorkspacePicker({
       <div className="flex-1 flex items-center justify-center" style={{ background: "#1a1a2e" }}>
         <div className="text-center">
           <span className="text-2xl font-bold tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</span>
-          <p className="text-sm mt-2" style={{ color: "#6a8ab0" }}>Cargando espacios...</p>
+          <p className="text-sm mt-2" style={{ color: "#64748b" }}>Cargando espacios...</p>
         </div>
       </div>
     );
@@ -3642,19 +3647,19 @@ function WorkspacePicker({
       <div className="flex-1 flex items-center justify-center" style={{ background: "#1a1a2e" }}>
         <div className="text-center max-w-xs">
           <span className="text-2xl font-bold tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</span>
-          <p className="text-sm mt-3 mb-6" style={{ color: "#6a8ab0" }}>No encontramos espacios de trabajo. Creá uno para empezar.</p>
+          <p className="text-sm mt-3 mb-6" style={{ color: "#64748b" }}>No encontramos espacios de trabajo. Creá uno para empezar.</p>
           <input
             value={newWsName}
             onChange={(e) => setNewWsName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && newWsName.trim() && !creating) { setCreating(true); onCreateWorkspace(newWsName.trim()).finally(() => setCreating(false)); } }}
             placeholder="Nombre del espacio de trabajo"
-            style={{ width: "100%", background: "#16213e", border: "1px solid #1a4a80", borderRadius: 10, padding: "10px 14px", color: "#e0e0e0", fontSize: 14, outline: "none", marginBottom: 12, boxSizing: "border-box" as const }}
+            style={{ width: "100%", background: "#ffffff", border: "1px solid #1a4a80", borderRadius: 10, padding: "10px 14px", color: "#1e293b", fontSize: 14, outline: "none", marginBottom: 12, boxSizing: "border-box" as const }}
           />
           <button
             disabled={creating || !newWsName.trim()}
             onClick={async () => { setCreating(true); await onCreateWorkspace(newWsName.trim()); setCreating(false); }}
             className="w-full px-6 py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
-            style={{ background: "#3dbb6e", color: "#fff" }}>
+            style={{ background: "#15803d", color: "#fff" }}>
             {creating ? "Creando..." : "+ Crear espacio de trabajo"}
           </button>
         </div>
@@ -3669,7 +3674,7 @@ function WorkspacePicker({
         {/* Logo + title */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold tracking-widest mb-1" style={{ color: "#e2b04a" }}>I.Ag</h1>
-          <p className="text-sm" style={{ color: "#6a8ab0" }}>
+          <p className="text-sm" style={{ color: "#64748b" }}>
             {step === "workspace" ? "¿Con qué espacio de trabajo querés trabajar?" : `¿Qué empresa(s) de "${selectedWs?.name}"?`}
           </p>
         </div>
@@ -3680,15 +3685,15 @@ function WorkspacePicker({
             {workspaceSummaries.map((ws) => (
               <button key={ws.id} onClick={() => selectWorkspace(ws.id)}
                 className="flex items-center gap-3 p-4 rounded-xl text-left transition-all hover:scale-[1.01]"
-                style={{ background: "#16213e", border: `2px solid ${ws.id === defaultWsId ? "#e2b04a" : "#0f3460"}` }}>
+                style={{ background: "#ffffff", border: `2px solid ${ws.id === defaultWsId ? "#e2b04a" : "#e2e8f0"}` }}>
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden flex-shrink-0"
-                  style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
+                  style={{ background: "#f1f5f9", border: "1px solid #94a3b8" }}>
                   {ws.logo ? <img src={ws.logo} alt="" className="w-full h-full object-cover" /> : <span className="text-2xl">🏢</span>}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-base truncate" style={{ color: ws.id === defaultWsId ? "#e2b04a" : "#e0e0e0" }}>
+                  <p className="font-bold text-base truncate" style={{ color: ws.id === defaultWsId ? "#e2b04a" : "#1e293b" }}>
                     {ws.name}
-                    {ws.id === defaultWsId && <span className="ml-2 text-xs font-normal" style={{ color: "#6a8ab0" }}>(actual)</span>}
+                    {ws.id === defaultWsId && <span className="ml-2 text-xs font-normal" style={{ color: "#64748b" }}>(actual)</span>}
                   </p>
                 </div>
                 <span style={{ color: "#4a6a8a" }}>→</span>
@@ -3706,21 +3711,21 @@ function WorkspacePicker({
         {step === "empresa" && (
           <div className="flex flex-col gap-3">
             {loadingEmps ? (
-              <p className="text-center text-sm py-4" style={{ color: "#6a8ab0" }}>Cargando empresas...</p>
+              <p className="text-center text-sm py-4" style={{ color: "#64748b" }}>Cargando empresas...</p>
             ) : empresas.length === 0 ? (
-              <div className="p-4 rounded-xl text-center" style={{ background: "#16213e", border: "1px dashed #2a4a6a" }}>
-                <p className="text-sm mb-2" style={{ color: "#6a8ab0" }}>Este espacio no tiene empresas aún.</p>
+              <div className="p-4 rounded-xl text-center" style={{ background: "#ffffff", border: "1px dashed #2a4a6a" }}>
+                <p className="text-sm mb-2" style={{ color: "#64748b" }}>Este espacio no tiene empresas aún.</p>
                 <a href="/configuracion" className="text-xs px-3 py-1.5 rounded-lg font-semibold"
                   style={{ background: "#e2b04a", color: "#1a1a2e" }}>Crear empresa →</a>
               </div>
             ) : (
               <>
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs uppercase tracking-wider" style={{ color: "#6a8ab0" }}>
+                  <p className="text-xs uppercase tracking-wider" style={{ color: "#64748b" }}>
                     Seleccioná una o varias
                   </p>
                   <button onClick={() => setSelectedEmpIds(new Set(empresas.map((e) => e.id)))}
-                    className="text-xs px-2 py-1 rounded" style={{ color: "#aac4e0", background: "#0f2040" }}>
+                    className="text-xs px-2 py-1 rounded" style={{ color: "#374151", background: "#f8fafc" }}>
                     Todas
                   </button>
                 </div>
@@ -3729,16 +3734,16 @@ function WorkspacePicker({
                   return (
                     <button key={emp.id} onClick={() => toggleEmpresa(emp.id)}
                       className="flex items-center gap-3 p-3.5 rounded-xl text-left transition-all"
-                      style={{ background: sel ? "#1a3a60" : "#16213e", border: `2px solid ${sel ? "#3dbb6e" : "#0f3460"}` }}>
+                      style={{ background: sel ? "#1a3a60" : "#ffffff", border: `2px solid ${sel ? "#15803d" : "#e2e8f0"}` }}>
                       <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0"
-                        style={{ background: "#0d1b35", border: "1px solid #2a4a6a" }}>
+                        style={{ background: "#f1f5f9", border: "1px solid #94a3b8" }}>
                         {emp.logo ? <img src={emp.logo} alt="" className="w-full h-full object-cover" /> : <span className="text-lg">🏛</span>}
                       </div>
-                      <span className="flex-1 font-semibold text-sm" style={{ color: sel ? "#e2b04a" : "#aac4e0" }}>
+                      <span className="flex-1 font-semibold text-sm" style={{ color: sel ? "#e2b04a" : "#374151" }}>
                         {emp.name}
                       </span>
                       <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                        style={{ borderColor: sel ? "#3dbb6e" : "#2a4a6a", background: sel ? "#3dbb6e" : "transparent" }}>
+                        style={{ borderColor: sel ? "#15803d" : "#94a3b8", background: sel ? "#15803d" : "transparent" }}>
                         {sel && <span className="text-xs font-bold" style={{ color: "#fff" }}>✓</span>}
                       </div>
                     </button>
@@ -3750,17 +3755,17 @@ function WorkspacePicker({
             <div className="flex gap-3 mt-2">
               <button onClick={() => setStep("workspace")}
                 className="px-4 py-2.5 rounded-xl text-sm font-semibold"
-                style={{ background: "#16213e", color: "#6a8ab0", border: "1px solid #0f3460" }}>
+                style={{ background: "#ffffff", color: "#64748b", border: "1px solid #e2e8f0" }}>
                 ← Volver
               </button>
               <button onClick={() => confirm("files")} disabled={selectedEmpIds.size === 0 || empresas.length === 0}
                 className="py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 px-4"
-                style={{ background: "#1a3060", color: "#aac4e0", border: "1px solid #2a5298" }}>
+                style={{ background: "#e2e8f0", color: "#374151", border: "1px solid #2a5298" }}>
                 📂 Archivos
               </button>
               <button onClick={() => confirm("map")} disabled={selectedEmpIds.size === 0 || empresas.length === 0}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40"
-                style={{ background: "#3dbb6e", color: "#fff" }}>
+                style={{ background: "#15803d", color: "#fff" }}>
                 Recorrer ({selectedEmpIds.size}) →
               </button>
             </div>
@@ -3800,7 +3805,7 @@ function DashFileSection({
   const inner = (
     <>
       <div className={nested ? "mb-2" : "mb-3"}>
-        <p className="text-xs font-semibold" style={{ color: "#aac4e0" }}>{title}</p>
+        <p className="text-xs font-semibold" style={{ color: "#374151" }}>{title}</p>
         {hint && <p className="text-xs mt-0.5" style={{ color: "#4a6a8a" }}>{hint}</p>}
       </div>
 
@@ -3815,7 +3820,7 @@ function DashFileSection({
               style={{ background: "#8a2a2a", color: "#fff" }}>Eliminar</button>
             <button onClick={() => setConfirmRemove(null)}
               className="px-2.5 py-1 rounded text-xs"
-              style={{ background: "#1a2a3a", color: "#6a8ab0" }}>Cancelar</button>
+              style={{ background: "#1a2a3a", color: "#64748b" }}>Cancelar</button>
           </div>
         </div>
       )}
@@ -3825,8 +3830,8 @@ function DashFileSection({
         <div className="space-y-1 mb-2">
           {files.map((name, i) => (
             <div key={i} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded"
-              style={{ background: confirmRemove === name ? "#2a0a0a" : "#0d2a1a", border: `1px solid ${confirmRemove === name ? "#8a2a2a" : "#1e5a2e"}` }}>
-              <span className="truncate flex-1" style={{ color: confirmRemove === name ? "#e25a5a" : "#3dbb6e" }}>✓ {name}</span>
+              style={{ background: confirmRemove === name ? "#2a0a0a" : "#dcfce7", border: `1px solid ${confirmRemove === name ? "#8a2a2a" : "#86efac"}` }}>
+              <span className="truncate flex-1" style={{ color: confirmRemove === name ? "#e25a5a" : "#15803d" }}>✓ {name}</span>
               <button onClick={() => setConfirmRemove(confirmRemove === name ? null : name)}
                 className="shrink-0 w-5 h-5 flex items-center justify-center rounded hover:opacity-70 text-sm"
                 style={{ color: "#e25a5a" }}>×</button>
@@ -3834,7 +3839,7 @@ function DashFileSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs mb-2" style={{ color: "#445" }}>Sin archivos cargados</p>
+        <p className="text-xs mb-2" style={{ color: "#94a3b8" }}>Sin archivos cargados</p>
       )}
       {status && !status.ok && (
         <p className="text-xs mb-2 px-2 py-1 rounded" style={{ background: "#3a2a0a", color: "#e2b04a" }}>{status.msg}</p>
@@ -3842,7 +3847,7 @@ function DashFileSection({
 
       {/* Upload button */}
       <label className="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg text-xs hover:opacity-80"
-        style={{ background: "#0d1b35", border: "1px dashed #2a5298", color: "#6a8ab0" }}>
+        style={{ background: "#f1f5f9", border: "1px dashed #2a5298", color: "#64748b" }}>
         <input type="file" accept={accept} multiple={multiple} className="sr-only"
           onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />
         + Agregar archivo
@@ -3853,15 +3858,15 @@ function DashFileSection({
         <div className="mt-2">
           {driveProps.linked ? (
             <div className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg"
-              style={{ background: "#0d2a1a", border: "1px solid #1e5a2e" }}>
+              style={{ background: "#dcfce7", border: "1px solid #86efac" }}>
               <span className="text-xs shrink-0" style={{ color: "#4a7a5a" }}>🔗</span>
-              <span className="truncate flex-1 text-xs" style={{ color: "#3dbb6e" }}>
+              <span className="truncate flex-1 text-xs" style={{ color: "#15803d" }}>
                 {driveProps.linked.url.slice(0, 50)}{driveProps.linked.url.length > 50 ? "…" : ""}
               </span>
               {driveProps.onRefresh && (
                 <button onClick={driveProps.onRefresh} disabled={driveProps.refreshing}
                   className="shrink-0 px-1.5 py-0.5 rounded text-xs disabled:opacity-50"
-                  style={{ background: "#1a4a1a", color: "#3dbb6e", border: "1px solid #2a6a2a" }}>
+                  style={{ background: "#1a4a1a", color: "#15803d", border: "1px solid #2a6a2a" }}>
                   {driveProps.refreshing ? "…" : "↻"}
                 </button>
               )}
@@ -3878,17 +3883,17 @@ function DashFileSection({
                 onKeyDown={(e) => e.key === "Enter" && driveProps.onLink()}
                 placeholder="https://docs.google.com/..."
                 className="flex-1 rounded px-2 py-1.5 text-xs"
-                style={{ background: "#0d1b35", border: "1px solid #2a4a6a", color: "#e0e0e0", outline: "none" }}
+                style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#1e293b", outline: "none" }}
                 autoFocus />
               <button onClick={driveProps.onLink}
                 disabled={!driveProps.urlInput.trim() || driveProps.refreshing}
                 className="px-2.5 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40 shrink-0"
-                style={{ background: "#3dbb6e", color: "#fff" }}>
+                style={{ background: "#15803d", color: "#fff" }}>
                 {driveProps.refreshing ? "…" : "Vincular"}
               </button>
               <button onClick={() => setDriveOpen(false)}
                 className="px-2 py-1.5 rounded-lg text-xs shrink-0"
-                style={{ color: "#6a8ab0" }}>✕</button>
+                style={{ color: "#64748b" }}>✕</button>
             </div>
           ) : (
             <button onClick={() => setDriveOpen(true)}
@@ -3908,11 +3913,11 @@ function DashFileSection({
   );
 
   if (nested) {
-    return <div className="pt-3" style={{ borderTop: "1px solid #0f3460" }}>{inner}</div>;
+    return <div className="pt-3" style={{ borderTop: "1px solid #e2e8f0" }}>{inner}</div>;
   }
 
   return (
-    <div className="rounded-xl p-4" style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+    <div className="rounded-xl p-4" style={{ background: "#ffffff", border: "1px solid #e2e8f0" }}>
       {inner}
     </div>
   );
@@ -3946,23 +3951,23 @@ function PluviometroLinkModal({
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
       <div className="rounded-2xl p-5 flex flex-col gap-4 w-full max-w-md max-h-[90vh] overflow-hidden"
-        style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+        style={{ background: "#ffffff", border: "1px solid #e2e8f0" }}>
         <div>
-          <p className="text-base font-semibold" style={{ color: "#e0e0e0" }}>Vincular pluviómetros a lotes</p>
-          <p className="text-xs mt-1" style={{ color: "#6a8ab0" }}>
+          <p className="text-base font-semibold" style={{ color: "#1e293b" }}>Vincular pluviómetros a lotes</p>
+          <p className="text-xs mt-1" style={{ color: "#64748b" }}>
             {pluviometros.length - unlinked.length} de {pluviometros.length} vinculados automáticamente
           </p>
         </div>
         <div className="overflow-y-auto flex flex-col gap-2">
           {pluviometros.map((p) => (
             <div key={p} className="flex items-center gap-2">
-              <span className="text-xs font-mono flex-1" style={{ color: "#aac4e0" }}>{p}</span>
-              <span className="text-xs" style={{ color: "#445" }}>→</span>
+              <span className="text-xs font-mono flex-1" style={{ color: "#374151" }}>{p}</span>
+              <span className="text-xs" style={{ color: "#94a3b8" }}>→</span>
               <select
                 value={linkMap[p] ?? ""}
                 onChange={(e) => setLinkMap((prev) => ({ ...prev, [p]: e.target.value }))}
                 className="text-xs px-2 py-1 rounded flex-1"
-                style={{ background: "#0f2040", border: "1px solid #1a3460", color: "#e0e0e0" }}
+                style={{ background: "#f8fafc", border: "1px solid #cbd5e1", color: "#1e293b" }}
               >
                 <option value="">Sin lote asociado</option>
                 {knownLots.map((l) => <option key={l} value={l}>{l}</option>)}
@@ -3972,12 +3977,12 @@ function PluviometroLinkModal({
         </div>
         <div className="flex gap-3">
           <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm"
-            style={{ background: "#0f2040", color: "#6a8ab0", border: "1px solid #1a3460" }}>
+            style={{ background: "#f8fafc", color: "#64748b", border: "1px solid #cbd5e1" }}>
             Cancelar
           </button>
           <button onClick={() => onConfirm(linkMap)}
             className="flex-1 py-2 rounded-lg text-sm font-semibold"
-            style={{ background: "#3dbb6e", color: "#fff" }}>
+            style={{ background: "#15803d", color: "#fff" }}>
             Confirmar →
           </button>
         </div>
@@ -4003,28 +4008,28 @@ function SourceSelectorModal({
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.7)" }}>
       <div className="rounded-2xl p-6 flex flex-col gap-4 w-full max-w-sm mx-4"
-        style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+        style={{ background: "#ffffff", border: "1px solid #e2e8f0" }}>
         <div>
-          <p className="text-base font-semibold" style={{ color: "#e0e0e0" }}>¿De qué software viene este archivo?</p>
-          {fileName && <p className="text-xs mt-1 truncate" style={{ color: "#6a8ab0" }}>{fileName}</p>}
+          <p className="text-base font-semibold" style={{ color: "#1e293b" }}>¿De qué software viene este archivo?</p>
+          {fileName && <p className="text-xs mt-1 truncate" style={{ color: "#64748b" }}>{fileName}</p>}
         </div>
         <div className="flex flex-col gap-2">
           {ALL_SOURCES.map((src) => (
             <button key={src} onClick={() => onSelect(src)}
               className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
               style={{
-                background: selected === src ? "#1a4a80" : "#0f2040",
-                border: `2px solid ${selected === src ? "#3dbb6e" : "#1a3460"}`,
+                background: selected === src ? "#1d4ed8" : "#f8fafc",
+                border: `2px solid ${selected === src ? "#15803d" : "#cbd5e1"}`,
               }}>
               <div className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
-                style={{ borderColor: selected === src ? "#3dbb6e" : "#2a4060" }}>
-                {selected === src && <div className="w-2 h-2 rounded-full" style={{ background: "#3dbb6e" }} />}
+                style={{ borderColor: selected === src ? "#15803d" : "#2a4060" }}>
+                {selected === src && <div className="w-2 h-2 rounded-full" style={{ background: "#15803d" }} />}
               </div>
-              <span className="text-sm" style={{ color: selected === src ? "#e2b04a" : "#aac4e0" }}>
+              <span className="text-sm" style={{ color: selected === src ? "#e2b04a" : "#374151" }}>
                 {SOURCE_LABELS[src]}
               </span>
               {src === detected && (
-                <span className="ml-auto text-xs px-2 py-0.5 rounded-full" style={{ background: "#0d2d1a", color: "#3dbb6e" }}>
+                <span className="ml-auto text-xs px-2 py-0.5 rounded-full" style={{ background: "#0d2d1a", color: "#15803d" }}>
                   detectado
                 </span>
               )}
@@ -4033,7 +4038,7 @@ function SourceSelectorModal({
         </div>
         <div className="flex gap-3 mt-1">
           <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm"
-            style={{ background: "#0f2040", color: "#6a8ab0", border: "1px solid #1a3460" }}>
+            style={{ background: "#f8fafc", color: "#64748b", border: "1px solid #cbd5e1" }}>
             Cancelar
           </button>
           <button onClick={() => onConfirm(selected)}
@@ -4074,22 +4079,22 @@ function CsvPreviewModal({
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
       <div className="rounded-2xl p-5 flex flex-col gap-4 w-full max-w-2xl max-h-[90vh] overflow-hidden"
-        style={{ background: "#16213e", border: "1px solid #0f3460" }}>
+        style={{ background: "#ffffff", border: "1px solid #e2e8f0" }}>
         <div>
-          <p className="text-base font-semibold" style={{ color: "#e0e0e0" }}>
+          <p className="text-base font-semibold" style={{ color: "#1e293b" }}>
             Preview — primeras {rows.length} filas de {totalCount} registros
           </p>
-          {fileName && <p className="text-xs mt-0.5 truncate" style={{ color: "#6a8ab0" }}>{fileName}</p>}
+          {fileName && <p className="text-xs mt-0.5 truncate" style={{ color: "#64748b" }}>{fileName}</p>}
         </div>
 
         {/* Table */}
         <div className="overflow-auto rounded-lg" style={{ maxHeight: "280px" }}>
           <table className="w-full text-xs border-collapse" style={{ color: "#c0d0e0" }}>
             <thead>
-              <tr style={{ background: "#0f2040" }}>
+              <tr style={{ background: "#f8fafc" }}>
                 {PREVIEW_COLS.map((c) => (
                   <th key={c.key} className="px-2 py-1.5 text-left font-semibold whitespace-nowrap"
-                    style={{ color: "#aac4e0", borderBottom: "1px solid #1a3460" }}>
+                    style={{ color: "#374151", borderBottom: "1px solid #cbd5e1" }}>
                     {c.label}
                   </th>
                 ))}
@@ -4113,15 +4118,15 @@ function CsvPreviewModal({
         {/* Merge mode */}
         {hasExistingData && (
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold" style={{ color: "#aac4e0" }}>¿Cómo combinarlo con los datos existentes?</p>
+            <p className="text-xs font-semibold" style={{ color: "#374151" }}>¿Cómo combinarlo con los datos existentes?</p>
             <div className="flex gap-2">
               {(["replace", "add"] as const).map((mode) => (
                 <button key={mode} onClick={() => setMergeMode(mode)}
                   className="flex-1 px-3 py-2 rounded-lg text-xs text-left transition-all"
                   style={{
-                    background: mergeMode === mode ? "#1a4a80" : "#0f2040",
-                    border: `1px solid ${mergeMode === mode ? "#3dbb6e" : "#1a3460"}`,
-                    color: mergeMode === mode ? "#e2b04a" : "#6a8ab0",
+                    background: mergeMode === mode ? "#1d4ed8" : "#f8fafc",
+                    border: `1px solid ${mergeMode === mode ? "#15803d" : "#cbd5e1"}`,
+                    color: mergeMode === mode ? "#e2b04a" : "#64748b",
                   }}>
                   <p className="font-semibold">{mode === "replace" ? "Reemplazar campaña" : "Agregar todo"}</p>
                   <p className="mt-0.5 opacity-80">
@@ -4137,12 +4142,12 @@ function CsvPreviewModal({
 
         <div className="flex gap-3">
           <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm"
-            style={{ background: "#0f2040", color: "#6a8ab0", border: "1px solid #1a3460" }}>
+            style={{ background: "#f8fafc", color: "#64748b", border: "1px solid #cbd5e1" }}>
             Cancelar
           </button>
           <button onClick={() => onConfirm(mergeMode)}
             className="flex-1 py-2 rounded-lg text-sm font-semibold"
-            style={{ background: "#3dbb6e", color: "#fff" }}>
+            style={{ background: "#15803d", color: "#fff" }}>
             Confirmar →
           </button>
         </div>
@@ -4180,7 +4185,7 @@ function DeleteEmpresaConfirm({ empName, mutating, onConfirm, onCancel }: {
         </button>
         <button onClick={onCancel}
           className="px-3 py-1.5 rounded text-xs"
-          style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
+          style={{ background: "#f0f4ff", color: "#64748b" }}>Cancelar</button>
       </div>
     </div>
   );
@@ -4206,7 +4211,7 @@ function ClearAllFilesButton({ onClear }: { onClear: () => void }) {
           style={{ background: "#8a1a1a", color: "#fff" }}>Borrar todo</button>
         <button onClick={() => setConfirm(false)}
           className="px-3 py-1 rounded text-xs"
-          style={{ background: "#1a2a4a", color: "#6a8ab0" }}>Cancelar</button>
+          style={{ background: "#f0f4ff", color: "#64748b" }}>Cancelar</button>
       </div>
     </div>
   );
