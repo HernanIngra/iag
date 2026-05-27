@@ -129,6 +129,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [fieldName, setFieldName] = useState("");
   const [lotCount, setLotCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [empresaDropdownOpen, setEmpresaDropdownOpen] = useState(false);
   const [shpStatus, setShpStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [shpErrorDetail, setShpErrorDetail] = useState<string | null>(null);
   const [csvStatus, setCsvStatus] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -380,7 +381,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     // Si hay colecciones cargadas pero las capas no están en el mapa (e.g. upload hecho
     // desde el dashboard antes de que el mapa terminara de inicializarse), dibujarlas ahora.
     if (collections.length > 0 && !shpLayerRef.current && mapRef.current) {
-      drawCollections(collections, colorMap, cultivoColorMap, lotData).then((layerList) => {
+      drawCollections(visibleCollections, colorMap, cultivoColorMap, lotData).then((layerList) => {
         import("leaflet").then((mod) => {
           const bounds = mod.default.featureGroup(layerList as LeafletGeoJSON[]).getBounds();
           if (bounds.isValid() && mapRef.current) mapRef.current.fitBounds(bounds, { padding: [30, 30] });
@@ -613,6 +614,20 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     lotDimmedRef.current = newDimmed;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilters.tipos, activeFilters.prod, lotData]);
+
+  // ── Redibuja el mapa cuando cambia la empresa activa ────────────────────────
+  useEffect(() => {
+    if (view !== "map" || !mapRef.current || !collections.length) return;
+    const filtered = activeEmpresaId
+      ? collections.map((col) => {
+          const fc = col as GeoJSON.FeatureCollection;
+          if (!fc.features) return col;
+          return { ...fc, features: fc.features.filter((f) => !f.properties?._empresaId || f.properties._empresaId === activeEmpresaId) };
+        }) as GeoCollection[]
+      : collections;
+    drawCollections(filtered, colorMap, cultivoColorMap, lotData);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeEmpresaId, collections]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1442,6 +1457,20 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     const v = visits.find((v) => v.date === today);
     return v && (v.note || v.yieldStars || v.sprayTarget);
   }).length;
+  // ── Empresa filter: only show data/shapes for the active empresa ────────────
+  const visibleRows = useMemo(
+    () => activeEmpresaId ? allRows.filter((r) => !r._empresaId || r._empresaId === activeEmpresaId) : allRows,
+    [allRows, activeEmpresaId]
+  );
+  const visibleCollections = useMemo(() => {
+    if (!activeEmpresaId) return collections;
+    return collections.map((col) => {
+      const fc = col as GeoJSON.FeatureCollection;
+      if (!fc.features) return col;
+      return { ...fc, features: fc.features.filter((f) => !f.properties?._empresaId || f.properties._empresaId === activeEmpresaId) };
+    }) as GeoCollection[];
+  }, [collections, activeEmpresaId]);
+
   const filteredRows = selectedLot ? getFilteredRows(selectedLot.lotName, activeFilters, lotData) : [];
   const allLotRows = selectedLot ? (lotData[selectedLot.lotName] ?? []) : [];
   const todayVisit = selectedLot
@@ -1476,13 +1505,59 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             </button>
           )}
           <a href="/" className="font-bold text-lg tracking-widest" style={{ color: "#e2b04a" }}>I.Ag</a>
-          {view === "map" && (
-            <>
-              <span className="text-sm hidden sm:inline" style={{ color: "#aac4e0" }}>
-                {fieldName ? `✓ ${fieldName}` : "· Cargá archivos para comenzar"}
+          {view === "map" && myEmpresas.length > 0 && (
+            <div className="hidden sm:flex items-center gap-1 text-sm">
+              {/* Espacio */}
+              <span className="px-2 py-0.5 rounded text-xs" style={{ background: "#16213e", color: "#6a8ab0", border: "1px solid #1a3a6a" }}>
+                {workspaceName || "Espacio"}
               </span>
+              <span style={{ color: "#2a5298" }}>›</span>
+              {/* Empresa — dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setEmpresaDropdownOpen((o) => !o)}
+                  className="px-2 py-0.5 rounded text-xs font-semibold flex items-center gap-1"
+                  style={{ background: "#1a2a50", color: "#e2b04a", border: "1px solid #2a5298" }}
+                >
+                  {activeEmpresaId ? (myEmpresas.find((e) => e.id === activeEmpresaId)?.name ?? "Empresa") : "Todas"}
+                  <span style={{ fontSize: "0.6rem" }}>▼</span>
+                </button>
+                {empresaDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[599]" onClick={() => setEmpresaDropdownOpen(false)} />
+                    <ul className="absolute left-0 top-full mt-1 z-[600] rounded shadow-lg min-w-[140px] py-1"
+                      style={{ background: "#16213e", border: "1px solid #2a5298" }}>
+                      <li>
+                        <button
+                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-[#1a3a6a] transition-colors"
+                          style={{ color: !activeEmpresaId ? "#e2b04a" : "#aac4e0" }}
+                          onClick={() => { setActiveEmpresaId(undefined); setEmpresaDropdownOpen(false); }}
+                        >
+                          Todas
+                        </button>
+                      </li>
+                      {myEmpresas.map((emp) => (
+                        <li key={emp.id}>
+                          <button
+                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-[#1a3a6a] transition-colors"
+                            style={{ color: activeEmpresaId === emp.id ? "#e2b04a" : "#aac4e0" }}
+                            onClick={() => { setActiveEmpresaId(emp.id); setEmpresaDropdownOpen(false); }}
+                          >
+                            {emp.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
               {lotCount > 0 && <span className="text-xs" style={{ color: "#6a8ab0" }}>{lotCount} lotes</span>}
-            </>
+            </div>
+          )}
+          {view === "map" && myEmpresas.length === 0 && (
+            <span className="text-sm hidden sm:inline" style={{ color: "#aac4e0" }}>
+              {fieldName ? `✓ ${fieldName}` : "· Cargá archivos para comenzar"}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-3">
@@ -1750,55 +1825,34 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         {(() => {
           const panelContent = (
             <>
-              {lotCount > 0 && (
-                <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
-                  <button className="w-full text-xs py-1 rounded" style={{ background: "#1a4a80", color: "#e0e8f0" }}
-                    onClick={() => {
-                      if (!shpLayerRef.current || !mapRef.current) return;
-                      const layers = allLotLayersRef.current.map((l) => l.layer);
-                      import("leaflet").then((L) => {
-                        const bounds = L.featureGroup(layers).getBounds();
-                        if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
-                      });
-                    }}>
-                    📍 Centrar en los lotes
-                  </button>
-                </div>
-              )}
-
-              {selectedLot && todayVisit && (
-                <SidebarSection title="📌 Recorrida de hoy" collapsible defaultOpen={true}>
-                  <VisitForm
-                    visit={todayVisit}
-                    onSave={(u) => saveVisit(selectedLot.lotName, today, u)}
-                    hasSprayingContext={recentSprayingsForSelected.length > 0}
-                    recentSprayings={recentSprayingsForSelected}
+              {/* ── 1. LOTE SELECCIONADO (arriba de todo) ── */}
+              <div className="p-4" style={{ borderBottom: "1px solid #0f3460" }}>
+                <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#aac4e0" }}>📌 Lote seleccionado</p>
+                {!selectedLot ? (
+                  <p className="text-xs italic" style={{ color: "#445" }}>Tocá un lote del mapa para ver su información.</p>
+                ) : (
+                  <LotInfo
+                    lotName={selectedLot.lotName}
+                    zone={selectedLot.zone}
+                    color={colorMap[selectedLot.zone] ?? "#e2b04a"}
+                    filteredRows={filteredRows}
+                    allRows={allLotRows}
+                    visits={lotVisits[selectedLot.lotName] ?? []}
+                    onSaveVisit={(date, update) => saveVisit(selectedLot.lotName, date, update)}
+                    recentSprayings={allLotRows.filter((r) => {
+                      if (!r._fecha) return false;
+                      const days = (Date.now() - r._fecha.getTime()) / 86400000;
+                      return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
+                    })}
                     lastAppWasHerbicide={lastAppWasHerbicide}
+                    lotRindes={rindeData[selectedLot.lotName] ?? []}
+                    rainReadings={rainData[selectedLot.lotName] ?? []}
+                    onAddRain={(reading) => addRainReading(selectedLot.lotName, reading)}
                   />
-                </SidebarSection>
-              )}
+                )}
+              </div>
 
-              {allRows.length > 0 && (
-                <FiltersPanel
-                  allRows={allRows}
-                  cultivoColorMap={cultivoColorMap}
-                  filters={activeFilters}
-                  onChange={setActiveFilters}
-                />
-              )}
-
-              {Object.values(lotVisits).some((vs) => vs.some((v) => v.note || v.yieldStars || v.sprayTarget)) && (
-                <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
-                  <button
-                    className="w-full py-1.5 text-xs rounded"
-                    style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
-                    onClick={downloadVisitsCSV}
-                  >
-                    ⬇ Exportar historial de recorridas (.csv)
-                  </button>
-                </div>
-              )}
-
+              {/* ── 2. LEYENDA CULTIVOS / EMPRESAS ── */}
               {myEmpresas.length > 1 && (
                 <div className="px-3 py-2" style={{ borderBottom: "1px solid #0f3460" }}>
                   <p className="text-xs mb-2" style={{ color: "#6a8ab0" }}>Color por</p>
@@ -1844,33 +1898,58 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                 </SidebarSection>
               )}
 
-              <div className="p-4">
-                <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#aac4e0" }}>📌 Lote seleccionado</p>
-                {!selectedLot ? (
-                  <p className="text-xs italic" style={{ color: "#445" }}>Tocá un lote del mapa para ver su información.</p>
-                ) : (
-                  <>
-                    <LotInfo
-                      lotName={selectedLot.lotName}
-                      zone={selectedLot.zone}
-                      color={colorMap[selectedLot.zone] ?? "#e2b04a"}
-                      filteredRows={filteredRows}
-                      allRows={allLotRows}
-                      visits={lotVisits[selectedLot.lotName] ?? []}
-                      onSaveVisit={(date, update) => saveVisit(selectedLot.lotName, date, update)}
-                      recentSprayings={allLotRows.filter((r) => {
-                        if (!r._fecha) return false;
-                        const days = (Date.now() - r._fecha.getTime()) / 86400000;
-                        return days <= 45 && SPRAYING_TIPOS.has((r._tipo ?? "").toUpperCase());
-                      })}
-                      lastAppWasHerbicide={lastAppWasHerbicide}
-                      lotRindes={rindeData[selectedLot.lotName] ?? []}
-                      rainReadings={rainData[selectedLot.lotName] ?? []}
-                      onAddRain={(reading) => addRainReading(selectedLot.lotName, reading)}
-                    />
-                  </>
-                )}
-              </div>
+              {/* ── 3. CENTRAR EN LOTES ── */}
+              {lotCount > 0 && (
+                <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
+                  <button className="w-full text-xs py-1 rounded" style={{ background: "#1a4a80", color: "#e0e8f0" }}
+                    onClick={() => {
+                      if (!shpLayerRef.current || !mapRef.current) return;
+                      const layers = allLotLayersRef.current.map((l) => l.layer);
+                      import("leaflet").then((L) => {
+                        const bounds = L.featureGroup(layers).getBounds();
+                        if (bounds.isValid()) mapRef.current!.fitBounds(bounds, { padding: [30, 30] });
+                      });
+                    }}>
+                    📍 Centrar en los lotes
+                  </button>
+                </div>
+              )}
+
+              {/* ── 4. RECORRIDA DE HOY (colapsada por default) ── */}
+              {selectedLot && todayVisit && (
+                <SidebarSection title="📌 Recorrida de hoy" collapsible defaultOpen={false}>
+                  <VisitForm
+                    visit={todayVisit}
+                    onSave={(u) => saveVisit(selectedLot.lotName, today, u)}
+                    hasSprayingContext={recentSprayingsForSelected.length > 0}
+                    recentSprayings={recentSprayingsForSelected}
+                    lastAppWasHerbicide={lastAppWasHerbicide}
+                  />
+                </SidebarSection>
+              )}
+
+              {/* ── 5. FILTROS (colapsados por default) ── */}
+              {visibleRows.length > 0 && (
+                <FiltersPanel
+                  allRows={visibleRows}
+                  cultivoColorMap={cultivoColorMap}
+                  filters={activeFilters}
+                  onChange={setActiveFilters}
+                />
+              )}
+
+              {/* ── 6. EXPORTAR HISTORIAL ── */}
+              {Object.values(lotVisits).some((vs) => vs.some((v) => v.note || v.yieldStars || v.sprayTarget)) && (
+                <div className="p-3" style={{ borderBottom: "1px solid #0f3460" }}>
+                  <button
+                    className="w-full py-1.5 text-xs rounded"
+                    style={{ background: "transparent", border: "1px solid #2a4a6a", color: "#6a8ab0" }}
+                    onClick={downloadVisitsCSV}
+                  >
+                    ⬇ Exportar historial de recorridas (.csv)
+                  </button>
+                </div>
+              )}
             </>
           );
 
@@ -2128,7 +2207,7 @@ function FiltersPanel({
   }, [allProducts, filters.prod]);
 
   return (
-    <SidebarSection title="🔍 Filtros">
+    <SidebarSection title="🔍 Filtros" collapsible defaultOpen={false}>
       <div className="space-y-3 text-xs">
         <div>
           <div className="flex justify-between items-center mb-1">
