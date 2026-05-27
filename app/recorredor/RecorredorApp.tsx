@@ -1,7 +1,7 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as LeafletMap, LayerGroup, Layer, GeoJSON as LeafletGeoJSON } from "leaflet";
 import type { Feature } from "geojson";
 import type { GeoCollection } from "@/lib/shapefile";
@@ -130,6 +130,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [lotCount, setLotCount] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [empresaDropdownOpen, setEmpresaDropdownOpen] = useState(false);
+  const [sidebarDark, setSidebarDark] = useState(false);
   const [shpStatus, setShpStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [shpErrorDetail, setShpErrorDetail] = useState<string | null>(null);
   const [csvStatus, setCsvStatus] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -390,6 +391,12 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
+
+  // ── Load sidebar theme preference ────────────────────────────────────────────
+
+  useEffect(() => {
+    if (localStorage.getItem("iag_sb_dark") === "1") setSidebarDark(true);
+  }, []);
 
   // ── Load management backup from localStorage on mount ────────────────────────
 
@@ -1486,6 +1493,21 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     return sorted[0]?._tipo?.toUpperCase() === "HERBICIDA";
   })();
 
+  // ── Sidebar theme CSS variables ──────────────────────────────────────────────
+  const sbTheme = (sidebarDark ? {
+    "--sb-bg": "#16213e", "--sb-card": "#0d1b35", "--sb-input": "#0f2040",
+    "--sb-bd": "#0f3460", "--sb-bd-s": "#1a3460",
+    "--sb-text": "#aac4e0", "--sb-text-s": "#6a8ab0", "--sb-text-m": "#556677", "--sb-text-d": "#e0e0e0",
+    "--sb-ok-bg": "#0d2a1a", "--sb-ok-bd": "#1e5a2e", "--sb-ok-tx": "#3dbb6e",
+    "--sb-blue-bg": "#1a2a50", "--sb-blue-bd": "#2a4a7a",
+  } : {
+    "--sb-bg": "#ffffff", "--sb-card": "#f1f5f9", "--sb-input": "#f8fafc",
+    "--sb-bd": "#e2e8f0", "--sb-bd-s": "#cbd5e1",
+    "--sb-text": "#374151", "--sb-text-s": "#64748b", "--sb-text-m": "#94a3b8", "--sb-text-d": "#1e293b",
+    "--sb-ok-bg": "#dcfce7", "--sb-ok-bd": "#86efac", "--sb-ok-tx": "#15803d",
+    "--sb-blue-bg": "#dbeafe", "--sb-blue-bd": "#bfdbfe",
+  }) as React.CSSProperties;
+
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: "#1a1a2e", color: "#e0e0e0" }}>
 
@@ -1830,11 +1852,23 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
         {(() => {
           const panelContent = (
             <>
+              {/* ── Tema claro/oscuro ── */}
+              <div className="flex justify-end px-3 pt-2 pb-1" style={{ borderBottom: "1px solid var(--sb-bd)" }}>
+                <button
+                  onClick={() => setSidebarDark((d) => { const n = !d; localStorage.setItem("iag_sb_dark", n ? "1" : "0"); return n; })}
+                  className="text-xs px-2 py-0.5 rounded transition-all"
+                  style={{ background: "var(--sb-card)", color: "var(--sb-text-s)", border: "1px solid var(--sb-bd)" }}
+                  title={sidebarDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+                >
+                  {sidebarDark ? "☀️ Claro" : "🌙 Oscuro"}
+                </button>
+              </div>
+
               {/* ── 1. LOTE SELECCIONADO (arriba de todo) ── */}
-              <div className="p-4" style={{ borderBottom: "1px solid #e2e8f0" }}>
-                <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#374151" }}>📌 Lote seleccionado</p>
+              <div className="p-4" style={{ borderBottom: "1px solid var(--sb-bd)" }}>
+                <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "var(--sb-text)" }}>📌 Lote seleccionado</p>
                 {!selectedLot ? (
-                  <p className="text-xs italic" style={{ color: "#94a3b8" }}>Tocá un lote del mapa para ver su información.</p>
+                  <p className="text-xs italic" style={{ color: "var(--sb-text-m)" }}>Tocá un lote del mapa para ver su información.</p>
                 ) : (
                   <LotInfo
                     lotName={selectedLot.lotName}
@@ -1859,16 +1893,16 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
               {/* ── 2. LEYENDA CULTIVOS / EMPRESAS ── */}
               {myEmpresas.length > 1 && (
-                <div className="px-3 py-2" style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <p className="text-xs mb-2" style={{ color: "#64748b" }}>Color por</p>
+                <div className="px-3 py-2" style={{ borderBottom: "1px solid var(--sb-bd)" }}>
+                  <p className="text-xs mb-2" style={{ color: "var(--sb-text-s)" }}>Color por</p>
                   <div className="flex gap-1">
                     {(["cultivo", "empresa"] as const).map((mode) => (
                       <button key={mode} onClick={() => setColorMode(mode)}
                         className="px-3 py-1 rounded-full text-xs font-medium transition-all"
                         style={{
-                          background: colorMode === mode ? "#3b82f6" : "#f1f5f9",
-                          color: colorMode === mode ? "#e2b04a" : "#64748b",
-                          border: `1px solid ${colorMode === mode ? "#3a6aaa" : "#cbd5e1"}`,
+                          background: colorMode === mode ? "#3b82f6" : "var(--sb-card)",
+                          color: colorMode === mode ? "#e2b04a" : "var(--sb-text-s)",
+                          border: `1px solid ${colorMode === mode ? "#3a6aaa" : "var(--sb-bd-s)"}`,
                         }}>
                         {mode === "cultivo" ? "🌱 Cultivo" : "🏛 Empresa"}
                       </button>
@@ -1881,7 +1915,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                 <SidebarSection title="🏛 Empresas" collapsible defaultOpen={true}>
                   <ul className="space-y-1">
                     {myEmpresas.map((emp) => (
-                      <li key={emp.id} className="flex items-center gap-2 text-xs" style={{ color: "#374151" }}>
+                      <li key={emp.id} className="flex items-center gap-2 text-xs" style={{ color: "var(--sb-text)" }}>
                         <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: empresaColorMap[emp.id] ?? "#8ab4d4" }} />
                         {emp.name}
                       </li>
@@ -1894,7 +1928,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                 <SidebarSection title="🌱 Cultivos" collapsible defaultOpen={false}>
                   <ul className="space-y-1">
                     {Object.entries(cultivoColorMap).sort((a, b) => a[0].localeCompare(b[0])).map(([name, color]) => (
-                      <li key={name} className="flex items-center gap-2 text-xs" style={{ color: "#374151" }}>
+                      <li key={name} className="flex items-center gap-2 text-xs" style={{ color: "var(--sb-text)" }}>
                         <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: color }} />
                         {name}
                       </li>
@@ -1905,8 +1939,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
               {/* ── 3. CENTRAR EN LOTES ── */}
               {lotCount > 0 && (
-                <div className="p-3" style={{ borderBottom: "1px solid #e2e8f0" }}>
-                  <button className="w-full text-xs py-1 rounded" style={{ background: "#1d4ed8", color: "#1e293b" }}
+                <div className="p-3" style={{ borderBottom: "1px solid var(--sb-bd)" }}>
+                  <button className="w-full text-xs py-1 rounded" style={{ background: "#1d4ed8", color: "var(--sb-text-d)" }}
                     onClick={() => {
                       if (!shpLayerRef.current || !mapRef.current) return;
                       const layers = allLotLayersRef.current.map((l) => l.layer);
@@ -1945,10 +1979,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
               {/* ── 6. EXPORTAR HISTORIAL ── */}
               {Object.values(lotVisits).some((vs) => vs.some((v) => v.note || v.yieldStars || v.sprayTarget)) && (
-                <div className="p-3" style={{ borderBottom: "1px solid #e2e8f0" }}>
+                <div className="p-3" style={{ borderBottom: "1px solid var(--sb-bd)" }}>
                   <button
                     className="w-full py-1.5 text-xs rounded"
-                    style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
+                    style={{ background: "transparent", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-s)" }}
                     onClick={downloadVisitsCSV}
                   >
                     ⬇ Exportar historial de recorridas (.csv)
@@ -1960,7 +1994,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
 
           if (isMobile) {
             return (
-              <div className="flex-1 overflow-y-auto" style={{ background: "#ffffff", borderTop: "1px solid #e2e8f0" }}>
+              <div className="flex-1 overflow-y-auto" style={{ ...sbTheme, background: "var(--sb-bg)", borderTop: "1px solid var(--sb-bd)" }}>
                 {panelContent}
               </div>
             );
@@ -1975,10 +2009,11 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
               <aside
                 className="absolute top-0 left-0 bottom-0 flex flex-col overflow-y-auto transition-all duration-300 z-[500]"
                 style={{
+                  ...sbTheme,
                   width: sidebarOpen ? "300px" : "0",
                   overflow: sidebarOpen ? "auto" : "hidden",
-                  background: "#ffffff",
-                  borderRight: "1px solid #e2e8f0",
+                  background: "var(--sb-bg)",
+                  borderRight: "1px solid var(--sb-bd)",
                 }}
               >
                 {panelContent}
@@ -2089,17 +2124,17 @@ function SidebarSection({ title, children, optional, collapsible, defaultOpen = 
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="p-3" style={{ borderBottom: "1px solid #e2e8f0" }}>
+    <div className="p-3" style={{ borderBottom: "1px solid var(--sb-bd)" }}>
       <button
         className="flex items-center justify-between w-full mb-0"
         style={{ cursor: collapsible ? "pointer" : "default", background: "none", border: "none", padding: 0 }}
         onClick={() => collapsible && setOpen((o) => !o)}
       >
-        <p className="text-xs uppercase tracking-wider flex items-center gap-2" style={{ color: "#374151" }}>
+        <p className="text-xs uppercase tracking-wider flex items-center gap-2" style={{ color: "var(--sb-text)" }}>
           {title}
-          {optional && <span className="text-xs normal-case px-2 py-0.5 rounded-full" style={{ background: "#f1f5f9", color: "#64748b", letterSpacing: 0, textTransform: "none" }}>Optativo</span>}
+          {optional && <span className="text-xs normal-case px-2 py-0.5 rounded-full" style={{ background: "var(--sb-card)", color: "var(--sb-text-s)", letterSpacing: 0, textTransform: "none" }}>Optativo</span>}
         </p>
-        {collapsible && <span className="text-xs flex-shrink-0 ml-2" style={{ color: "#64748b" }}>{open ? "▲" : "▼"}</span>}
+        {collapsible && <span className="text-xs flex-shrink-0 ml-2" style={{ color: "var(--sb-text-s)" }}>{open ? "▲" : "▼"}</span>}
       </button>
       {open && <div className="mt-2">{children}</div>}
     </div>
@@ -2122,7 +2157,7 @@ function UploadZone({
     return (
       <div className="space-y-1">
         {loadedFiles.map((name, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs px-2 py-1 rounded" style={{ background: "#dcfce7", border: "1px solid #86efac", color: "#15803d" }}>
+          <div key={i} className="flex items-center gap-2 text-xs px-2 py-1 rounded" style={{ background: "var(--sb-ok-bg)", border: "1px solid var(--sb-ok-bd)", color: "var(--sb-ok-tx)" }}>
             <span className="truncate flex-1">✓ {name}</span>
             {onRemove && (
               <button
@@ -2136,7 +2171,7 @@ function UploadZone({
         ))}
         <label
           className="flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded text-xs transition-colors hover:opacity-80"
-          style={{ background: "#f1f5f9", border: "1px dashed #2a5298", color: "#64748b" }}
+          style={{ background: "var(--sb-card)", border: "1px dashed #2a5298", color: "var(--sb-text-s)" }}
         >
           <input type="file" accept={accept} multiple={multiple} className="sr-only"
             onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />
@@ -2155,7 +2190,7 @@ function UploadZone({
         className="block rounded-lg text-center cursor-pointer transition-all relative"
         style={{
           border: `2px dashed ${drag ? "#e2b04a" : "#3b82f6"}`,
-          background: drag ? "#f0f4ff" : "#f1f5f9",
+          background: drag ? "var(--sb-card)" : "var(--sb-card)",
           padding: "12px 10px",
         }}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
@@ -2165,8 +2200,8 @@ function UploadZone({
         <input type="file" accept={accept} multiple={multiple} className="sr-only"
           onChange={(e) => { if (e.target.files?.length) onFiles(e.target.files); }} />
         <div className="text-2xl mb-1">{icon}</div>
-        <p className="text-xs" style={{ color: "#64748b" }}>Clic para subir o arrastrá acá</p>
-        <p className="text-xs mt-1" style={{ color: "#94a3b8" }}>{hint}</p>
+        <p className="text-xs" style={{ color: "var(--sb-text-s)" }}>Clic para subir o arrastrá acá</p>
+        <p className="text-xs mt-1" style={{ color: "var(--sb-text-m)" }}>{hint}</p>
       </label>
       {status && !status.ok && (
         <p className="text-xs mt-1 px-2 py-1 rounded" style={{ background: "#3a2a0a", color: "#e2b04a" }}>{status.msg}</p>
@@ -2216,11 +2251,11 @@ function FiltersPanel({
       <div className="space-y-3 text-xs">
         <div>
           <div className="flex justify-between items-center mb-1">
-            <span style={{ color: "#64748b" }}>Tipo de aplicación</span>
+            <span style={{ color: "var(--sb-text-s)" }}>Tipo de aplicación</span>
             <div className="flex gap-1">
-              <button className="px-1.5 py-0.5 rounded text-xs" style={{ background: "none", border: "1px solid #94a3b8", color: "#64748b" }}
+              <button className="px-1.5 py-0.5 rounded text-xs" style={{ background: "none", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-s)" }}
                 onClick={() => onChange({ ...filters, tipos })}>Todos</button>
-              <button className="px-1.5 py-0.5 rounded text-xs" style={{ background: "none", border: "1px solid #94a3b8", color: "#64748b" }}
+              <button className="px-1.5 py-0.5 rounded text-xs" style={{ background: "none", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-s)" }}
                 onClick={() => onChange({ ...filters, tipos: [] })}>Ninguno</button>
             </div>
           </div>
@@ -2244,10 +2279,10 @@ function FiltersPanel({
         {/* Product filter — collapsible */}
         <div>
           <div className="flex justify-between items-center mb-1">
-            <span style={{ color: "#64748b" }}>Producto</span>
+            <span style={{ color: "var(--sb-text-s)" }}>Producto</span>
             <button
               className="px-1.5 py-0.5 rounded text-xs font-bold"
-              style={{ background: showProdFilter ? "#dbeafe" : "none", border: "1px solid #94a3b8", color: "#64748b" }}
+              style={{ background: showProdFilter ? "var(--sb-blue-bg)" : "none", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-s)" }}
               onClick={() => { setShowProdFilter((v) => !v); if (showProdFilter) onChange({ ...filters, prod: "" }); }}
             >{showProdFilter ? "−" : "+"}</button>
           </div>
@@ -2257,15 +2292,15 @@ function FiltersPanel({
                 type="text"
                 placeholder="Buscar producto..."
                 className="w-full rounded px-2 py-1.5 mb-1"
-                style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#374151" }}
+                style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)", color: "var(--sb-text)" }}
                 value={filters.prod}
                 onChange={(e) => onChange({ ...filters, prod: e.target.value })}
               />
               {filters.prod && filteredProducts.length > 0 && (
-                <div className="max-h-28 overflow-y-auto rounded" style={{ background: "#f1f5f9", border: "1px solid #94a3b8" }}>
+                <div className="max-h-28 overflow-y-auto rounded" style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)" }}>
                   {filteredProducts.slice(0, 20).map((p) => (
                     <button key={p} className="w-full text-left px-2 py-1 text-xs hover:opacity-80"
-                      style={{ color: filters.prod === p ? "#7ab8e8" : "#aac", background: filters.prod === p ? "#dbeafe" : "transparent" }}
+                      style={{ color: filters.prod === p ? "#7ab8e8" : "#aac", background: filters.prod === p ? "var(--sb-blue-bg)" : "transparent" }}
                       onClick={() => onChange({ ...filters, prod: p })}>
                       {p}
                     </button>
@@ -2273,21 +2308,21 @@ function FiltersPanel({
                 </div>
               )}
               {filters.prod && (
-                <button className="mt-1 text-xs" style={{ color: "#64748b" }}
+                <button className="mt-1 text-xs" style={{ color: "var(--sb-text-s)" }}
                   onClick={() => onChange({ ...filters, prod: "" })}>✕ Limpiar producto</button>
               )}
             </div>
           )}
         </div>
 
-        <select className="w-full rounded px-2 py-1.5" style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#374151" }}
+        <select className="w-full rounded px-2 py-1.5" style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)", color: "var(--sb-text)" }}
           value={filters.campaign} onChange={(e) => onChange({ ...filters, campaign: e.target.value })}>
           <option value="">Todas las campañas</option>
           {campaigns.map((c) => <option key={c} value={c}>Campaña {c}</option>)}
         </select>
 
         {cultivos.length > 0 && (
-          <select className="w-full rounded px-2 py-1.5" style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#374151" }}
+          <select className="w-full rounded px-2 py-1.5" style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)", color: "var(--sb-text)" }}
             value={filters.cultivo} onChange={(e) => onChange({ ...filters, cultivo: e.target.value })}>
             <option value="">Todos los cultivos</option>
             {cultivos.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -2295,14 +2330,14 @@ function FiltersPanel({
         )}
 
         {geneticas.length > 0 && (
-          <select className="w-full rounded px-2 py-1.5" style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#374151" }}
+          <select className="w-full rounded px-2 py-1.5" style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)", color: "var(--sb-text)" }}
             value={filters.genetica} onChange={(e) => onChange({ ...filters, genetica: e.target.value })}>
             <option value="">Todas las genéticas</option>
             {geneticas.map((g) => <option key={g} value={g}>{g}</option>)}
           </select>
         )}
 
-        <button className="w-full py-1.5 rounded font-semibold text-xs" style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
+        <button className="w-full py-1.5 rounded font-semibold text-xs" style={{ background: "transparent", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-s)" }}
           onClick={() => {
             const dates = allRows.map((r) => r._fecha).filter((d): d is Date => !!d && !isNaN(d.getTime()));
             const from = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))).toISOString().slice(0, 10) : "";
@@ -2320,13 +2355,13 @@ function FiltersPanel({
 function StarRating({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
   return (
     <div>
-      <p className="text-xs mb-1" style={{ color: "#64748b" }}>{label}</p>
+      <p className="text-xs mb-1" style={{ color: "var(--sb-text-s)" }}>{label}</p>
       <div className="flex gap-1">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
             type="button"
-            style={{ fontSize: "1.4rem", lineHeight: 1, color: n <= value ? "#e2b04a" : "#94a3b8", background: "none", border: "none", cursor: "pointer", padding: "2px" }}
+            style={{ fontSize: "1.4rem", lineHeight: 1, color: n <= value ? "#e2b04a" : "var(--sb-text-m)", background: "none", border: "none", cursor: "pointer", padding: "2px" }}
             onClick={() => onChange(n === value ? 0 : n)}
           >
             ★
@@ -2353,18 +2388,18 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings,
     <div className="space-y-3">
       <StarRating value={visit.yieldStars} onChange={(n) => onSave({ yieldStars: n })} label="Estimación de rinde" />
       {hasSprayingContext && (
-        <div className="p-2 rounded space-y-2" style={{ background: "#f1f5f9", border: "1px solid #94a3b8" }}>
-          <p className="text-xs" style={{ color: "#64748b" }}>
+        <div className="p-2 rounded space-y-2" style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)" }}>
+          <p className="text-xs" style={{ color: "var(--sb-text-s)" }}>
             Aplicación reciente:{" "}
             {recentSprayings.slice(0, 3).map((r, i) => (
               <span key={i}>{i > 0 ? ", " : ""}<strong style={{ color: "#e2b04a" }}>{r._prod || r._tipo}</strong>{r._fechaStr ? ` (${r._fechaStr})` : ""}</span>
             ))}
           </p>
           <div>
-            <label className="text-xs block mb-1" style={{ color: "#374151" }}>¿Cuál fue el blanco?</label>
+            <label className="text-xs block mb-1" style={{ color: "var(--sb-text)" }}>¿Cuál fue el blanco?</label>
             <input
               className="w-full rounded px-2 py-1 text-xs"
-              style={{ background: "#ffffff", border: "1px solid #2a5298", color: "#1e293b", outline: "none" }}
+              style={{ background: "var(--sb-bg)", border: "1px solid #2a5298", color: "var(--sb-text-d)", outline: "none" }}
               placeholder="Ej: yuyo colorado, roya..."
               value={localTarget}
               onChange={(e) => setLocalTarget(e.target.value)}
@@ -2377,19 +2412,19 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings,
       {lastAppWasHerbicide && (
         <div className="p-2 rounded space-y-2" style={{ background: "#fff7f5", border: "1px solid #fca5a5" }}>
           <p className="text-xs font-semibold" style={{ color: "#e2804a" }}>Fitotoxicidad</p>
-          <p className="text-xs" style={{ color: "#64748b" }}>La última aplicación fue un herbicida. ¿Se observa daño en el cultivo?</p>
+          <p className="text-xs" style={{ color: "var(--sb-text-s)" }}>La última aplicación fue un herbicida. ¿Se observa daño en el cultivo?</p>
           <div className="flex gap-1 flex-wrap">
             {FITO_LABELS.map((label, i) => {
               const active = visit.fitotoxicity === i;
-              const color = i === 0 ? "#15803d" : i <= 2 ? "#e2b04a" : "#e24a4a";
+              const color = i === 0 ? "var(--sb-ok-tx)" : i <= 2 ? "#e2b04a" : "#e24a4a";
               return (
                 <button key={i}
                   onClick={() => onSave({ fitotoxicity: active ? undefined : i })}
                   className="px-2 py-1 rounded text-xs font-semibold transition-all"
                   style={{
-                    background: active ? color + "33" : "#f1f5f9",
+                    background: active ? color + "33" : "var(--sb-card)",
                     border: `1px solid ${active ? color : "#fca5a5"}`,
-                    color: active ? color : "#64748b",
+                    color: active ? color : "var(--sb-text-s)",
                   }}>
                   {label}
                 </button>
@@ -2399,18 +2434,18 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings,
         </div>
       )}
       <div>
-        <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "#64748b" }}>Notas</label>
+        <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "var(--sb-text-s)" }}>Notas</label>
         <textarea
           value={localNote}
           onChange={(e) => setLocalNote(e.target.value)}
           onBlur={() => onSave({ note: localNote })}
           placeholder="Observaciones del recorrido..."
           className="w-full rounded-md p-2 text-sm resize-y leading-relaxed"
-          style={{ background: "#f1f5f9", border: "1px solid #94a3b8", color: "#1e293b", outline: "none", minHeight: "70px" }}
+          style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-d)", outline: "none", minHeight: "70px" }}
         />
       </div>
       {onDone && (
-        <button className="text-xs py-1 px-3 rounded" style={{ background: "#f0f4ff", border: "1px solid #2a5298", color: "#374151" }} onClick={onDone}>
+        <button className="text-xs py-1 px-3 rounded" style={{ background: "var(--sb-card)", border: "1px solid #2a5298", color: "var(--sb-text)" }} onClick={onDone}>
           Listo
         </button>
       )}
@@ -2449,25 +2484,25 @@ function LotInfo({
   return (
     <div>
       <div className="text-xl font-bold mb-1" style={{ color }}>🌿 {lotName}</div>
-      <div className="text-xs mb-3" style={{ color: "#64748b" }}>Campo: {zone}</div>
+      <div className="text-xs mb-3" style={{ color: "var(--sb-text-s)" }}>Campo: {zone}</div>
 
       {allRows.length > 0 && (
-        <div className="rounded-lg p-2 mb-3 text-xs space-y-1" style={{ background: "#f1f5f9", color: "#64748b" }}>
+        <div className="rounded-lg p-2 mb-3 text-xs space-y-1" style={{ background: "var(--sb-card)", color: "var(--sb-text-s)" }}>
           {cultivos.length > 0 && <div>🌱 <strong style={{ color: "#e2b04a" }}>Cultivo:</strong> {cultivos.join(", ")}</div>}
           {sups.length > 0 && <div>📐 <strong style={{ color: "#e2b04a" }}>Sup:</strong> {sups[0]} ha</div>}
           {campaigns.length > 0 && <div>📅 <strong style={{ color: "#e2b04a" }}>Campaña:</strong> {campaigns.join(", ")}</div>}
           <div>📋 <strong style={{ color: "#e2b04a" }}>{filteredRows.length}</strong> registro{filteredRows.length !== 1 ? "s" : ""}
-            {filteredRows.length < allRows.length && <span style={{ color: "#64748b" }}> (de {allRows.length})</span>}
+            {filteredRows.length < allRows.length && <span style={{ color: "var(--sb-text-s)" }}> (de {allRows.length})</span>}
           </div>
         </div>
       )}
 
       {/* ── Rindes históricos (collapsible) ── */}
       {lotRindes.length > 0 && (
-        <div style={{ borderTop: "1px solid #e2e8f0", marginBottom: "8px" }}>
+        <div style={{ borderTop: "1px solid var(--sb-bd)", marginBottom: "8px" }}>
           <button
             className="flex items-center justify-between w-full py-2 text-xs uppercase tracking-wider"
-            style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer" }}
+            style={{ background: "none", border: "none", color: "var(--sb-text-s)", cursor: "pointer" }}
             onClick={() => setRindesOpen((o) => !o)}
           >
             <span>🌾 Rindes históricos</span>
@@ -2478,10 +2513,10 @@ function LotInfo({
       )}
 
       {/* ── Lluvia ── */}
-      <div style={{ borderTop: "1px solid #e2e8f0", marginBottom: "8px" }}>
+      <div style={{ borderTop: "1px solid var(--sb-bd)", marginBottom: "8px" }}>
         <button
           className="flex items-center justify-between w-full py-2 text-xs uppercase tracking-wider"
-          style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer" }}
+          style={{ background: "none", border: "none", color: "var(--sb-text-s)", cursor: "pointer" }}
           onClick={() => setRainOpen((o) => !o)}
         >
           <span>🌧 Lluvia</span>
@@ -2492,11 +2527,11 @@ function LotInfo({
             <div className="flex gap-2 mb-2 items-center">
               <input type="date" value={rainDate} onChange={(e) => setRainDate(e.target.value)}
                 className="text-xs px-2 py-1 rounded flex-1"
-                style={{ background: "#f8fafc", border: "1px solid #cbd5e1", color: "#1e293b" }} />
+                style={{ background: "var(--sb-input)", border: "1px solid var(--sb-bd-s)", color: "var(--sb-text-d)" }} />
               <input type="number" value={rainMm} onChange={(e) => setRainMm(e.target.value)}
                 placeholder="mm" min={0} step={0.1}
                 className="text-xs px-2 py-1 rounded w-16 text-right"
-                style={{ background: "#f8fafc", border: "1px solid #cbd5e1", color: "#1e293b" }} />
+                style={{ background: "var(--sb-input)", border: "1px solid var(--sb-bd-s)", color: "var(--sb-text-d)" }} />
               <button
                 onClick={() => {
                   const mm = parseFloat(rainMm);
@@ -2513,13 +2548,13 @@ function LotInfo({
               </button>
             </div>
             {rainReadings.slice(0, 5).map((r, i) => (
-              <div key={i} className="flex justify-between text-xs py-0.5" style={{ color: "#374151" }}>
+              <div key={i} className="flex justify-between text-xs py-0.5" style={{ color: "var(--sb-text)" }}>
                 <span>{r.date}</span>
                 <span className="font-semibold" style={{ color: "#1d4ed8" }}>{r.mm} mm</span>
               </div>
             ))}
             {rainReadings.length === 0 && (
-              <p className="text-xs" style={{ color: "#94a3b8" }}>Sin lecturas registradas</p>
+              <p className="text-xs" style={{ color: "var(--sb-text-m)" }}>Sin lecturas registradas</p>
             )}
           </div>
         )}
@@ -2527,21 +2562,21 @@ function LotInfo({
 
       {/* ── Applications table ── */}
       {sortedRows.length > 0 && (
-        <div style={{ borderTop: "1px solid #e2e8f0" }}>
-          <p className="text-xs uppercase tracking-wider mt-3 mb-2" style={{ color: "#64748b" }}>Historial de aplicaciones</p>
+        <div style={{ borderTop: "1px solid var(--sb-bd)" }}>
+          <p className="text-xs uppercase tracking-wider mt-3 mb-2" style={{ color: "var(--sb-text-s)" }}>Historial de aplicaciones</p>
           {allRows.length === 0 && (
-            <p className="text-xs italic mb-2" style={{ color: "#94a3b8" }}>
+            <p className="text-xs italic mb-2" style={{ color: "var(--sb-text-m)" }}>
               No hay datos de manejo. Cargá un CSV/XLSX con columna "Lote".
             </p>
           )}
           <div className="overflow-x-auto mb-2">
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr style={{ background: "#f1f5f9" }}>
-                  <th className="text-left px-2 py-1" style={{ color: "#94a3b8" }}>Tipo</th>
-                  {hasLabor && <th className="text-left px-2 py-1" style={{ color: "#94a3b8" }}>Labor</th>}
-                  <th className="text-left px-2 py-1" style={{ color: "#94a3b8" }}>{hasLabor ? "Producto" : "Producto / Labor"}</th>
-                  <th className="text-left px-2 py-1" style={{ color: "#94a3b8" }}>Dosis</th>
+                <tr style={{ background: "var(--sb-card)" }}>
+                  <th className="text-left px-2 py-1" style={{ color: "var(--sb-text-m)" }}>Tipo</th>
+                  {hasLabor && <th className="text-left px-2 py-1" style={{ color: "var(--sb-text-m)" }}>Labor</th>}
+                  <th className="text-left px-2 py-1" style={{ color: "var(--sb-text-m)" }}>{hasLabor ? "Producto" : "Producto / Labor"}</th>
+                  <th className="text-left px-2 py-1" style={{ color: "var(--sb-text-m)" }}>Dosis</th>
                 </tr>
               </thead>
               <tbody>
@@ -2559,22 +2594,22 @@ function LotInfo({
                       cells.push(
                         <tr key={`fecha-${i}`}>
                           <td colSpan={colSpan} className="px-2 py-1.5 text-xs font-bold uppercase tracking-wide"
-                            style={{ background: "#e2e8f0", color: "#e2b04a", borderTop: "2px solid #bfdbfe", borderBottom: "1px solid #2a5298" }}>
+                            style={{ background: "var(--sb-bd)", color: "#e2b04a", borderTop: "2px solid var(--sb-blue-bd)", borderBottom: "1px solid #2a5298" }}>
                             📅 {fechaStr}
                           </td>
                         </tr>
                       );
                     }
                     cells.push(
-                      <tr key={i} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                      <tr key={i} style={{ borderBottom: "1px solid var(--sb-bd)" }}>
                         <td className="px-2 py-1.5">
                           <span className="px-1.5 py-0.5 rounded-full text-xs font-semibold" style={{ background: tc + "22", color: tc, border: `1px solid ${tc}44` }}>
                             {row._tipo || "–"}
                           </span>
                         </td>
-                        {hasLabor && <td className="px-2 py-1.5" style={{ color: "#374151" }}>{row._labor || "–"}</td>}
-                        <td className="px-2 py-1.5" style={{ color: "#374151" }}>{row._prod || "–"}</td>
-                        <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: "#374151" }}>{dosisStr}</td>
+                        {hasLabor && <td className="px-2 py-1.5" style={{ color: "var(--sb-text)" }}>{row._labor || "–"}</td>}
+                        <td className="px-2 py-1.5" style={{ color: "var(--sb-text)" }}>{row._prod || "–"}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap" style={{ color: "var(--sb-text)" }}>{dosisStr}</td>
                       </tr>
                     );
                     return cells;
@@ -2588,19 +2623,19 @@ function LotInfo({
 
       {/* ── Past visits ── */}
       {pastVisits.length > 0 && (
-        <div className="mt-4 pt-3" style={{ borderTop: "1px solid #e2e8f0" }}>
-          <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "#64748b" }}>Visitas anteriores</p>
+        <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--sb-bd)" }}>
+          <p className="text-xs uppercase tracking-wider mb-3" style={{ color: "var(--sb-text-s)" }}>Visitas anteriores</p>
           <div className="space-y-3">
             {pastVisits.map((v) => {
               const formatted = new Date(v.date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
               const hasContent = v.note || v.yieldStars || v.sprayTarget;
               const isEditing = editingDate === v.date;
               return (
-                <div key={v.date} className="rounded-lg p-2 text-xs" style={{ background: "#f1f5f9", border: "1px solid #e2e8f0" }}>
+                <div key={v.date} className="rounded-lg p-2 text-xs" style={{ background: "var(--sb-card)", border: "1px solid var(--sb-bd)" }}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold" style={{ color: "#374151" }}>📅 {formatted}</span>
+                    <span className="font-semibold" style={{ color: "var(--sb-text)" }}>📅 {formatted}</span>
                     <button className="text-xs px-2 py-0.5 rounded"
-                      style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
+                      style={{ background: "transparent", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-s)" }}
                       onClick={() => setEditingDate(isEditing ? null : v.date)}>
                       {isEditing ? "Cerrar" : "Editar"}
                     </button>
@@ -2609,22 +2644,22 @@ function LotInfo({
                     <VisitForm visit={v} onSave={(u) => onSaveVisit(v.date, u)} onDone={() => setEditingDate(null)} hasSprayingContext={recentSprayings.length > 0} recentSprayings={recentSprayings} lastAppWasHerbicide={lastAppWasHerbicide} />
                   ) : (
                     <>
-                      {!hasContent && <p style={{ color: "#94a3b8" }}>Sin anotaciones</p>}
+                      {!hasContent && <p style={{ color: "var(--sb-text-m)" }}>Sin anotaciones</p>}
                       {v.yieldStars > 0 && (
                         <p style={{ color: "#e2b04a" }}>{"★".repeat(v.yieldStars)}{"☆".repeat(5 - v.yieldStars)} rinde estimado</p>
                       )}
                       {v.sprayTarget && (
-                        <p style={{ color: "#374151" }}>
+                        <p style={{ color: "var(--sb-text)" }}>
                           Blanco: {v.sprayTarget}
                           {v.sprayEffect > 0 && <span style={{ color: "#e2b04a" }}> · {"★".repeat(v.sprayEffect)}{"☆".repeat(5 - v.sprayEffect)}</span>}
                         </p>
                       )}
                       {v.fitotoxicity !== undefined && (
-                        <p style={{ color: v.fitotoxicity === 0 ? "#15803d" : v.fitotoxicity <= 2 ? "#e2b04a" : "#e24a4a" }}>
+                        <p style={{ color: v.fitotoxicity === 0 ? "var(--sb-ok-tx)" : v.fitotoxicity <= 2 ? "#e2b04a" : "#e24a4a" }}>
                           Fitotoxicidad: {FITO_LABELS[v.fitotoxicity]}
                         </p>
                       )}
-                      {v.note && <p style={{ color: "#374151", whiteSpace: "pre-wrap", marginTop: "4px" }}>{v.note}</p>}
+                      {v.note && <p style={{ color: "var(--sb-text)", whiteSpace: "pre-wrap", marginTop: "4px" }}>{v.note}</p>}
                     </>
                   )}
                 </div>
@@ -2646,14 +2681,14 @@ function YieldBar({ lotRindes }: { lotRindes: Array<{ campana: string; cultivo: 
   const campaigns = Object.keys(byCampaign).sort((a, b) => b.localeCompare(a)).slice(0, 5);
 
   return (
-    <div className="mt-3 pt-3" style={{ borderTop: "1px solid #e2e8f0" }}>
-      <p className="text-xs uppercase tracking-wider mb-2" style={{ color: "#64748b" }}>🌾 Rindes históricos</p>
+    <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--sb-bd)" }}>
+      <p className="text-xs uppercase tracking-wider mb-2" style={{ color: "var(--sb-text-s)" }}>🌾 Rindes históricos</p>
       <div className="overflow-x-auto">
         <table className="text-xs border-collapse whitespace-nowrap">
           <thead>
             <tr>
               <th className="pr-3 text-left" style={{ color: "#4a6a8a" }} />
-              {campaigns.map((c) => <th key={c} className="px-3 text-left" style={{ color: "#64748b" }}>{c}</th>)}
+              {campaigns.map((c) => <th key={c} className="px-3 text-left" style={{ color: "var(--sb-text-s)" }}>{c}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -2668,7 +2703,7 @@ function YieldBar({ lotRindes }: { lotRindes: Array<{ campana: string; cultivo: 
                   const winter = records.find((r) => isWinterCrop(r.cultivo));
                   const main = summer ?? (!winter ? records[0] : null);
                   return (
-                    <td key={camp} className="px-3 py-1" style={{ borderLeft: "1px solid #e2e8f0", color: "#374151" }}>
+                    <td key={camp} className="px-3 py-1" style={{ borderLeft: "1px solid var(--sb-bd)", color: "var(--sb-text)" }}>
                       {row === "cultivo" ? (
                         <div>
                           {main && <span>{cultivoIcon(main.cultivo)} {main.cultivo}</span>}
@@ -2707,22 +2742,22 @@ function ColumnPickerModal({
 }) {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.7)" }}>
-      <div className="rounded-xl p-6 w-full max-w-sm" style={{ background: "#ffffff", border: "1px solid #e2e8f0" }}>
+      <div className="rounded-xl p-6 w-full max-w-sm" style={{ background: "var(--sb-bg)", border: "1px solid var(--sb-bd)" }}>
         <h3 className="font-bold text-base mb-1" style={{ color: "#e2b04a" }}>¿Qué columna identifica el lote?</h3>
-        <p className="text-xs mb-4" style={{ color: "#374151" }}>
+        <p className="text-xs mb-4" style={{ color: "var(--sb-text)" }}>
           Archivo: <strong>{fileName}</strong><br />
           Elegí la columna que contiene el nombre del lote, para vincularlo con el mapa.
         </p>
         <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
           {columns.map((col) => (
             <button key={col} className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors"
-              style={{ background: "#f1f5f9", border: "1px solid #2a5298", color: "#374151" }}
+              style={{ background: "var(--sb-card)", border: "1px solid #2a5298", color: "var(--sb-text)" }}
               onClick={() => onSelect(col)}>
               {col}
             </button>
           ))}
         </div>
-        <button className="w-full py-2 rounded text-xs" style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
+        <button className="w-full py-2 rounded text-xs" style={{ background: "transparent", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-s)" }}
           onClick={onCancel}>Cancelar</button>
       </div>
     </div>
@@ -2758,9 +2793,9 @@ function ColumnMappingModal({
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,.75)" }}>
-      <div className="rounded-xl p-6 w-full max-w-md flex flex-col" style={{ background: "#ffffff", border: "1px solid #e2e8f0", maxHeight: "90vh" }}>
+      <div className="rounded-xl p-6 w-full max-w-md flex flex-col" style={{ background: "var(--sb-bg)", border: "1px solid var(--sb-bd)", maxHeight: "90vh" }}>
         <h3 className="font-bold text-base mb-1 flex-shrink-0" style={{ color: "#e2b04a" }}>Configurar columnas</h3>
-        <p className="text-xs mb-3 flex-shrink-0" style={{ color: "#374151" }}>
+        <p className="text-xs mb-3 flex-shrink-0" style={{ color: "var(--sb-text)" }}>
           Archivo: <strong>{fileName}</strong> · Columna lote: <strong>{local.linkCol}</strong><br />
           Revisá cómo mapeamos el resto de columnas. Podés cambiar cualquiera.
         </p>
@@ -2771,15 +2806,15 @@ function ColumnMappingModal({
             const detected = !!local[key];
             return (
               <div key={key} className="flex items-center gap-2 text-xs">
-                <span className="w-36 flex-shrink-0" style={{ color: detected ? "#374151" : "#556" }}>
+                <span className="w-36 flex-shrink-0" style={{ color: detected ? "var(--sb-text)" : "#556" }}>
                   {label}
                 </span>
                 <select
                   className="flex-1 rounded px-2 py-1 text-xs"
                   style={{
-                    background: "#f1f5f9",
+                    background: "var(--sb-card)",
                     border: `1px solid ${detected ? "#2a7a5a" : "#3b82f6"}`,
-                    color: detected ? "#374151" : "#64748b",
+                    color: detected ? "var(--sb-text)" : "var(--sb-text-s)",
                   }}
                   value={local[key]}
                   onChange={(e) => setLocal({ ...local, [key]: e.target.value })}
@@ -2787,7 +2822,7 @@ function ColumnMappingModal({
                   <option value="">— No vincular —</option>
                   {allColumns.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <span className="w-3 flex-shrink-0 text-center" style={{ color: detected ? "#15803d" : "#333" }}>
+                <span className="w-3 flex-shrink-0 text-center" style={{ color: detected ? "var(--sb-ok-tx)" : "#333" }}>
                   {detected ? "✓" : ""}
                 </span>
               </div>
@@ -2797,17 +2832,17 @@ function ColumnMappingModal({
 
         {/* Merge mode (only when existing data is present) */}
         {hasExistingData && (
-          <div className="flex-shrink-0 mb-4 p-3 rounded-lg text-xs space-y-2" style={{ background: "#f1f5f9", border: "1px solid #94a3b8" }}>
-            <p style={{ color: "#374151" }}>¿Qué hacer con los datos de la/s campaña/s de este archivo?</p>
+          <div className="flex-shrink-0 mb-4 p-3 rounded-lg text-xs space-y-2" style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)" }}>
+            <p style={{ color: "var(--sb-text)" }}>¿Qué hacer con los datos de la/s campaña/s de este archivo?</p>
             <label className="flex items-start gap-2 cursor-pointer">
               <input type="radio" name="mergeMode" value="replace" checked={mergeMode === "replace"} onChange={() => setMergeMode("replace")} className="mt-0.5 flex-shrink-0" />
-              <span style={{ color: mergeMode === "replace" ? "#374151" : "#64748b" }}>
+              <span style={{ color: mergeMode === "replace" ? "var(--sb-text)" : "var(--sb-text-s)" }}>
                 <strong>Reemplazar la campaña</strong> — este archivo incluye todo el historial de la temporada
               </span>
             </label>
             <label className="flex items-start gap-2 cursor-pointer">
               <input type="radio" name="mergeMode" value="add" checked={mergeMode === "add"} onChange={() => setMergeMode("add")} className="mt-0.5 flex-shrink-0" />
-              <span style={{ color: mergeMode === "add" ? "#374151" : "#64748b" }}>
+              <span style={{ color: mergeMode === "add" ? "var(--sb-text)" : "var(--sb-text-s)" }}>
                 <strong>Solo agregar nuevos registros</strong> — el archivo tiene solo registros adicionales
               </span>
             </label>
@@ -2824,7 +2859,7 @@ function ColumnMappingModal({
           </button>
           <button
             className="px-4 py-2 rounded text-xs"
-            style={{ background: "transparent", border: "1px solid #94a3b8", color: "#64748b" }}
+            style={{ background: "transparent", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-s)" }}
             onClick={onCancel}
           >
             Cancelar
@@ -3032,13 +3067,7 @@ function FileDashboard({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primaryEmpresaId]);
 
-  // Auto-open first empresa so file sections are always visible on entry
-  useEffect(() => {
-    if (availableEmpresas.length > 0 && !empresaOpenId) {
-      setEmpresaOpenId(availableEmpresas[0].id);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableEmpresas]);
+  // Empresas start collapsed — user taps each card to expand and manage files
 
   function toggleWs(id: string) {
     setSelWs((prev) => {
@@ -3439,7 +3468,7 @@ function FileDashboard({
                             setInviteEmail(""); setInviteMsg("");
                           }}
                             className="p-1.5 rounded text-xs" style={{ background: isInviting ? "#e2e8f0" : "#f0f4ff", color: "#6ab0e0" }}
-                            title="Invitar usuario">✉️</button>
+                            title="Compartir empresa">🤝</button>
                           <button onClick={() => { setEmpresaNameDraft(emp.name); setRenamingEmpresaId(emp.id); }}
                             className="p-1.5 rounded text-xs" style={{ background: "#f0f4ff", color: "#64748b" }}
                             title="Renombrar">✏️</button>
@@ -3452,21 +3481,24 @@ function FileDashboard({
 
                     {/* Invite form */}
                     {isInviting && (
-                      <div className="px-3 pb-3 pt-1" style={{ borderTop: "1px solid #cbd5e1" }}>
+                      <div className="px-3 pb-3 pt-2" style={{ borderTop: "1px solid #cbd5e1" }}>
+                        <p className="text-xs font-semibold mb-0.5" style={{ color: "#374151" }}>
+                          🤝 Compartir empresa
+                        </p>
                         <p className="text-xs mb-2" style={{ color: "#64748b" }}>
-                          Invitar a un usuario a ver esta empresa:
+                          El usuario recibirá un correo. Al aceptar, la empresa aparecerá en su espacio de trabajo (por defecto, "Mi espacio").
                         </p>
                         <div className="flex gap-2">
                           <input autoFocus type="email" value={inviteEmail}
                             onChange={(e) => { setInviteEmail(e.target.value); setInviteMsg(""); }}
                             onKeyDown={(e) => { if (e.key === "Enter") handleInvite(emp.id); if (e.key === "Escape") { setInvitingEmpresaId(null); setInviteEmail(""); setInviteMsg(""); } }}
-                            placeholder="email@ejemplo.com"
+                            placeholder="email del usuario"
                             className="flex-1 rounded px-3 py-1.5 text-sm"
-                            style={{ background: "#f1f5f9", border: "1px solid #2a5298", color: "#1e293b", outline: "none" }} />
+                            style={{ background: "#f1f5f9", border: "1px solid #3b82f6", color: "#1e293b", outline: "none" }} />
                           <button onClick={() => handleInvite(emp.id)} disabled={inviteLoading || !inviteEmail.trim()}
                             className="px-3 py-1.5 rounded text-sm font-semibold disabled:opacity-50"
-                            style={{ background: "#15803d", color: "#fff" }}>
-                            {inviteLoading ? "..." : "Invitar"}
+                            style={{ background: "#1d4ed8", color: "#fff" }}>
+                            {inviteLoading ? "..." : "Compartir"}
                           </button>
                         </div>
                         {inviteMsg && (
