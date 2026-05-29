@@ -265,6 +265,36 @@ export async function saveWorkspace(
       updated_at: new Date().toISOString(),
     })
     .eq("id", workspaceId);
+  // If rain_file_meta column doesn't exist yet, retry without it
+  if (error?.message?.includes("rain_file_meta")) {
+    const { error: e2 } = await supabase
+      .from("workspaces")
+      .update({
+        ...nameField,
+        logo: state.workspaceLogo || null,
+        field_name: state.fieldName,
+        lot_count: state.lotCount,
+        collections: compressCollections(state.collections),
+        color_map: state.colorMap,
+        cultivo_color_map: state.cultivoColorMap,
+        lot_data: serializeLotData(state.lotData),
+        rinde_data: state.rindeData,
+        lot_visits: state.lotVisits,
+        shp_files: state.shpFiles,
+        csv_files: state.csvFiles,
+        rinde_files: state.rindeFiles,
+        shp_file_meta: state.shpFileMeta,
+        csv_file_meta: state.csvFileMeta,
+        rinde_file_meta: state.rindeFileMeta,
+        empresa_drive_links: state.empresaDriveLinks ?? {},
+        rain_data: state.rainData,
+        pluviometro_map: state.pluviometroMap,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", workspaceId);
+    if (e2) throw new Error(e2.message);
+    return;
+  }
   if (error) throw new Error(error.message);
 }
 
