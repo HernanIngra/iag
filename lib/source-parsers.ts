@@ -169,23 +169,31 @@ function parseFinnegansBase(rows: RawRow[], fileName: string): ParsedRow[] {
       if (doc) laborMap.set(doc, String(row["Labor/producto"] ?? "").trim());
     }
   }
+  // Accept both "Insumo" and "Laboreo" rows — Laboreo rows are standalone mechanical
+  // operations (tillage, harvest, etc.) that also carry a lote and date.
+  // "Lote corregido" is accepted as alias for "Lote" (used in some Finnegans exports).
   return rows
-    .filter((row) => String(row["Tipo"] ?? "").toLowerCase() === "insumo")
+    .filter((row) => {
+      const t = String(row["Tipo"] ?? "").toLowerCase();
+      return t === "insumo" || t === "laboreo";
+    })
     .map((row) => {
-      const lote = String(row["Lote"] ?? "").trim();
+      const lote = String(row["Lote corregido"] ?? row["Lote"] ?? "").trim();
       if (!lote) return null;
+      const tipoRaw = String(row["Tipo"] ?? "").toLowerCase();
       const doc = String(row["Documento"] ?? "").trim();
       const { fecha, fechaStr, campaign } = parseDateCell(row["Fecha"]);
+      const prod = String(row["Labor/producto"] ?? "").trim();
       return makeRow(row, {
         lote,
         fecha, fechaStr,
         campaign: normalizeCampaign(row["Campaña"] as string) || campaign,
-        labor: laborMap.get(doc) ?? "",
-        prod: String(row["Labor/producto"] ?? "").trim(),
-        tipo: normalizeProductType(String(row["Familia"] ?? row["Subfamilia"] ?? "")),
+        labor: tipoRaw === "insumo" ? (laborMap.get(doc) ?? "") : prod,
+        prod: tipoRaw === "insumo" ? prod : "",
+        tipo: normalizeProductType(String(row["Familia"] ?? row["Subfamilia"] ?? (tipoRaw === "laboreo" ? prod : ""))),
         dosis: row["Cant./ha"],
         unid: String(row["Unidad"] ?? "").trim(),
-        cultivo: normalizeCultivo(String(row["Actividad"] ?? "")),
+        cultivo: normalizeCultivo(String(row["Actividad"] ?? row["Cultivo"] ?? "")),
         sup: row["Superficie"],
       }, fileName);
     })

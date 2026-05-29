@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GeoCollection } from "./shapefile";
+import { compressCollections } from "./shapefile";
 import type { LotData, RindeData, ParsedRow, ColumnMapping } from "./data-parser";
 
 export interface LotVisit {
@@ -56,6 +57,7 @@ export interface Workspace {
   shpFileMeta: FileMeta[];
   csvFileMeta: FileMeta[];
   rindeFileMeta: FileMeta[];
+  rainFileMeta: FileMeta[];
   driveManejo?: DriveManejo | null;         // legacy — mantener para backward compat
   manejoColMapping?: ColumnMapping | null;   // legacy
   empresaDriveLinks: Record<string, EmpresaLinks>; // reemplaza driveManejo por empresa
@@ -144,6 +146,7 @@ function deserializeWorkspaceRow(data: Record<string, unknown>): Workspace {
     shpFileMeta: (data.shp_file_meta ?? []) as FileMeta[],
     csvFileMeta: (data.csv_file_meta ?? []) as FileMeta[],
     rindeFileMeta: (data.rinde_file_meta ?? []) as FileMeta[],
+    rainFileMeta: (data.rain_file_meta ?? []) as FileMeta[],
     driveManejo: (data.drive_manejo ?? null) as DriveManejo | null,
     manejoColMapping: (data.manejo_col_mapping ?? null) as ColumnMapping | null,
     empresaDriveLinks: (data.empresa_drive_links ?? {}) as Record<string, EmpresaLinks>,
@@ -243,7 +246,7 @@ export async function saveWorkspace(
       logo: state.workspaceLogo || null,
       field_name: state.fieldName,
       lot_count: state.lotCount,
-      collections: state.collections,
+      collections: compressCollections(state.collections),
       color_map: state.colorMap,
       cultivo_color_map: state.cultivoColorMap,
       lot_data: serializeLotData(state.lotData),
@@ -255,6 +258,7 @@ export async function saveWorkspace(
       shp_file_meta: state.shpFileMeta,
       csv_file_meta: state.csvFileMeta,
       rinde_file_meta: state.rindeFileMeta,
+      rain_file_meta: state.rainFileMeta,
       empresa_drive_links: state.empresaDriveLinks ?? {},
       rain_data: state.rainData,
       pluviometro_map: state.pluviometroMap,
@@ -306,6 +310,7 @@ export function saveWorkspaceLocal(state: Workspace, workspaceId: string): void 
         shp_file_meta: state.shpFileMeta,
         csv_file_meta: state.csvFileMeta,
         rinde_file_meta: state.rindeFileMeta,
+        rain_file_meta: state.rainFileMeta,
         empresa_drive_links: state.empresaDriveLinks ?? {},
         rain_data: state.rainData,
         pluviometro_map: state.pluviometroMap,
@@ -342,6 +347,7 @@ export function loadWorkspaceLocal(workspaceId: string): Workspace | null {
       shpFileMeta: (data.shp_file_meta ?? []) as FileMeta[],
       csvFileMeta: (data.csv_file_meta ?? []) as FileMeta[],
       rindeFileMeta: (data.rinde_file_meta ?? []) as FileMeta[],
+      rainFileMeta: (data.rain_file_meta ?? []) as FileMeta[],
       driveManejo: (data.drive_manejo ?? null) as DriveManejo | null,
       manejoColMapping: (data.manejo_col_mapping ?? null) as ColumnMapping | null,
       empresaDriveLinks: (data.empresa_drive_links ?? {}) as Record<string, EmpresaLinks>,
@@ -540,15 +546,19 @@ export async function getSharedEmpresas(supabase: SupabaseClient): Promise<Share
 // ─── Invite to empresa ────────────────────────────────────────────────────────
 
 export async function inviteToEmpresa(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   empresaId: string,
   email: string
 ): Promise<"added" | "invited"> {
-  const { error } = await supabase.rpc("invite_to_empresa", {
-    p_empresa_id: empresaId,
-    p_invited_email: email,
+  const res = await fetch("/api/invite-empresa", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ empresaId, email }),
   });
-  if (error) throw new Error(error.message);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? `Error ${res.status}`);
+  }
   return "invited";
 }
 

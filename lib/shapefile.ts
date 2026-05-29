@@ -1,6 +1,29 @@
-import type { FeatureCollection, Feature, Geometry } from "geojson";
+import type { FeatureCollection, Feature, Geometry, Position } from "geojson";
 
 export type GeoCollection = FeatureCollection<Geometry, Record<string, unknown>>;
+
+// Round coordinates to `precision` decimal places to shrink JSON payload for Supabase saves.
+// 6 decimals ≈ 0.1 m — more than enough for agricultural maps.
+function roundCoords(coords: Position | Position[] | Position[][] | Position[][][], precision: number): unknown {
+  if (typeof coords[0] === "number") {
+    return (coords as number[]).map((v) => Math.round(v * 10 ** precision) / 10 ** precision);
+  }
+  return (coords as unknown[]).map((c) => roundCoords(c as Position[], precision));
+}
+
+export function compressCollections(cols: GeoCollection[], precision = 6): GeoCollection[] {
+  return cols.map((col) => ({
+    ...col,
+    features: col.features.map((f) => {
+      const geom = f.geometry as unknown as Record<string, unknown> | null;
+      if (!geom?.coordinates) return f;
+      return {
+        ...f,
+        geometry: { ...geom, coordinates: roundCoords(geom.coordinates as Position[], precision) } as unknown as Geometry,
+      };
+    }),
+  })) as GeoCollection[];
+}
 
 function fixEncoding(str: string): string {
   try {

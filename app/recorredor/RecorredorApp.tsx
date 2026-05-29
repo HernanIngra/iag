@@ -210,7 +210,9 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [shpFileMeta, setShpFileMeta] = useState<FileMeta[]>([]);
   const [csvFileMeta, setCsvFileMeta] = useState<FileMeta[]>([]);
   const [rindeFileMeta, setRindeFileMeta] = useState<FileMeta[]>([]);
+  const [rainFileMeta, setRainFileMeta] = useState<FileMeta[]>([]);
   const pendingCsvEmpresaIdRef = useRef<string | undefined>(undefined);
+  const pendingRainEmpresaIdRef = useRef<string | undefined>(undefined);
 
   // Rain data
   const [rainData, setRainData] = useState<RainData>({});
@@ -433,6 +435,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     setShpFileMeta(ws.shpFileMeta ?? []);
     setCsvFileMeta(ws.csvFileMeta ?? []);
     setRindeFileMeta(ws.rindeFileMeta ?? []);
+    setRainFileMeta(ws.rainFileMeta ?? []);
     // Restore per-empresa Drive links; migrate legacy workspace-level driveManejo if needed
     const restoredLinks = ws.empresaDriveLinks && Object.keys(ws.empresaDriveLinks).length
       ? ws.empresaDriveLinks
@@ -560,7 +563,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
       workspaceName, workspaceLogo,
       fieldName, lotCount, collections, colorMap, cultivoColorMap,
       lotData, allRows, rindeData, lotVisits, shpFiles, csvFiles, rindeFiles,
-      shpFileMeta, csvFileMeta, rindeFileMeta,
+      shpFileMeta, csvFileMeta, rindeFileMeta, rainFileMeta,
       empresaDriveLinks,
       rainData, pluviometroMap,
     };
@@ -581,7 +584,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }, 1500);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, lotData, rindeData, lotVisits, empresaDriveLinks, rainData, pluviometroMap, workspaceName, workspaceLogo, user, shpFiles, csvFiles, rindeFiles, shpFileMeta, csvFileMeta, rindeFileMeta]);
+  }, [collections, lotData, rindeData, lotVisits, empresaDriveLinks, rainData, pluviometroMap, workspaceName, workspaceLogo, user, shpFiles, csvFiles, rindeFiles, shpFileMeta, csvFileMeta, rindeFileMeta, rainFileMeta]);
 
   // ── Guardar en localStorage síncrono al cerrar/recargar la pestaña ──────────
   useEffect(() => {
@@ -830,6 +833,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const pendingDriveLluviaInfoRef = useRef<{ driveInfo: DriveManejo; empresaId: string } | null>(null);
 
   async function handleRainFileStart(file: File, driveInfo?: DriveManejo, driveEmpresaId?: string) {
+    pendingRainEmpresaIdRef.current = driveEmpresaId ?? activeEmpresaId;
     try {
       const parsed = await parseLluviaFile(file);
       if (!Object.keys(parsed).length) throw new Error("No se encontraron lecturas válidas.");
@@ -858,6 +862,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     }
     setRainData(newRainData);
     setRainFiles((prev) => [...prev, pendingRainFileName]);
+    setRainFileMeta((prev) => [...prev.filter((m) => m.name !== pendingRainFileName), { name: pendingRainFileName, empresaId: pendingRainEmpresaIdRef.current ?? "" }]);
     // Si venía de un Drive link, persistir en empresaDriveLinks
     const lluvia = pendingDriveLluviaInfoRef.current;
     if (lluvia) {
@@ -1698,8 +1703,13 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             for (const name of csvToRemove) removeCsvFile(name);
             setRindeFiles((prev) => prev.filter((f) => !rindeFileMeta.find((m) => m.name === f && m.empresaId === empresaId)));
             setRindeFileMeta((prev) => prev.filter((m) => m.empresaId !== empresaId));
-            // Drive rain files are named "drive-lluvia:{empresaId}"; local rain files have no empresa tracking
-            setRainFiles((prev) => prev.filter((f) => f !== `drive-lluvia:${empresaId}`));
+            // Remove both drive and local rain files for this empresa
+            setRainFiles((prev) => prev.filter((f) => {
+              if (f === `drive-lluvia:${empresaId}`) return false;
+              if (rainFileMeta.find((m) => m.name === f && m.empresaId === empresaId)) return false;
+              return true;
+            }));
+            setRainFileMeta((prev) => prev.filter((m) => m.empresaId !== empresaId));
             setEmpresaDriveLinks((prev) => { const next = { ...prev }; delete next[empresaId]; return next; });
           }}
           onInvite={async (empresaId, email) => {
@@ -1728,10 +1738,13 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           onReassignShp={(name, empId) => setShpFileMeta((prev) => prev.map((m) => m.name === name ? { ...m, empresaId: empId } : m))}
           onReassignCsv={(name, empId) => setCsvFileMeta((prev) => prev.map((m) => m.name === name ? { ...m, empresaId: empId } : m))}
           onReassignRinde={(name, empId) => setRindeFileMeta((prev) => prev.map((m) => m.name === name ? { ...m, empresaId: empId } : m))}
+          onReassignRain={(name, empId) => setRainFileMeta((prev) => prev.map((m) => m.name === name ? { ...m, empresaId: empId } : m))}
           rainFiles={rainFiles}
+          rainFileMeta={rainFileMeta}
           onUploadRain={(fl, empId) => { if (fl[0]) handleRainFileStart(fl[0], undefined, empId); }}
           onRemoveRain={(name) => {
             setRainFiles((prev) => prev.filter((f) => f !== name));
+            setRainFileMeta((prev) => prev.filter((m) => m.name !== name));
             setRainData((prev) => { const next = { ...prev }; delete next[name]; return next; });
           }}
           shpStatus={shpStatus}
@@ -1794,7 +1807,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             setCollections([]); setColorMap({}); setLotCount(0); setShpFiles([]); setShpFileMeta([]); setShpStatus(null);
             setAllRows([]); setLotData({}); setCsvFiles([]); setCsvFileMeta([]); setCsvStatus(null);
             setRindeFiles([]); setRindeFileMeta([]); setRindeData({}); setRindeStatus(null);
-            setRainFiles([]); setRainData({});
+            setRainFiles([]); setRainFileMeta([]); setRainData({});
             if (shpLayerRef.current && mapRef.current) { mapRef.current.removeLayer(shpLayerRef.current); shpLayerRef.current = null; }
             allLotLayersRef.current = [];
           }}
@@ -2885,9 +2898,10 @@ function FileDashboard({
   onGoToPicker,
   workspaceSummaries, onSwitchWorkspace, onCreateWorkspace,
   shpFiles, shpFileMeta, csvFiles, csvFileMeta, rindeFiles, rindeFileMeta,
+  rainFileMeta,
   onUploadShp, onUploadCsv, onUploadRinde,
   onRemoveShp, onRemoveCsv, onRemoveRinde,
-  onReassignShp, onReassignCsv, onReassignRinde,
+  onReassignShp, onReassignCsv, onReassignRinde, onReassignRain,
   rainFiles, onUploadRain, onRemoveRain,
   shpStatus, csvStatus, rindeStatus,
   empresaDriveLinks,
@@ -2930,7 +2944,9 @@ function FileDashboard({
   onReassignShp: (name: string, empresaId: string) => void;
   onReassignCsv: (name: string, empresaId: string) => void;
   onReassignRinde: (name: string, empresaId: string) => void;
+  onReassignRain: (name: string, empresaId: string) => void;
   rainFiles: string[];
+  rainFileMeta: FileMeta[];
   onUploadRain: (fl: FileList, empresaId: string) => void;
   onRemoveRain: (name: string) => void;
   shpStatus: { msg: string; ok: boolean } | null;
@@ -3319,7 +3335,7 @@ function FileDashboard({
               const orphanShp = shpFiles.filter((n) => { if (isDriveInternal(n)) return false; const m = shpFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
               const orphanCsv = csvFiles.filter((n) => { if (isDriveInternal(n)) return false; const m = csvFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
               const orphanRinde = rindeFiles.filter((n) => { if (isDriveInternal(n)) return false; const m = rindeFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
-              const orphanRain = rainFiles.filter((n) => !n.startsWith("drive-lluvia:"));
+              const orphanRain = rainFiles.filter((n) => { if (n.startsWith("drive-lluvia:")) return false; const m = rainFileMeta.find((x) => x.name === n); return !m || !m.empresaId || !knownIds.has(m.empresaId); });
               const hasOrphans = orphanShp.length + orphanCsv.length + orphanRinde.length + orphanRain.length > 0;
               const allFiles = shpFiles.length + csvFiles.length + rindeFiles.length + rainFiles.length;
               return (
@@ -3343,6 +3359,7 @@ function FileDashboard({
                                 if (orphanShp.includes(name)) onReassignShp(name, empId);
                                 else if (orphanCsv.includes(name)) onReassignCsv(name, empId);
                                 else if (orphanRinde.includes(name)) onReassignRinde(name, empId);
+                                else if (orphanRain.includes(name)) onReassignRain(name, empId);
                                 e.target.value = "";
                               }}
                               className="text-xs rounded px-1 py-0.5"
@@ -3381,6 +3398,10 @@ function FileDashboard({
                 const empShpFiles = shpFiles.filter((n) => shpFileMeta.find((x) => x.name === n)?.empresaId === emp.id);
                 const empCsvFiles = csvFiles.filter((n) => csvFileMeta.find((x) => x.name === n)?.empresaId === emp.id);
                 const empRindeFiles = rindeFiles.filter((n) => rindeFileMeta.find((x) => x.name === n)?.empresaId === emp.id);
+                const empRainFiles = [
+                  ...rainFiles.filter((n) => n === `drive-lluvia:${emp.id}`),
+                  ...rainFiles.filter((n) => !n.startsWith("drive-lluvia:") && rainFileMeta.find((x) => x.name === n)?.empresaId === emp.id),
+                ];
 
                 if (isRenaming) {
                   return (
@@ -3564,7 +3585,7 @@ function FileDashboard({
                         <DashFileSection nested title="🌧 Lluvias"
                           hint="xlsx o csv con columnas Fecha, Ubicación y Valor (mm)"
                           accept=".csv,.xlsx,.xls" multiple={false}
-                          files={rainFiles} status={null}
+                          files={empRainFiles} status={null}
                           onFiles={(fl) => onUploadRain(fl, emp.id)} onRemove={onRemoveRain}
                           driveProps={{
                             linked: empresaDriveLinks[emp.id]?.lluviaLink ?? null,
