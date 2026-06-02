@@ -1516,8 +1516,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   return (
     <div className="flex flex-col overflow-hidden" style={{ background: "#1a1a2e", color: "#e0e0e0", height: "100dvh" }}>
 
-      {/* ── TOP BAR — fixed al viewport, nunca se mueve ── */}
-      <header className="flex items-center justify-between px-4 py-2 z-[9999]" style={{ position: "fixed", top: 0, left: 0, right: 0, background: "#0f3460", boxShadow: "0 2px 8px rgba(0,0,0,.4)" }}>
+      {/* ── TOP BAR ── */}
+      <header className="flex items-center justify-between px-4 py-2 flex-shrink-0 z-[9999]" style={{ position: "relative", background: "#0f3460", boxShadow: "0 2px 8px rgba(0,0,0,.4)" }}>
         <div className="flex items-center gap-3">
           {view === "map" && !isMobile && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="px-2 py-1 rounded text-sm" style={{ background: "#0f3460", color: "#aac4e0", border: "1px solid #2a5298" }}>☰</button>
@@ -1619,9 +1619,6 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           <AuthButton />
         </div>
       </header>
-
-      {/* Espaciador para compensar el header fixed (py-2 + line-height ≈ 52px) */}
-      <div style={{ flexShrink: 0, height: 52 }} />
 
       {/* ── ADMIN BANNER ── */}
       {isAdmin && asUserId && (
