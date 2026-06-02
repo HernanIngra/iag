@@ -80,6 +80,11 @@ function markDriveRefreshed(wsId: string) {
 }
 
 const SPRAYING_TIPOS = new Set(["HERBICIDA", "FUNGICIDA", "INSECTICIDA", "ACARICIDA"]);
+
+// Clave reservada para las notas generales de la recorrida (no atadas a un lote).
+// Se guarda dentro de lotVisits para reutilizar toda la persistencia existente
+// (localStorage + Supabase) sin tocar el esquema. Nunca es un lote real.
+const GENERAL_KEY = "__general__";
 import AuthButton from "@/components/AuthButton";
 
 // ── State types ───────────────────────────────────────────────────────────────
@@ -1413,7 +1418,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
           .forEach((v) => {
             if (!v.note && !v.yieldStars && !v.sprayTarget) return;
             const fecha = new Date(v.date + "T12:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
-            rows.push([lot, fecha, v.yieldStars ? String(v.yieldStars) : "", v.sprayTarget ?? "", v.sprayEffect ? String(v.sprayEffect) : "", v.note ?? ""]);
+            const lotLabel = lot === GENERAL_KEY ? "— Notas generales —" : lot;
+            rows.push([lotLabel, fecha, v.yieldStars ? String(v.yieldStars) : "", v.sprayTarget ?? "", v.sprayEffect ? String(v.sprayEffect) : "", v.note ?? ""]);
           });
       });
     if (rows.length === 1) return;
@@ -1445,13 +1451,15 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     const today = todayStr();
     const entries = Object.entries(lotVisits)
       .map(([lot, visits]) => ({ lot, visit: visits.find((v) => v.date === today) }))
-      .filter(({ visit }) => visit && (visit.note || visit.yieldStars || visit.sprayTarget));
+      .filter(({ visit }) => visit && (visit.note || visit.yieldStars || visit.sprayTarget))
+      // Las notas generales primero; el resto alfabético por lote.
+      .sort((a, b) => (a.lot === GENERAL_KEY ? -1 : b.lot === GENERAL_KEY ? 1 : a.lot.localeCompare(b.lot)));
     if (!entries.length) return;
     const fecha = new Date().toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
     let body = `RECORRIDO DEL ${fecha}\n${"=".repeat(40)}\n\n`;
     entries.forEach(({ lot, visit }) => {
       if (!visit) return;
-      body += `LOTE: ${lot}\n`;
+      body += lot === GENERAL_KEY ? `NOTAS GENERALES\n` : `LOTE: ${lot}\n`;
       if (visit.yieldStars) body += `Estimación de rinde: ${"★".repeat(visit.yieldStars)}${"☆".repeat(5 - visit.yieldStars)}\n`;
       if (visit.sprayTarget) body += `Blanco de aplicación: ${visit.sprayTarget}\n`;
       if (visit.sprayEffect) body += `Efectividad: ${"★".repeat(visit.sprayEffect)}${"☆".repeat(5 - visit.sprayEffect)}\n`;
@@ -1967,6 +1975,14 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                 </div>
               )}
 
+              {/* ── 3.5. NOTAS GENERALES DE LA RECORRIDA (no atadas a un lote) ── */}
+              <SidebarSection title="📝 Notas generales" collapsible defaultOpen={false}>
+                <GeneralNotesForm
+                  note={(lotVisits[GENERAL_KEY] ?? []).find((v) => v.date === today)?.note ?? ""}
+                  onSave={(note) => saveVisit(GENERAL_KEY, today, { note })}
+                />
+              </SidebarSection>
+
               {/* ── 4. RECORRIDA DE HOY (colapsada por default) ── */}
               {selectedLot && todayVisit && (
                 <SidebarSection title="📌 Recorrida de hoy" collapsible defaultOpen={false}>
@@ -2455,6 +2471,61 @@ function useDictation(onFinalText: (text: string) => void) {
   useEffect(() => () => { try { recRef.current?.abort(); } catch { /* noop */ } }, []);
 
   return { supported, listening, interim, toggle };
+}
+
+// Bloc de notas generales de la recorrida (no atado a ningún lote). Solo texto
+// libre + dictado por voz. Reutiliza el mismo hook useDictation que VisitForm.
+function GeneralNotesForm({ note, onSave }: { note: string; onSave: (note: string) => void }) {
+  const [local, setLocal] = useState(note);
+  const localRef = useRef(local);
+  localRef.current = local;
+  function appendDictado(text: string) {
+    const prev = localRef.current;
+    const sep = prev && !/\s$/.test(prev) ? " " : "";
+    const chunk = prev ? text : text.charAt(0).toUpperCase() + text.slice(1);
+    const next = prev + sep + chunk;
+    localRef.current = next;
+    setLocal(next);
+    onSave(next);
+  }
+  const dictation = useDictation(appendDictado);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs" style={{ color: "var(--sb-text-s)" }}>
+          Cosas sueltas del día (no van a un lote): pendientes, insumos, avisos…
+        </p>
+        {dictation.supported && (
+          <button
+            type="button"
+            onClick={dictation.toggle}
+            title={dictation.listening ? "Detener dictado" : "Dictar por voz"}
+            className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded transition-all shrink-0 ml-2"
+            style={
+              dictation.listening
+                ? { background: "#e24a4a22", border: "1px solid #e24a4a", color: "#e24a4a" }
+                : { background: "var(--sb-card)", border: "1px solid #2a5298", color: "var(--sb-text)" }
+            }
+          >
+            {dictation.listening ? "● Grabando…" : "🎤 Dictar"}
+          </button>
+        )}
+      </div>
+      <textarea
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={() => onSave(local)}
+        placeholder="Ej: traer gasoil, el camino del fondo está roto, llamar al de fertilizantes…"
+        className="w-full rounded-md p-2 text-sm resize-y leading-relaxed"
+        style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-d)", outline: "none", minHeight: "70px" }}
+      />
+      {dictation.listening && (
+        <div className="text-xs mt-1 italic" style={{ color: "var(--sb-text-m)" }}>
+          {dictation.interim ? `…${dictation.interim}` : "Escuchando — hablá y el texto se va agregando."}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings, lastAppWasHerbicide }: {
