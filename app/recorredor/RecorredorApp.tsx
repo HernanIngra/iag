@@ -2387,6 +2387,76 @@ function StarRating({ value, onChange, label }: { value: number; onChange: (n: n
 
 const FITO_LABELS = ["0 — Sin daño", "1 — Leve", "2 — Moderado", "3 — Importante", "4 — Severo", "5 — Perdido"];
 
+// ── Dictado por voz (Web Speech API) ─────────────────────────────────────────
+// Pieza aislada y opcional. Usa el reconocimiento de voz nativo del navegador
+// (gratis, sin claves, en tiempo real). Si el navegador no lo soporta, el hook
+// devuelve `supported: false` y el botón ni se muestra: el textarea sigue
+// funcionando exactamente igual que antes. Pensado para celular/tablet en el
+// campo con buena conectividad (Starlink). Idioma fijado en español rioplatense.
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((e: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+};
+
+function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+function useDictation(onFinalText: (text: string) => void) {
+  const [supported] = useState(() => getSpeechRecognitionCtor() !== null);
+  const [listening, setListening] = useState(false);
+  const [interim, setInterim] = useState("");
+  const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const cbRef = useRef(onFinalText);
+  cbRef.current = onFinalText;
+
+  function stop() {
+    try { recRef.current?.stop(); } catch { /* noop */ }
+  }
+
+  function start() {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) return;
+    const rec = new Ctor();
+    rec.lang = "es-AR";
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (e) => {
+      let finalChunk = "";
+      let interimChunk = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        if (res.isFinal) finalChunk += res[0].transcript;
+        else interimChunk += res[0].transcript;
+      }
+      if (finalChunk.trim()) cbRef.current(finalChunk.trim());
+      setInterim(interimChunk);
+    };
+    rec.onerror = () => { /* el handler onend limpia el estado */ };
+    rec.onend = () => { setListening(false); setInterim(""); recRef.current = null; };
+    recRef.current = rec;
+    setListening(true);
+    try { rec.start(); } catch { setListening(false); recRef.current = null; }
+  }
+
+  function toggle() { if (listening) stop(); else start(); }
+
+  // Cortar el reconocimiento si el componente se desmonta a mitad de un dictado.
+  useEffect(() => () => { try { recRef.current?.abort(); } catch { /* noop */ } }, []);
+
+  return { supported, listening, interim, toggle };
+}
+
 function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings, lastAppWasHerbicide }: {
   visit: LotVisit;
   onSave: (u: Partial<LotVisit>) => void;
@@ -2397,6 +2467,23 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings,
 }) {
   const [localNote, setLocalNote] = useState(visit.note);
   const [localTarget, setLocalTarget] = useState(visit.sprayTarget);
+
+  // Dictado por voz: cada fragmento final reconocido se agrega a la nota y se
+  // persiste vía onSave (igual que el onBlur del textarea). El texto provisorio
+  // (interim) se muestra debajo como guía, sin tocar el valor del textarea.
+  const noteRef = useRef(localNote);
+  noteRef.current = localNote;
+  function appendDictado(text: string) {
+    const prev = noteRef.current;
+    const sep = prev && !/\s$/.test(prev) ? " " : "";
+    const chunk = prev ? text : text.charAt(0).toUpperCase() + text.slice(1);
+    const next = prev + sep + chunk;
+    noteRef.current = next;
+    setLocalNote(next);
+    onSave({ note: next });
+  }
+  const dictation = useDictation(appendDictado);
+
   return (
     <div className="space-y-3">
       <StarRating value={visit.yieldStars} onChange={(n) => onSave({ yieldStars: n })} label="Estimación de rinde" />
@@ -2447,7 +2534,24 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings,
         </div>
       )}
       <div>
-        <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "var(--sb-text-s)" }}>Notas</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs uppercase tracking-wider block" style={{ color: "var(--sb-text-s)" }}>Notas</label>
+          {dictation.supported && (
+            <button
+              type="button"
+              onClick={dictation.toggle}
+              title={dictation.listening ? "Detener dictado" : "Dictar la nota por voz"}
+              className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded transition-all"
+              style={
+                dictation.listening
+                  ? { background: "#e24a4a22", border: "1px solid #e24a4a", color: "#e24a4a" }
+                  : { background: "var(--sb-card)", border: "1px solid #2a5298", color: "var(--sb-text)" }
+              }
+            >
+              {dictation.listening ? "● Grabando…" : "🎤 Dictar"}
+            </button>
+          )}
+        </div>
         <textarea
           value={localNote}
           onChange={(e) => setLocalNote(e.target.value)}
@@ -2456,6 +2560,11 @@ function VisitForm({ visit, onSave, onDone, hasSprayingContext, recentSprayings,
           className="w-full rounded-md p-2 text-sm resize-y leading-relaxed"
           style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-d)", outline: "none", minHeight: "70px" }}
         />
+        {dictation.listening && (
+          <div className="text-xs mt-1 italic" style={{ color: "var(--sb-text-m)" }}>
+            {dictation.interim ? `…${dictation.interim}` : "Escuchando — hablá y el texto se va agregando a la nota."}
+          </div>
+        )}
       </div>
       {onDone && (
         <button className="text-xs py-1 px-3 rounded" style={{ background: "var(--sb-card)", border: "1px solid #2a5298", color: "var(--sb-text)" }} onClick={onDone}>
