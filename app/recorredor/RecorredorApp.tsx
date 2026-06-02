@@ -1514,10 +1514,10 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   }) as React.CSSProperties;
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ background: "#1a1a2e", color: "#e0e0e0" }}>
+    <div className="flex flex-col overflow-hidden" style={{ background: "#1a1a2e", color: "#e0e0e0", height: "100dvh" }}>
 
       {/* ── TOP BAR ── */}
-      <header className="flex items-center justify-between px-4 py-2 flex-shrink-0 z-50" style={{ background: "#0f3460", boxShadow: "0 2px 8px rgba(0,0,0,.4)" }}>
+      <header className="flex items-center justify-between px-4 py-2 flex-shrink-0 sticky top-0 z-[9999]" style={{ background: "#0f3460", boxShadow: "0 2px 8px rgba(0,0,0,.4)" }}>
         <div className="flex items-center gap-3">
           {view === "map" && !isMobile && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="px-2 py-1 rounded text-sm" style={{ background: "#0f3460", color: "#aac4e0", border: "1px solid #2a5298" }}>☰</button>
