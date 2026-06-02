@@ -85,6 +85,57 @@ const SPRAYING_TIPOS = new Set(["HERBICIDA", "FUNGICIDA", "INSECTICIDA", "ACARIC
 // Se guarda dentro de lotVisits para reutilizar toda la persistencia existente
 // (localStorage + Supabase) sin tocar el esquema. Nunca es un lote real.
 const GENERAL_KEY = "__general__";
+
+// ── Geometría: detectar el lote bajo una posición GPS ────────────────────────
+// Coordenadas GeoJSON en [lng, lat]. Ray-casting clásico sobre cada anillo.
+
+function pointInRing(pt: [number, number], ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > pt[1]) !== (yj > pt[1])) &&
+      (pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInGeometry(pt: [number, number], geom: GeoJSON.Geometry | null | undefined): boolean {
+  if (!geom) return false;
+  if (geom.type === "Polygon") {
+    const [outer, ...holes] = geom.coordinates as number[][][];
+    return pointInRing(pt, outer) && !holes.some((h) => pointInRing(pt, h));
+  }
+  if (geom.type === "MultiPolygon") {
+    return (geom.coordinates as number[][][][]).some((poly) => {
+      const [outer, ...holes] = poly;
+      return pointInRing(pt, outer) && !holes.some((h) => pointInRing(pt, h));
+    });
+  }
+  return false;
+}
+
+// Distancia (al cuadrado, equirectangular aprox.) del punto al vértice más
+// cercano de la geometría. Solo se usa para rankear el lote "más cercano".
+function minVertexDistSq(pt: [number, number], geom: GeoJSON.Geometry | null | undefined): number {
+  if (!geom) return Infinity;
+  const cosLat = Math.cos((pt[1] * Math.PI) / 180);
+  let min = Infinity;
+  const scan = (coords: unknown): void => {
+    if (!Array.isArray(coords)) return;
+    if (typeof coords[0] === "number") {
+      const dx = ((coords[0] as number) - pt[0]) * cosLat;
+      const dy = (coords[1] as number) - pt[1];
+      const d = dx * dx + dy * dy;
+      if (d < min) min = d;
+      return;
+    }
+    for (const c of coords) scan(c);
+  };
+  scan((geom as { coordinates?: unknown }).coordinates);
+  return min;
+}
 import AuthButton from "@/components/AuthButton";
 
 // ── State types ───────────────────────────────────────────────────────────────
@@ -142,6 +193,8 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
   const [rindeStatus, setRindeStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [gpsTracking, setGpsTracking] = useState(false);
   const [gpsStatus, setGpsStatus] = useState("");
+  const [quickNote, setQuickNote] = useState<QuickNoteState | null>(null);
+  const lastPosRef = useRef<{ lat: number; lng: number; acc: number } | null>(null);
 
   // Auth + persistence
   const [user, setUser] = useState<User | null>(null);
@@ -1218,6 +1271,7 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     const L = (await import("leaflet")).default;
     const onSuccess = (pos: GeolocationPosition) => {
       const { latitude: lat, longitude: lng, accuracy: acc } = pos.coords;
+      lastPosRef.current = { lat, lng, acc };
       if (gpsMarkerRef.current && mapRef.current) mapRef.current.removeLayer(gpsMarkerRef.current);
       if (gpsCircleRef.current && mapRef.current) mapRef.current.removeLayer(gpsCircleRef.current);
       gpsCircleRef.current = L.circle([lat, lng], {
@@ -1231,6 +1285,90 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
     navigator.geolocation.getCurrentPosition(onSuccess, () => setGpsStatus("Error GPS"), { enableHighAccuracy: true });
     gpsWatchRef.current = navigator.geolocation.watchPosition(onSuccess, undefined, { enableHighAccuracy: true, maximumAge: 5000 });
     setGpsTracking(true);
+  }
+
+  // ── Nota rápida asociada por GPS ─────────────────────────────────────────────
+
+  // Lista de lotes (para el selector) y detección del lote bajo una posición.
+  function loteNamesSorted(): string[] {
+    const set = new Set<string>();
+    for (const col of visibleCollections) {
+      const fc = col as GeoJSON.FeatureCollection;
+      for (const f of fc.features ?? []) {
+        const n = getLotName((f.properties ?? {}) as Record<string, unknown>);
+        if (n) set.add(n);
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }
+
+  // Devuelve { lotName, inside }: si estás DENTRO de un lote lo retorna con
+  // inside=true; si no, retorna el lote más cercano con inside=false.
+  function loteAtOrNearest(lat: number, lng: number): { lotName: string | null; inside: boolean } {
+    const pt: [number, number] = [lng, lat];
+    let nearest: string | null = null;
+    let nearestD = Infinity;
+    for (const col of visibleCollections) {
+      const fc = col as GeoJSON.FeatureCollection;
+      for (const f of fc.features ?? []) {
+        const name = getLotName((f.properties ?? {}) as Record<string, unknown>);
+        if (!name) continue;
+        if (pointInGeometry(pt, f.geometry)) return { lotName: name, inside: true };
+        const d = minVertexDistSq(pt, f.geometry);
+        if (d < nearestD) { nearestD = d; nearest = name; }
+      }
+    }
+    return { lotName: nearest, inside: false };
+  }
+
+  function getPositionOnce(): Promise<{ lat: number; lng: number; acc: number }> {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) return reject(new Error("no-geo"));
+      navigator.geolocation.getCurrentPosition(
+        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy }),
+        reject,
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 },
+      );
+    });
+  }
+
+  async function openQuickNote() {
+    const lots = loteNamesSorted();
+    // Apertura inmediata: default = lote seleccionado o General; si hay GPS, lo
+    // refinamos abajo (sin pisar la elección si el usuario ya cambió el lote).
+    setQuickNote({
+      lots,
+      lotName: selectedLot?.lotName ?? GENERAL_KEY,
+      detected: null,
+      inside: false,
+      acc: null,
+      locating: true,
+      touched: false,
+    });
+    let pos = lastPosRef.current;
+    if (!pos) { try { pos = await getPositionOnce(); lastPosRef.current = pos; } catch { pos = null; } }
+    if (!pos) { setQuickNote((q) => (q ? { ...q, locating: false } : q)); return; }
+    const { lat, lng, acc } = pos;
+    const r = loteAtOrNearest(lat, lng);
+    const autoLot = r.inside ? (r.lotName ?? GENERAL_KEY) : (r.lotName ?? GENERAL_KEY);
+    setQuickNote((q) => q ? {
+      ...q,
+      detected: r.inside ? r.lotName : null,
+      inside: r.inside,
+      acc: Math.round(acc),
+      locating: false,
+      lotName: q.touched ? q.lotName : autoLot,
+    } : q);
+  }
+
+  function saveQuickNote(lotName: string, text: string) {
+    const t = text.trim();
+    if (!t) return;
+    const d = todayStr();
+    const prev = (lotVisits[lotName] ?? []).find((v) => v.date === d)?.note ?? "";
+    const sep = prev ? "\n" : "";
+    saveVisit(lotName, d, { note: prev + sep + t });
+    setQuickNote(null);
   }
 
   // ── Drive manejo — por empresa ───────────────────────────────────────────────
@@ -1848,12 +1986,38 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
             {gpsTracking ? "🎯" : "📍"}
           </button>
 
+          {/* Nota rápida (asociada por GPS al lote donde estás) */}
+          {visibleCollections.length > 0 && (
+            <button
+              onClick={openQuickNote}
+              className="absolute bottom-8 right-16 w-11 h-11 rounded-full flex items-center justify-center text-xl z-[1000]"
+              style={{
+                background: "#0f3460",
+                border: "2px solid #e2b04a",
+                boxShadow: "0 2px 8px rgba(0,0,0,.5)",
+              }}
+              title="Nota rápida (se asocia al lote por GPS)"
+            >
+              📝
+            </button>
+          )}
+
           {/* GPS status */}
           {gpsStatus && (
             <div className="absolute bottom-20 right-3 text-xs px-2 py-1 rounded-lg z-[1000] max-w-[160px] text-center"
               style={{ background: "rgba(15,52,96,.92)", color: "#aac4e0", border: "1px solid #2a5298" }}>
               {gpsStatus}
             </div>
+          )}
+
+          {/* Hoja de nota rápida (asociada al lote por GPS) */}
+          {quickNote && (
+            <QuickNoteSheet
+              state={quickNote}
+              onPick={(lotName) => setQuickNote((q) => (q ? { ...q, lotName, touched: true } : q))}
+              onSave={saveQuickNote}
+              onClose={() => setQuickNote(null)}
+            />
           )}
 
           {/* Yield overlay — only on desktop (on mobile it's in the panel) */}
@@ -1974,14 +2138,6 @@ export default function RecorredorApp({ asUserId, asEmail }: { asUserId?: string
                   </button>
                 </div>
               )}
-
-              {/* ── 3.5. NOTAS GENERALES DE LA RECORRIDA (no atadas a un lote) ── */}
-              <SidebarSection title="📝 Notas generales" collapsible defaultOpen={false}>
-                <GeneralNotesForm
-                  note={(lotVisits[GENERAL_KEY] ?? []).find((v) => v.date === today)?.note ?? ""}
-                  onSave={(note) => saveVisit(GENERAL_KEY, today, { note })}
-                />
-              </SidebarSection>
 
               {/* ── 4. RECORRIDA DE HOY (colapsada por default) ── */}
               {selectedLot && todayVisit && (
@@ -2473,57 +2629,124 @@ function useDictation(onFinalText: (text: string) => void) {
   return { supported, listening, interim, toggle };
 }
 
-// Bloc de notas generales de la recorrida (no atado a ningún lote). Solo texto
-// libre + dictado por voz. Reutiliza el mismo hook useDictation que VisitForm.
-function GeneralNotesForm({ note, onSave }: { note: string; onSave: (note: string) => void }) {
-  const [local, setLocal] = useState(note);
-  const localRef = useRef(local);
-  localRef.current = local;
+// Estado de la hoja de "nota rápida" abierta desde el mapa (asociada por GPS).
+interface QuickNoteState {
+  lots: string[];          // todos los lotes (para el selector)
+  lotName: string;         // lote elegido (GENERAL_KEY = nota general)
+  detected: string | null; // lote donde el GPS te ubica DENTRO (null si fuera)
+  inside: boolean;         // true si estás dentro de un lote
+  acc: number | null;      // precisión GPS en metros
+  locating: boolean;       // buscando ubicación
+  touched: boolean;        // el usuario cambió el lote a mano
+}
+
+// Hoja de nota rápida: se abre desde el botón 📝 del mapa. Detecta por GPS en
+// qué lote estás, lo muestra (editable) y guarda la nota dictada/escrita en ese
+// lote. Reutiliza useDictation. Estilos explícitos (vive fuera del sidebar).
+function QuickNoteSheet({ state, onPick, onSave, onClose }: {
+  state: QuickNoteState;
+  onPick: (lotName: string) => void;
+  onSave: (lotName: string, note: string) => void;
+  onClose: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const noteRef = useRef("");
+  noteRef.current = note;
   function appendDictado(text: string) {
-    const prev = localRef.current;
+    const prev = noteRef.current;
     const sep = prev && !/\s$/.test(prev) ? " " : "";
     const chunk = prev ? text : text.charAt(0).toUpperCase() + text.slice(1);
     const next = prev + sep + chunk;
-    localRef.current = next;
-    setLocal(next);
-    onSave(next);
+    noteRef.current = next;
+    setNote(next);
   }
   const dictation = useDictation(appendDictado);
+  const isGeneral = state.lotName === GENERAL_KEY;
+
+  let statusMsg = "";
+  if (state.locating) statusMsg = "📡 Buscando tu ubicación…";
+  else if (isGeneral) statusMsg = "Nota general (no atada a un lote).";
+  else if (state.inside && state.detected === state.lotName) statusMsg = `📍 Estás dentro de este lote${state.acc != null ? ` (±${state.acc} m)` : ""}.`;
+  else if (state.inside) statusMsg = `📍 El GPS te ubica en ${state.detected}. Verificá el lote elegido.`;
+  else if (state.acc != null) statusMsg = `📍 Fuera de un lote — sugerido el más cercano (±${state.acc} m). Confirmá o cambialo.`;
+  else statusMsg = "Sin GPS — elegí el lote a mano.";
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs" style={{ color: "var(--sb-text-s)" }}>
-          Cosas sueltas del día (no van a un lote): pendientes, insumos, avisos…
-        </p>
-        {dictation.supported && (
-          <button
-            type="button"
-            onClick={dictation.toggle}
-            title={dictation.listening ? "Detener dictado" : "Dictar por voz"}
-            className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded transition-all shrink-0 ml-2"
-            style={
-              dictation.listening
-                ? { background: "#e24a4a22", border: "1px solid #e24a4a", color: "#e24a4a" }
-                : { background: "var(--sb-card)", border: "1px solid #2a5298", color: "var(--sb-text)" }
-            }
-          >
-            {dictation.listening ? "● Grabando…" : "🎤 Dictar"}
-          </button>
-        )}
-      </div>
-      <textarea
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => onSave(local)}
-        placeholder="Ej: traer gasoil, el camino del fondo está roto, llamar al de fertilizantes…"
-        className="w-full rounded-md p-2 text-sm resize-y leading-relaxed"
-        style={{ background: "var(--sb-card)", border: "1px solid var(--sb-text-m)", color: "var(--sb-text-d)", outline: "none", minHeight: "70px" }}
-      />
-      {dictation.listening && (
-        <div className="text-xs mt-1 italic" style={{ color: "var(--sb-text-m)" }}>
-          {dictation.interim ? `…${dictation.interim}` : "Escuchando — hablá y el texto se va agregando."}
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl p-4 space-y-3"
+        style={{ background: "#0d1b35", border: "1px solid #2a5298", boxShadow: "0 8px 32px rgba(0,0,0,.6)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold" style={{ color: "#e2b04a" }}>📝 Nota de recorrida</h3>
+          <button onClick={onClose} className="text-xl leading-none px-2" style={{ color: "#6a8ab0", background: "none", border: "none" }}>✕</button>
         </div>
-      )}
+
+        <div>
+          <label className="text-xs uppercase tracking-wider block mb-1" style={{ color: "#6a8ab0" }}>Nota para</label>
+          <select
+            value={state.lotName}
+            onChange={(e) => onPick(e.target.value)}
+            className="w-full rounded-md px-2 py-2 text-sm font-semibold"
+            style={{ background: "#16213e", border: `1px solid ${isGeneral ? "#2a5298" : "#3dbb6e"}`, color: "#e0e0e0", outline: "none" }}
+          >
+            <option value={GENERAL_KEY}>— General (sin lote) —</option>
+            {state.lots.map((n) => (
+              <option key={n} value={n}>{n}{n === state.detected ? "  ·  📍 acá" : ""}</option>
+            ))}
+          </select>
+          <p className="text-xs mt-1" style={{ color: "#6a8ab0" }}>{statusMsg}</p>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs uppercase tracking-wider block" style={{ color: "#6a8ab0" }}>Observación</label>
+            {dictation.supported && (
+              <button
+                type="button"
+                onClick={dictation.toggle}
+                title={dictation.listening ? "Detener dictado" : "Dictar por voz"}
+                className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded transition-all shrink-0 ml-2"
+                style={
+                  dictation.listening
+                    ? { background: "#e24a4a22", border: "1px solid #e24a4a", color: "#e24a4a" }
+                    : { background: "#16213e", border: "1px solid #2a5298", color: "#aac4e0" }
+                }
+              >
+                {dictation.listening ? "● Grabando…" : "🎤 Dictar"}
+              </button>
+            )}
+          </div>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Ej: hay roya en el borde norte, hay que entrar a fumigar…"
+            autoFocus
+            className="w-full rounded-md p-2 text-sm resize-y leading-relaxed"
+            style={{ background: "#16213e", border: "1px solid #2a5298", color: "#e0e0e0", outline: "none", minHeight: "90px" }}
+          />
+          {dictation.listening && (
+            <div className="text-xs mt-1 italic" style={{ color: "#556677" }}>
+              {dictation.interim ? `…${dictation.interim}` : "Escuchando — hablá y el texto se va agregando."}
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={() => onSave(state.lotName, note)}
+          disabled={!note.trim()}
+          className="w-full py-2.5 rounded-lg text-sm font-bold transition-all"
+          style={{
+            background: note.trim() ? "#1d4ed8" : "#16213e",
+            color: note.trim() ? "#e2b04a" : "#556677",
+            border: "1px solid #2a5298",
+            cursor: note.trim() ? "pointer" : "default",
+          }}
+        >
+          Guardar en {isGeneral ? "General" : state.lotName}
+        </button>
+      </div>
     </div>
   );
 }
